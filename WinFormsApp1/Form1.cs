@@ -130,11 +130,19 @@ namespace WinFormsApp1
     public class YoloTrackingEngine : TrackingEngine
     {
         private YoloPredictor _predictor;
-        private string _tempImagePath = Path.Combine(Path.GetTempPath(), "yolo_frame.jpg");
+        private string _tempImagePath;
 
         public YoloTrackingEngine(string modelPath)
         {
             _predictor = new YoloPredictor(modelPath);
+            
+            // 임시 파일 경로 설정 및 디렉토리 확인
+            string tempDir = Path.GetTempPath();
+            if (!Directory.Exists(tempDir))
+            {
+                Directory.CreateDirectory(tempDir);
+            }
+            _tempImagePath = Path.Combine(tempDir, "yolo_frame.jpg");
         }
 
         public override List<BoundingBox> TrackObjects(
@@ -266,7 +274,7 @@ namespace WinFormsApp1
 
         private TrackingEngine trackingEngine = null;
         private bool isYoloAvailable = false;
-        private string yoloModelPath = "D:\\yolov8n.onnx";  // 모델 경로
+        private string yoloModelPath = Path.Combine(Application.StartupPath, "yolov8n.onnx");  // 모델 경로
 
         public Form1()
         {
@@ -292,12 +300,13 @@ namespace WinFormsApp1
                 if (!File.Exists(yoloModelPath))
                 {
                     MessageBox.Show(
-                        $"YOLO 모델을 찾을 수 없습니다: {yoloModelPath}\n\n",
+                        $"YOLO 모델을 찾을 수 없습니다: {yoloModelPath}\n\n" +
+                        "yolov8n.onnx 파일을 실행 파일과 같은 폴더에 배치해주세요.",
                         "경고",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                     isYoloAvailable = false;
-                    Application.Exit() ;
+                    return; // Application.Exit() 대신 return으로 변경
                 }
 
                 trackingEngine = new YoloTrackingEngine(yoloModelPath);
@@ -312,12 +321,23 @@ namespace WinFormsApp1
             }
             catch (Exception ex)
             {
+                string errorMessage = ex.Message;
+                if (errorMessage.Contains("Opset 22"))
+                {
+                    errorMessage += "\n\n해결 방법:\n" +
+                                  "1. YOLOv8 모델을 Opset 21로 다시 변환하세요\n" +
+                                  "2. Python: model.export(format='onnx', opset=21)\n" +
+                                  "3. 또는 YOLO 기능 없이 계속 진행하세요";
+                }
+                
                 MessageBox.Show(
-                        $"YOLO 모델 로딩중 에러: {ex.Message}\n\n",
+                        $"YOLO 모델 로딩중 에러: {errorMessage}\n\n" +
+                        "YOLO 기능 없이 계속 진행합니다.",
                         "경고",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
-                Application.Exit();
+                isYoloAvailable = false;
+                // Application.Exit() 제거하여 프로그램이 계속 실행되도록 함
             }
         }
 
@@ -1413,7 +1433,14 @@ namespace WinFormsApp1
         {
             try
             {
-                string saveDir = Path.Combine(Path.GetDirectoryName(videoFilePath), "labels");
+                string videoDir = Path.GetDirectoryName(videoFilePath);
+                if (string.IsNullOrEmpty(videoDir) || !Directory.Exists(videoDir))
+                    return;
+
+                string saveDir = Path.Combine(videoDir, "labels");
+                if (!Directory.Exists(saveDir))
+                    return;
+
                 string fileName = Path.GetFileNameWithoutExtension(videoFilePath) + "_labels.json";
                 string loadPath = Path.Combine(saveDir, fileName);
 
@@ -1489,15 +1516,38 @@ namespace WinFormsApp1
 
             try
             {
-                string saveDir = Path.Combine(Path.GetDirectoryName(currentVideoFile), "labels");
-                Directory.CreateDirectory(saveDir);
+                string videoDir = Path.GetDirectoryName(currentVideoFile);
+                if (string.IsNullOrEmpty(videoDir) || !Directory.Exists(videoDir))
+                {
+                    MessageBox.Show("비디오 파일의 디렉토리를 찾을 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                string saveDir = Path.Combine(videoDir, "labels");
+                
+                // 디렉토리 생성 시 예외 처리
+                try
+                {
+                    if (!Directory.Exists(saveDir))
+                    {
+                        Directory.CreateDirectory(saveDir);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"라벨 저장 디렉토리 생성 실패: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
 
                 string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
                 string savePath = Path.Combine(saveDir, fileName);
 
                 ExportToJsonExtended(savePath);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"라벨링 데이터 저장 중 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ExportToJsonExtended(string filePath)
