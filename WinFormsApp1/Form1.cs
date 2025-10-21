@@ -272,9 +272,9 @@ namespace WinFormsApp1
         private Dictionary<int, CategoryData> categoryMap = new Dictionary<int, CategoryData>();
         private int nextAnnotationId = 1;
 
-        private TrackingEngine trackingEngine = null;
+        private TrackingEngine trackingEngine = null;  
         private bool isYoloAvailable = false;
-        private string yoloModelPath = Path.Combine(Application.StartupPath, "yolov8n.onnx");  // 모델 경로
+        private string yoloModelPath = Path.Combine(Application.StartupPath, @"..\..\..\yolov8n.onnx");
 
         public Form1()
         {
