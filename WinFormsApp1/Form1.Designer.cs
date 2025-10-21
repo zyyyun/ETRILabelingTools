@@ -47,6 +47,8 @@
             this.btnRewind = new System.Windows.Forms.Button();
             this.btnForward = new System.Windows.Forms.Button();
             this.labelTimeInfo = new System.Windows.Forms.Label();
+            this.labelRealTime = new System.Windows.Forms.Label();
+            this.btnSetRealTime = new System.Windows.Forms.Button();
             this.btnEntry = new System.Windows.Forms.Button();
             this.btnExit = new System.Windows.Forms.Button();
             this.trackBarVolume = new System.Windows.Forms.TrackBar();
@@ -235,6 +237,8 @@
             this.panelVideoControls.Controls.Add(this.btnRewind);
             this.panelVideoControls.Controls.Add(this.btnForward);
             this.panelVideoControls.Controls.Add(this.labelTimeInfo);
+            this.panelVideoControls.Controls.Add(this.labelRealTime);
+            this.panelVideoControls.Controls.Add(this.btnSetRealTime);
             this.panelVideoControls.Controls.Add(this.btnEntry);
             this.panelVideoControls.Controls.Add(this.btnExit);
             this.panelVideoControls.Controls.Add(this.trackBarVolume);
@@ -271,6 +275,23 @@
             this.labelTimeInfo.Size = new System.Drawing.Size(200, 25);
             this.labelTimeInfo.ForeColor = System.Drawing.Color.Gray;
             this.labelTimeInfo.Font = new System.Drawing.Font("Consolas", 10F);
+
+            // Real-time (subtitle replacement) label
+            this.labelRealTime.Text = "--:--:--.---";
+            this.labelRealTime.Location = new System.Drawing.Point(370, 24);
+            this.labelRealTime.Size = new System.Drawing.Size(130, 25);
+            this.labelRealTime.ForeColor = System.Drawing.Color.Black;
+            this.labelRealTime.Font = new System.Drawing.Font("Consolas", 10F, System.Drawing.FontStyle.Bold);
+
+            // Set Real-time Base button
+            this.btnSetRealTime.Text = "시간 기준 설정";
+            this.btnSetRealTime.Location = new System.Drawing.Point(510, 16);
+            this.btnSetRealTime.Size = new System.Drawing.Size(80, 40);
+            this.btnSetRealTime.BackColor = System.Drawing.Color.FromArgb(226, 232, 240);
+            this.btnSetRealTime.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnSetRealTime.FlatAppearance.BorderSize = 0;
+            this.btnSetRealTime.Font = new System.Drawing.Font("Segoe UI", 8F);
+            this.btnSetRealTime.Click += new System.EventHandler(this.btnSetRealTime_Click);
 
             // Entry/Exit buttons
             this.btnEntry.Text = "Entry: 07:22:15";
@@ -526,6 +547,8 @@
         private System.Windows.Forms.Button btnRewind;
         private System.Windows.Forms.Button btnForward;
         private System.Windows.Forms.Label labelTimeInfo;
+        private System.Windows.Forms.Label labelRealTime;
+        private System.Windows.Forms.Button btnSetRealTime;
         private System.Windows.Forms.Button btnEntry;
         private System.Windows.Forms.Button btnExit;
         private System.Windows.Forms.TrackBar trackBarVolume;
