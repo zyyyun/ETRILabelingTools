@@ -292,13 +292,13 @@ namespace WinFormsApp1
             this.WindowState = FormWindowState.Maximized;
             ApplyTheme();
             btnSelectFolder.Text = "파일 선택";
+            
+            // Form이 키 이벤트를 받을 수 있도록 포커스 설정
             this.Focus();
+            this.Activate();
 
             // YOLO 모델 초기화 시도
             InitializeYoloModel();
-            
-            // pictureBoxVideo에 포커스를 주어 키 이벤트가 올바르게 처리되도록 함
-            pictureBoxVideo.Focus();
         }
 
         private void btnSetRealTime_Click(object sender, EventArgs e)
@@ -504,6 +504,10 @@ namespace WinFormsApp1
 
                 labelTitle.Text = $"Form_AllDay - {Path.GetFileName(filePath)}";
 
+                // Form이 키 이벤트를 받을 수 있도록 포커스 설정
+                this.Focus();
+                this.Activate();
+
                 // 동일 파일명의 JSON 자동 로드
                 LoadLabelingData(filePath);
             }
@@ -538,9 +542,6 @@ namespace WinFormsApp1
             currentFrameIndex = frameIndex;
             UpdateTimeLabels();
             pictureBoxVideo.Invalidate();
-            
-            // pictureBoxVideo에 포커스를 주어 키 이벤트가 올바르게 처리되도록 함
-            pictureBoxVideo.Focus();
         }
 
         private void UpdateTimeLabels()
@@ -764,9 +765,6 @@ namespace WinFormsApp1
 
         private void pictureBoxVideo_MouseDown(object sender, MouseEventArgs e)
         {
-            // pictureBoxVideo에 포커스를 주어 키 이벤트가 올바르게 처리되도록 함
-            pictureBoxVideo.Focus();
-            
             if (currentMode == DrawMode.Draw)
             {
                 if (!entryFrameIndex.HasValue)
@@ -1705,6 +1703,13 @@ namespace WinFormsApp1
         {
             // 영상이 로드되지 않은 경우 키 이벤트 무시
             if (videoCapture == null || !videoCapture.IsOpened())
+                return;
+
+            // 특정 컨트롤이 포커스를 받고 있으면 해당 키만 무시
+            if (e.KeyCode == Keys.Space && (btnPlay.Focused || btnRewind.Focused || btnForward.Focused))
+                return;
+            if ((e.KeyCode == Keys.Left || e.KeyCode == Keys.Right) && 
+                (btnEntry.Focused || btnExit.Focused || btnSetRealTime.Focused))
                 return;
 
             if (e.KeyCode == Keys.Space)
