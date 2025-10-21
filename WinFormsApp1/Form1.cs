@@ -274,7 +274,7 @@ namespace WinFormsApp1
 
         private TrackingEngine trackingEngine = null;  
         private bool isYoloAvailable = false;
-        private string yoloModelPath = Path.Combine(Application.StartupPath, @"..\..\..\yolov8n.onnx");
+        private string yoloModelPath = Path.Combine(Application.StartupPath, @"..\..\..\..\yolov8n.onnx");
 
         public Form1()
         {
