@@ -9,7 +9,8 @@ using OpenCvSharp.Extensions;
 using Newtonsoft.Json;
 using System.IO;
 using OpenCvSharp.Tracking;
-using Compunet.YoloSharp;  // YoloSharp 추가
+using Compunet.YoloSharp;
+using System.CodeDom;  // YoloSharp 추가
 
 namespace WinFormsApp1
 {
@@ -291,6 +292,9 @@ namespace WinFormsApp1
 
             // YOLO 모델 초기화 시도
             InitializeYoloModel();
+            
+            // pictureBoxVideo에 포커스를 주어 키 이벤트가 올바르게 처리되도록 함
+            pictureBoxVideo.Focus();
         }
 
         private void InitializeYoloModel()
@@ -503,6 +507,9 @@ namespace WinFormsApp1
             currentFrameIndex = frameIndex;
             UpdateTimeLabels();
             pictureBoxVideo.Invalidate();
+            
+            // pictureBoxVideo에 포커스를 주어 키 이벤트가 올바르게 처리되도록 함
+            pictureBoxVideo.Focus();
         }
 
         private void UpdateTimeLabels()
@@ -714,6 +721,9 @@ namespace WinFormsApp1
 
         private void pictureBoxVideo_MouseDown(object sender, MouseEventArgs e)
         {
+            // pictureBoxVideo에 포커스를 주어 키 이벤트가 올바르게 처리되도록 함
+            pictureBoxVideo.Focus();
+            
             if (currentMode == DrawMode.Draw)
             {
                 if (!entryFrameIndex.HasValue)
@@ -1650,6 +1660,10 @@ namespace WinFormsApp1
         #region Keyboard Shortcuts
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
+            // 영상이 로드되지 않은 경우 키 이벤트 무시
+            if (videoCapture == null || !videoCapture.IsOpened())
+                return;
+
             if (e.KeyCode == Keys.Space)
             {
                 btnPlay_Click(sender, e);
@@ -1657,14 +1671,18 @@ namespace WinFormsApp1
             }
             else if (e.KeyCode == Keys.Left)
             {
-                if (currentFrameIndex > 0)
-                    LoadFrame(currentFrameIndex - 1);
+                // 5초씩 뒤로 이동 (fps * 5 프레임)
+                int framesToMove = (int)(fps * 5);
+                int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
+                LoadFrame(newFrame);
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.Right)
             {
-                if (currentFrameIndex < totalFrames - 1)
-                    LoadFrame(currentFrameIndex + 1);
+                // 5초씩 앞으로 이동 (fps * 5 프레임)
+                int framesToMove = (int)(fps * 5);
+                int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
+                LoadFrame(newFrame);
                 e.Handled = true;
             }
             else if (selectedBox != null && (e.KeyCode == Keys.W || e.KeyCode == Keys.A || e.KeyCode == Keys.S || e.KeyCode == Keys.D))
