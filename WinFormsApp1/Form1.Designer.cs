@@ -218,6 +218,7 @@
             this.pictureBoxVideo.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pictureBoxVideo.BackColor = System.Drawing.Color.Black;
             this.pictureBoxVideo.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+            this.pictureBoxVideo.TabStop = true;
             this.pictureBoxVideo.Paint += new System.Windows.Forms.PaintEventHandler(this.pictureBoxVideo_Paint);
             this.pictureBoxVideo.MouseDown += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseDown);
             this.pictureBoxVideo.MouseMove += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseMove);
