@@ -25,7 +25,7 @@ namespace WinFormsApp1
         public BoundingBox Box { get; set; }
         public Rectangle OriginalRectangle { get; set; }
         public string OriginalLabel { get; set; }
-        public int OriginalPersonId { get; set; }
+        public int OriginalObjectId { get; set; }
         public List<BoundingBox> TrackedBoxes { get; set; }
     }
 
@@ -36,6 +36,8 @@ namespace WinFormsApp1
         public Color MarkerColor { get; set; }
         public string EntryTime { get; set; }
         public string ExitTime { get; set; }
+        public int ObjectId { get; set; } // PersonId, VehicleId, EventId 중 하나
+        public string Label { get; set; }
     }
 
     public class CustomLabel
@@ -53,6 +55,8 @@ namespace WinFormsApp1
         public Rectangle Rectangle { get; set; }
         public string Label { get; set; }
         public int PersonId { get; set; }
+        public int VehicleId { get; set; }
+        public int EventId { get; set; }
         public string Action { get; set; }
         public string VehicleName { get; set; }
         public string EventName { get; set; }
@@ -284,6 +288,9 @@ namespace WinFormsApp1
 
         private Dictionary<int, CategoryData> categoryMap = new Dictionary<int, CategoryData>();
         private int nextAnnotationId = 1;
+        
+        // ID 관리 변수 제거 - 사용자가 수동으로 Ctrl+1~14로 지정
+        private int currentAssignedId = 1; // 현재 할당할 ID (Ctrl+1~14로 변경됨)
 
         private TrackingEngine trackingEngine = null;  
         private bool isYoloAvailable = false;
@@ -293,6 +300,9 @@ namespace WinFormsApp1
         private string currentSrtFile = "";
         private List<SubtitleEntry> subtitleEntries = new List<SubtitleEntry>();
         private bool isFFmpegAvailable = false;
+        
+        // 현재 선택된 라벨 (person, vehicle, event)
+        private string currentSelectedLabel = "person";
 
 
         public Form1()
@@ -595,8 +605,11 @@ namespace WinFormsApp1
                     currentVideoIndex = 0;
                     await LoadVideoWithSubtitle(videoFileList[0]);
                     boundingBoxes.Clear();
+                    waypointMarkers.Clear();
                     selectedBox = null;
+                    // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
                     UpdateBoxCount();
+                    UpdateWaypointListView();
                     pictureBoxVideo.Invalidate();
 
                     MessageBox.Show($"총 {videoFileList.Count}개의 영상 파일을 불러왔습니다.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -807,17 +820,91 @@ namespace WinFormsApp1
         #region Entry/Exit Markers
         private void btnEntry_Click(object sender, EventArgs e)
         {
+            // 선택된 웨이포인트가 있는지 확인
+            if (listViewWaypoints.SelectedItems.Count > 0)
+            {
+                var selectedItem = listViewWaypoints.SelectedItems[0];
+                var waypoint = selectedItem.Tag as WaypointMarker;
+
+                if (waypoint != null)
+                {
+                    // 선택된 웨이포인트의 Entry 프레임으로 이동
+                    LoadFrame(waypoint.EntryFrame);
+                    MessageBox.Show(
+                        $"Entry 프레임으로 이동했습니다.\n\n" +
+                        $"프레임: {waypoint.EntryFrame}\n" +
+                        $"시간: {waypoint.EntryTime}",
+                        "Entry 이동",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+            }
+
+            // 웨이포인트가 선택되지 않았으면 안내 메시지
+            MessageBox.Show(
+                "웨이포인트를 선택하면 Entry 프레임으로 이동합니다.\n\n" +
+                "웨이포인트가 없거나 선택되지 않았습니다.",
+                "안내",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private void btnExit_Click(object sender, EventArgs e)
+        {
+            // 선택된 웨이포인트가 있는지 확인
+            if (listViewWaypoints.SelectedItems.Count > 0)
+            {
+                var selectedItem = listViewWaypoints.SelectedItems[0];
+                var waypoint = selectedItem.Tag as WaypointMarker;
+
+                if (waypoint != null)
+                {
+                    // 선택된 웨이포인트의 Exit 프레임으로 이동
+                    LoadFrame(waypoint.ExitFrame);
+                    MessageBox.Show(
+                        $"Exit 프레임으로 이동했습니다.\n\n" +
+                        $"프레임: {waypoint.ExitFrame}\n" +
+                        $"시간: {waypoint.ExitTime}",
+                        "Exit 이동",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    return;
+                }
+            }
+
+            // 웨이포인트가 선택되지 않았으면 안내 메시지
+            MessageBox.Show(
+                "웨이포인트를 선택하면 Exit 프레임으로 이동합니다.\n\n" +
+                "웨이포인트가 없거나 선택되지 않았습니다.",
+                "안내",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        // E키로 Entry 마커 설정 (원래 기능)
+        private void SetEntryMarker()
+        {
             entryFrameIndex = currentFrameIndex;
             TimeSpan time = TimeSpan.FromSeconds(currentFrameIndex / fps);
             btnEntry.Text = $"Entry: {time:hh\\:mm\\:ss}";
             panelTimeline.Invalidate();
         }
 
-        private void btnExit_Click(object sender, EventArgs e)
+        // X키로 Exit 마커 설정 및 웨이포인트 생성 (원래 기능)
+        private void SetExitMarkerAndCreateWaypoint()
         {
             if (!entryFrameIndex.HasValue)
             {
-                MessageBox.Show("먼저 Entry를 설정해주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("먼저 Entry를 설정해주세요. (E키)", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Entry 프레임의 박스를 찾아서 PersonId와 Label 가져오기
+            var entryBox = boundingBoxes.FirstOrDefault(b => b.FrameIndex == entryFrameIndex.Value);
+            if (entryBox == null)
+            {
+                MessageBox.Show("Entry 프레임에 박스가 없습니다. 먼저 박스를 그려주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -833,7 +920,9 @@ namespace WinFormsApp1
                 ExitFrame = exitFrameIndex.Value,
                 MarkerColor = markerColors[currentColorIndex % markerColors.Length],
                 EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
-                ExitTime = exitTime.ToString(@"hh\:mm\:ss")
+                ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                ObjectId = GetBoxId(entryBox),
+                Label = entryBox.Label
             };
 
             waypointMarkers.Add(waypoint);
@@ -861,7 +950,7 @@ namespace WinFormsApp1
 
             if (result == DialogResult.Yes)
             {
-                PerformTrackingForWaypoint(waypoint);
+                PerformTrackingForWaypoint(waypoint, true);
             }
         }
 
@@ -878,8 +967,13 @@ namespace WinFormsApp1
 
             if (waypoint != null)
             {
+                // 해당 웨이포인트의 ObjectId와 프레임 범위에 일치하는 박스만 삭제
                 var boxesToDelete = boundingBoxes
-                    .Where(b => b.FrameIndex >= waypoint.EntryFrame && b.FrameIndex <= waypoint.ExitFrame)
+                    .Where(b => 
+                        b.FrameIndex >= waypoint.EntryFrame && 
+                        b.FrameIndex <= waypoint.ExitFrame &&
+                        GetBoxId(b) == waypoint.ObjectId &&
+                        b.Label == waypoint.Label)
                     .ToList();
 
                 foreach (var box in boxesToDelete)
@@ -936,8 +1030,10 @@ namespace WinFormsApp1
                 {
                     FrameIndex = currentFrameIndex,
                     Rectangle = new Rectangle(e.Location, new System.Drawing.Size(0, 0)),
-                    Label = "person",
-                    PersonId = 1,
+                    Label = currentSelectedLabel,
+                    PersonId = currentSelectedLabel == "person" ? currentAssignedId : 0,
+                    VehicleId = currentSelectedLabel == "vehicle" ? currentAssignedId : 0,
+                    EventId = currentSelectedLabel == "event" ? currentAssignedId : 0,
                     Action = "waypoint"
                 };
             }
@@ -1015,8 +1111,26 @@ namespace WinFormsApp1
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            foreach (var box in boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex))
+            // 현재 프레임에 해당하는 박스들을 필터링
+            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex);
+
+            foreach (var box in currentFrameBoxes)
             {
+                // 웨이포인트 확인: 해당 박스의 PersonId와 일치하는 웨이포인트 찾기
+                var waypoint = waypointMarkers.FirstOrDefault(w => 
+                    w.ObjectId == GetBoxId(box) && 
+                    w.Label == box.Label);
+
+                // 웨이포인트가 있으면 Entry 프레임 이후에만 표시
+                if (waypoint != null)
+                {
+                    if (currentFrameIndex < waypoint.EntryFrame)
+                        continue; // Entry 이전이면 표시 안 함
+                    
+                    if (currentFrameIndex > waypoint.ExitFrame)
+                        continue; // Exit 이후에도 표시 안 함
+                }
+
                 Color boxColor = GetColorForLabel(box.Label);
                 using (Pen pen = new Pen(boxColor, 3))
                 {
@@ -1025,7 +1139,7 @@ namespace WinFormsApp1
                     g.DrawRectangle(pen, box.Rectangle);
                 }
 
-                string labelText = $"{box.Label}_{box.PersonId:D2}";
+                string labelText = $"{box.Label}_{GetBoxId(box):D2}";
                 using (Font font = new Font("Segoe UI", 10F, FontStyle.Bold))
                 {
                     SizeF textSize = g.MeasureString(labelText, font);
@@ -1054,8 +1168,23 @@ namespace WinFormsApp1
 
         private BoundingBox GetBoundingBoxAt(System.Drawing.Point location)
         {
-            foreach (var box in boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex).Reverse())
+            // 현재 프레임에 해당하는 박스들을 필터링
+            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex);
+
+            foreach (var box in currentFrameBoxes.Reverse())
             {
+                // 웨이포인트 확인: 해당 박스의 PersonId와 일치하는 웨이포인트 찾기
+                var waypoint = waypointMarkers.FirstOrDefault(w => 
+                    w.ObjectId == GetBoxId(box) && 
+                    w.Label == box.Label);
+
+                // 웨이포인트가 있으면 Entry 프레임 이후에만 선택 가능
+                if (waypoint != null)
+                {
+                    if (currentFrameIndex < waypoint.EntryFrame || currentFrameIndex > waypoint.ExitFrame)
+                        continue;
+                }
+
                 if (box.Rectangle.Contains(location))
                     return box;
             }
@@ -1078,9 +1207,30 @@ namespace WinFormsApp1
             labelBoxCount.Text = $"박스 개수: {boundingBoxes.Count}";
         }
 
+        private string FormatFrameTime(int frameIndex)
+        {
+            TimeSpan time = TimeSpan.FromSeconds(frameIndex / fps);
+            return time.ToString(@"hh\:mm\:ss");
+        }
+
+        private void UpdateWaypointListView()
+        {
+            listViewWaypoints.Items.Clear();
+
+            foreach (var waypoint in waypointMarkers)
+            {
+                var item = new ListViewItem(waypoint.EntryTime);
+                item.SubItems.Add(waypoint.ExitTime);
+                item.SubItems.Add("●");
+                item.ForeColor = waypoint.MarkerColor;
+                item.Tag = waypoint;
+                listViewWaypoints.Items.Add(item);
+            }
+        }
+
         private void UpdateObjectInfo(BoundingBox box)
         {
-            labelObjectLabel.Text = $"Label: {box.Label}_{box.PersonId:D2}";
+            labelObjectLabel.Text = $"Label: {box.Label}_{GetBoxId(box):D2}";
             labelPrevWaypoint.Text = "Previous Waypoint: C0001.mp4, 00:10:32 - 00:11:05";
             labelNextWaypoint.Text = "Next Waypoint: C0003.mp4, 00:15:21 - 00:16:01";
         }
@@ -1164,8 +1314,11 @@ namespace WinFormsApp1
                 currentVideoIndex = selectedIndex;
                 await LoadVideoWithSubtitle(videoFileList[currentVideoIndex]);
                 boundingBoxes.Clear();
+                waypointMarkers.Clear();
                 selectedBox = null;
+                // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
                 UpdateBoxCount();
+                UpdateWaypointListView();
                 pictureBoxVideo.Invalidate();
                 RefreshVideoListView();
             }
@@ -1173,54 +1326,77 @@ namespace WinFormsApp1
 
         private void panelLabelPerson_Click(object sender, EventArgs e)
         {
+            currentSelectedLabel = "person";
+            
             if (selectedBox != null)
             {
-                ApplyLabelChange("person", 1, selectedBox.Label, selectedBox.PersonId, selectedBox.Rectangle);
+                ApplyLabelChange("person", currentAssignedId, selectedBox.Label, GetBoxId(selectedBox), selectedBox.Rectangle);
             }
             else
             {
-                MessageBox.Show("먼저 BBox를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Person 라벨 선택됨. 현재 ID: {currentAssignedId}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
         private void panelLabelVehicle_Click(object sender, EventArgs e)
         {
+            currentSelectedLabel = "vehicle";
+            
             if (selectedBox != null)
             {
-                ApplyLabelChange("vehicle", 0, selectedBox.Label, selectedBox.PersonId, selectedBox.Rectangle);
+                ApplyLabelChange("vehicle", currentAssignedId, selectedBox.Label, GetBoxId(selectedBox), selectedBox.Rectangle);
             }
             else
             {
-                MessageBox.Show("먼저 BBox를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Vehicle 라벨 선택됨. 현재 ID: {currentAssignedId}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
         private void panelLabelEvent_Click(object sender, EventArgs e)
         {
+            currentSelectedLabel = "event";
+            
             if (selectedBox != null)
             {
-                ApplyLabelChange("event", 0, selectedBox.Label, selectedBox.PersonId, selectedBox.Rectangle);
+                ApplyLabelChange("event", currentAssignedId, selectedBox.Label, GetBoxId(selectedBox), selectedBox.Rectangle);
             }
             else
             {
-                MessageBox.Show("먼저 BBox를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Event 라벨 선택됨. 현재 ID: {currentAssignedId}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
-        private void ApplyLabelChange(string newLabel, int newPersonId, string oldLabel, int oldPersonId, Rectangle oldRect)
+        // 박스의 현재 라벨에 해당하는 ID 가져오기
+        private int GetBoxId(BoundingBox box)
+        {
+            if (box.Label == "person") return box.PersonId;
+            if (box.Label == "vehicle") return box.VehicleId;
+            if (box.Label == "event") return box.EventId;
+            return 0;
+        }
+        
+        // 박스의 특정 라벨 타입에 ID 설정
+        private void SetBoxId(BoundingBox box, string label, int id)
+        {
+            if (label == "person") box.PersonId = id;
+            else if (label == "vehicle") box.VehicleId = id;
+            else if (label == "event") box.EventId = id;
+        }
+
+        private void ApplyLabelChange(string newLabel, int newId, string oldLabel, int oldId, Rectangle oldRect)
         {
             if (selectedBox != null)
             {
                 selectedBox.Label = newLabel;
-                selectedBox.PersonId = newPersonId;
-                labelObjectLabel.Text = $"Label: {newLabel}_{newPersonId:D2}";
+                SetBoxId(selectedBox, newLabel, newId);
+                labelObjectLabel.Text = $"Label: {newLabel}_{newId:D2}";
 
                 AddUndoAction(new UndoAction
                 {
                     Type = UndoActionType.ModifyBox,
                     Box = CloneBoundingBox(selectedBox),
                     OriginalLabel = oldLabel,
-                    OriginalPersonId = oldPersonId,
+                    OriginalObjectId = oldId,
                     OriginalRectangle = oldRect
                 });
 
@@ -1312,11 +1488,11 @@ namespace WinFormsApp1
             if (selectedBox != null)
             {
                 string oldLabel = selectedBox.Label;
-                int oldPersonId = selectedBox.PersonId;
+                int oldPersonId = GetBoxId(selectedBox);
                 Rectangle oldRect = selectedBox.Rectangle;
 
                 selectedBox.Label = customLabel.Type;
-                selectedBox.PersonId = customLabel.Type == "person" ? customLabel.Id : 0;
+                SetBoxId(selectedBox, customLabel.Type, customLabel.Id);
 
                 labelObjectLabel.Text = $"Label: {customLabel.Name}";
 
@@ -1325,7 +1501,7 @@ namespace WinFormsApp1
                     Type = UndoActionType.ModifyBox,
                     Box = CloneBoundingBox(selectedBox),
                     OriginalLabel = oldLabel,
-                    OriginalPersonId = oldPersonId,
+                    OriginalObjectId = oldPersonId,
                     OriginalRectangle = oldRect
                 });
 
@@ -1490,13 +1666,14 @@ namespace WinFormsApp1
                 case UndoActionType.ModifyBox:
                     var boxToModify = boundingBoxes.FirstOrDefault(b =>
                         b.FrameIndex == action.Box.FrameIndex &&
-                        b.PersonId == action.Box.PersonId);
+                        GetBoxId(b) == GetBoxId(action.Box) &&
+                        b.Label == action.Box.Label);
 
                     if (boxToModify != null)
                     {
                         boxToModify.Rectangle = action.OriginalRectangle;
                         boxToModify.Label = action.OriginalLabel;
-                        boxToModify.PersonId = action.OriginalPersonId;
+                        SetBoxId(boxToModify, action.OriginalLabel, action.OriginalObjectId);
                     }
                     break;
 
@@ -1538,13 +1715,14 @@ namespace WinFormsApp1
                 case UndoActionType.ModifyBox:
                     var boxToModify = boundingBoxes.FirstOrDefault(b =>
                         b.FrameIndex == action.Box.FrameIndex &&
-                        b.PersonId == action.OriginalPersonId);
+                        GetBoxId(b) == action.OriginalObjectId &&
+                        b.Label == action.OriginalLabel);
 
                     if (boxToModify != null)
                     {
                         boxToModify.Rectangle = action.Box.Rectangle;
                         boxToModify.Label = action.Box.Label;
-                        boxToModify.PersonId = action.Box.PersonId;
+                        SetBoxId(boxToModify, action.Box.Label, GetBoxId(action.Box));
                     }
                     break;
 
@@ -1563,7 +1741,7 @@ namespace WinFormsApp1
         #endregion
 
         #region Tracking Algorithm
-        private void PerformTrackingForWaypoint(WaypointMarker waypoint, bool useYolo = false)
+        private async void PerformTrackingForWaypoint(WaypointMarker waypoint, bool useYolo = false)
         {
             try
             {
@@ -1583,20 +1761,46 @@ namespace WinFormsApp1
                     return;
                 }
 
+                // 추적 중 로딩 폼 생성
+                Form loadingForm = new Form
+                {
+                    Width = 350,
+                    Height = 120,
+                    Text = "YOLO 추적 중",
+                    StartPosition = FormStartPosition.CenterParent,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false,
+                    TopMost = true
+                };
+
+                Label loadingLabel = new Label
+                {
+                    Text = "YOLO 추적 중... 잠시만 기다려주세요.",
+                    AutoSize = true,
+                    Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
+                    Location = new System.Drawing.Point(40, 35)
+                };
+
+                loadingForm.Controls.Add(loadingLabel);
+                loadingForm.Show();
+                loadingForm.Refresh();
+
                 List<BoundingBox> trackedBoxes = new List<BoundingBox>();
 
                 if (useYolo && isYoloAvailable)
                 {
-                    // YOLO 추적 사용
-                    trackedBoxes = trackingEngine.TrackObjects(
+                    // YOLO 추적을 비동기로 실행
+                    trackedBoxes = await Task.Run(() => trackingEngine.TrackObjects(
                         videoCapture,
                         startBox,
                         waypoint.EntryFrame,
                         waypoint.ExitFrame,
-                        fps);
+                        fps));
                 }
                 else 
                 {
+                    loadingForm.Close();
                     MessageBox.Show(
                         "YOLO 모델을 사용할 수 없습니다.\n",
                         "정보",
@@ -1604,6 +1808,8 @@ namespace WinFormsApp1
                         MessageBoxIcon.Information);
                     return;
                 }
+
+                loadingForm.Close();
 
                 // 추적된 박스 추가
                 foreach (var box in trackedBoxes)
@@ -1664,6 +1870,7 @@ namespace WinFormsApp1
                 categoryMap.Clear();
                 selectedBox = null;
                 nextAnnotationId = 1;
+                // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
 
                 if (labelingData.Categories != null)
                 {
@@ -1678,7 +1885,7 @@ namespace WinFormsApp1
                     if (annotation.Bbox == null || annotation.Bbox.Length < 4)
                         continue;
 
-                    int personId = annotation.TrackId;
+                    int trackId = annotation.TrackId;
                     string label = "person";
 
                     if (categoryMap.ContainsKey(annotation.CategoryId))
@@ -1697,7 +1904,9 @@ namespace WinFormsApp1
                         FrameIndex = annotation.ImageId,
                         Rectangle = new Rectangle(annotation.Bbox[0], annotation.Bbox[1], annotation.Bbox[2], annotation.Bbox[3]),
                         Label = label,
-                        PersonId = personId,
+                        PersonId = label == "person" ? trackId : 0,
+                        VehicleId = label == "vehicle" ? trackId : 0,
+                        EventId = label == "event" ? trackId : 0,
                         Action = "waypoint"
                     };
 
@@ -1705,7 +1914,42 @@ namespace WinFormsApp1
 
                     if (annotation.Id >= nextAnnotationId)
                         nextAnnotationId = annotation.Id + 1;
+
+                    // 웨이포인트 정보 복원
+                    if (annotation.TrackInfo != null && 
+                        annotation.TrackInfo.Entry != null && 
+                        annotation.TrackInfo.Exit != null)
+                    {
+                        int entryFrame = annotation.TrackInfo.Entry.Frame;
+                        int exitFrame = annotation.TrackInfo.Exit.Frame;
+
+                        // 이미 같은 personId와 entry/exit를 가진 웨이포인트가 있는지 확인
+                        bool waypointExists = waypointMarkers.Any(w => 
+                            w.ObjectId == trackId && 
+                            w.Label == label &&
+                            w.EntryFrame == entryFrame && 
+                            w.ExitFrame == exitFrame);
+
+                        if (!waypointExists)
+                        {
+                            var waypoint = new WaypointMarker
+                            {
+                                ObjectId = trackId,
+                                Label = label,
+                                EntryFrame = entryFrame,
+                                ExitFrame = exitFrame,
+                                EntryTime = FormatFrameTime(entryFrame),
+                                ExitTime = FormatFrameTime(exitFrame),
+                                MarkerColor = GetColorForLabel(label)
+                            };
+
+                            waypointMarkers.Add(waypoint);
+                        }
+                    }
                 }
+
+                // 웨이포인트 리스트뷰 갱신
+                UpdateWaypointListView();
 
                 UpdateBoxCount();
                 pictureBoxVideo.Invalidate();
@@ -1790,20 +2034,27 @@ namespace WinFormsApp1
 
                     foreach (var box in frameGroup)
                     {
-                        int categoryId = box.PersonId;
+                        // 박스의 라벨 타입에 맞는 ID 가져오기
+                        int boxId = GetBoxId(box);
+                        int categoryId = boxId;
+                        
                         if (!categories.ContainsKey(categoryId))
                         {
                             categories[categoryId] = new CategoryData
                             {
                                 Id = categoryId,
-                                Name = $"{box.Label}_{box.PersonId:D2}",
+                                Name = $"{box.Label}_{boxId:D2}",
                                 Supercategory = box.Label
                             };
                         }
 
-                        // Entry와 Exit 프레임 계산
-                        int entryFrame = boundingBoxes.Where(b => b.PersonId == box.PersonId).Min(b => b.FrameIndex);
-                        int exitFrame = boundingBoxes.Where(b => b.PersonId == box.PersonId).Max(b => b.FrameIndex);
+                        // Entry와 Exit 프레임 계산 (같은 라벨과 ID를 가진 박스들)
+                        int entryFrame = boundingBoxes
+                            .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
+                            .Min(b => b.FrameIndex);
+                        int exitFrame = boundingBoxes
+                            .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
+                            .Max(b => b.FrameIndex);
 
                         // 자막에서 타임스탬프 추출 시도
                         string entryTimestamp = GetSubtitleTimestampForFrame(entryFrame);
@@ -1823,7 +2074,7 @@ namespace WinFormsApp1
                             Bbox = new int[] { box.Rectangle.X, box.Rectangle.Y, box.Rectangle.Width, box.Rectangle.Height },
                             Area = box.Rectangle.Width * box.Rectangle.Height,
                             Iscrowd = 0,
-                            TrackId = box.PersonId,
+                            TrackId = boxId,
                             TrackInfo = new TrackInfo
                             {
                                 Entry = new TrackEntry
@@ -1875,6 +2126,52 @@ namespace WinFormsApp1
         #region Keyboard Shortcuts
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
+            // Ctrl+1~14: ID 수동 지정 (영상 로드 여부와 무관하게 동작)
+            if (e.Control && !e.Shift && !e.Alt)
+            {
+                int? assignedId = null;
+                
+                if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) assignedId = 1;
+                else if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2) assignedId = 2;
+                else if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3) assignedId = 3;
+                else if (e.KeyCode == Keys.D4 || e.KeyCode == Keys.NumPad4) assignedId = 4;
+                else if (e.KeyCode == Keys.D5 || e.KeyCode == Keys.NumPad5) assignedId = 5;
+                else if (e.KeyCode == Keys.D6 || e.KeyCode == Keys.NumPad6) assignedId = 6;
+                else if (e.KeyCode == Keys.D7 || e.KeyCode == Keys.NumPad7) assignedId = 7;
+                else if (e.KeyCode == Keys.D8 || e.KeyCode == Keys.NumPad8) assignedId = 8;
+                else if (e.KeyCode == Keys.D9 || e.KeyCode == Keys.NumPad9) assignedId = 9;
+                
+                if (assignedId.HasValue)
+                {
+                    currentAssignedId = assignedId.Value;
+                    MessageBox.Show($"{currentSelectedLabel} ID를 {currentAssignedId}로 설정했습니다.", 
+                        "ID 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    e.Handled = true;
+                    return;
+                }
+            }
+            
+            // Ctrl+Shift+1~5로 10~14 지정
+            if (e.Control && e.Shift && !e.Alt)
+            {
+                int? assignedId = null;
+                
+                if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) assignedId = 10;
+                else if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2) assignedId = 11;
+                else if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3) assignedId = 12;
+                else if (e.KeyCode == Keys.D4 || e.KeyCode == Keys.NumPad4) assignedId = 13;
+                else if (e.KeyCode == Keys.D5 || e.KeyCode == Keys.NumPad5) assignedId = 14;
+                
+                if (assignedId.HasValue)
+                {
+                    currentAssignedId = assignedId.Value;
+                    MessageBox.Show($"{currentSelectedLabel} ID를 {currentAssignedId}로 설정했습니다.", 
+                        "ID 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    e.Handled = true;
+                    return;
+                }
+            }
+            
             // 영상이 로드되지 않은 경우 키 이벤트 무시
             if (videoCapture == null || !videoCapture.IsOpened())
                 return;
@@ -1942,15 +2239,18 @@ namespace WinFormsApp1
                 pictureBoxVideo.Invalidate();
                 e.Handled = true;
             }
-            else if (e.Control && e.KeyCode == Keys.Z && !e.Shift)
+            else if (e.Control && e.KeyCode == Keys.Z)
             {
-                Undo();
-                e.Handled = true;
-            }
-            else if (e.Control && e.Shift && e.KeyCode == Keys.Z)
-            {
-                Redo();
-                e.Handled = true;
+                if (e.Shift)
+                {
+                    // Ctrl+Shift+Z는 이미 위에서 ID 설정으로 처리됨
+                    // Redo는 Ctrl+Y로만 사용
+                }
+                else
+                {
+                    Undo();
+                    e.Handled = true;
+                }
             }
             else if (e.Control && e.KeyCode == Keys.Y)
             {
@@ -1959,12 +2259,12 @@ namespace WinFormsApp1
             }
             else if (e.KeyCode == Keys.E && !e.Control && !e.Alt)
             {
-                btnEntry_Click(sender, e);
+                SetEntryMarker();
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.X && !e.Control && !e.Alt)
             {
-                btnExit_Click(sender, e);
+                SetExitMarkerAndCreateWaypoint();
                 e.Handled = true;
             }
             else if (e.Control && e.KeyCode == Keys.T)
@@ -2085,17 +2385,17 @@ namespace WinFormsApp1
             if (selectedBox == null)
                 return;
 
-            int oldPersonId = selectedBox.PersonId;
+            int oldPersonId = GetBoxId(selectedBox);
             string oldLabel = selectedBox.Label;
             Rectangle oldRect = selectedBox.Rectangle;
 
-            selectedBox.PersonId = id;
+            SetBoxId(selectedBox, selectedBox.Label, id);
 
             AddUndoAction(new UndoAction
             {
                 Type = UndoActionType.ModifyBox,
                 Box = CloneBoundingBox(selectedBox),
-                OriginalPersonId = oldPersonId,
+                OriginalObjectId = oldPersonId,
                 OriginalLabel = oldLabel,
                 OriginalRectangle = oldRect
             });
@@ -2310,6 +2610,8 @@ namespace WinFormsApp1
                 Rectangle = new Rectangle(box.Rectangle.Location, box.Rectangle.Size),
                 Label = box.Label,
                 PersonId = box.PersonId,
+                VehicleId = box.VehicleId,
+                EventId = box.EventId,
                 Action = box.Action,
                 VehicleName = box.VehicleName,
                 EventName = box.EventName
