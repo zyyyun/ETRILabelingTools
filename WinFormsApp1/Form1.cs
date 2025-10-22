@@ -781,6 +781,18 @@ namespace WinFormsApp1
             string speedText = playbackSpeed == 1.0 ? "" : $" ({playbackSpeed}x)";
             string subtitleText = GetCurrentSubtitle();
             
+            // 자막에서 타임스탬프 추출하여 우측 하단에 표시
+            string timestamp = ExtractTimestampFromSubtitle(subtitleText);
+            if (!string.IsNullOrEmpty(timestamp))
+            {
+                labelSubtitleTimestamp.Text = timestamp;
+                labelSubtitleTimestamp.Visible = true;
+            }
+            else
+            {
+                labelSubtitleTimestamp.Visible = false;
+            }
+            
             if (!string.IsNullOrEmpty(subtitleText))
             {
                 labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} x264{speedText}\n자막: {subtitleText}";
@@ -1162,6 +1174,18 @@ namespace WinFormsApp1
             else if (isDragging)
             {
                 isDragging = false;
+            }
+        }
+
+        private void pictureBoxVideo_Resize(object sender, EventArgs e)
+        {
+            // PictureBox 크기가 변경될 때 타임스탬프 Label 위치 조정 (우측 하단)
+            if (labelSubtitleTimestamp != null && pictureBoxVideo != null)
+            {
+                labelSubtitleTimestamp.Location = new System.Drawing.Point(
+                    pictureBoxVideo.Width - labelSubtitleTimestamp.Width - 20,
+                    pictureBoxVideo.Height - labelSubtitleTimestamp.Height - 20
+                );
             }
         }
 

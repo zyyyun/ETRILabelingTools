@@ -237,6 +237,21 @@
             this.pictureBoxVideo.MouseUp += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseUp);
 
             // 
+            // labelSubtitleTimestamp (자막 타임스탬프 표시 - 우측 하단)
+            // 
+            this.labelSubtitleTimestamp = new System.Windows.Forms.Label();
+            this.labelSubtitleTimestamp.AutoSize = false;
+            this.labelSubtitleTimestamp.Size = new System.Drawing.Size(200, 30);
+            this.labelSubtitleTimestamp.BackColor = System.Drawing.Color.FromArgb(180, 0, 0, 0);
+            this.labelSubtitleTimestamp.ForeColor = System.Drawing.Color.White;
+            this.labelSubtitleTimestamp.Font = new System.Drawing.Font("Consolas", 11F, System.Drawing.FontStyle.Bold);
+            this.labelSubtitleTimestamp.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            this.labelSubtitleTimestamp.Text = "";
+            this.labelSubtitleTimestamp.Anchor = System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right;
+            this.pictureBoxVideo.Controls.Add(this.labelSubtitleTimestamp);
+            this.pictureBoxVideo.Resize += new System.EventHandler(this.pictureBoxVideo_Resize);
+
+            // 
             // panelVideoControls (Bottom control bar)
             // 
             this.panelVideoControls.Dock = System.Windows.Forms.DockStyle.Bottom;
@@ -541,6 +556,7 @@
         private System.Windows.Forms.Button btnRewind;
         private System.Windows.Forms.Button btnForward;
         private System.Windows.Forms.Label labelTimeInfo;
+        private System.Windows.Forms.Label labelSubtitleTimestamp;
         private System.Windows.Forms.Button btnEntry;
         private System.Windows.Forms.Button btnExit;
         private System.Windows.Forms.TrackBar trackBarVolume;
