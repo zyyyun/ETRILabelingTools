@@ -11,6 +11,9 @@ using System.IO;
 using OpenCvSharp.Tracking;
 using Compunet.YoloSharp;
 using System.CodeDom;  // YoloSharp 추가
+using FFMpegCore;
+using FFMpegCore.Enums;
+using System.Diagnostics;
 
 namespace WinFormsApp1
 {
@@ -53,6 +56,14 @@ namespace WinFormsApp1
         public string Action { get; set; }
         public string VehicleName { get; set; }
         public string EventName { get; set; }
+    }
+
+    public class SubtitleEntry
+    {
+        public int Index { get; set; }
+        public TimeSpan StartTime { get; set; }
+        public TimeSpan EndTime { get; set; }
+        public string Text { get; set; }
     }
 
     #region JSON Serialization Classes
@@ -278,6 +289,12 @@ namespace WinFormsApp1
         private bool isYoloAvailable = false;
         private string yoloModelPath = Path.Combine(Application.StartupPath, @"..\..\..\..\yolov8n.onnx");
 
+        // SRT 자막 관련
+        private string currentSrtFile = "";
+        private List<SubtitleEntry> subtitleEntries = new List<SubtitleEntry>();
+        private bool isFFmpegAvailable = false;
+
+
         public Form1()
         {
             InitializeComponent();
@@ -296,8 +313,84 @@ namespace WinFormsApp1
 
             // YOLO 모델 초기화 시도
             InitializeYoloModel();
+
+            // FFmpeg 경로 설정
+            SetupFFmpegPath();
         }
 
+
+        private void SetupFFmpegPath()
+        {
+            try
+            {
+                // FFmpeg가 시스템 PATH에 있는지 확인
+                try
+                {
+                    var process = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "ffmpeg",
+                            Arguments = "-version",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        }
+                    };
+
+                    process.Start();
+                    process.WaitForExit(3000); // 3초 타임아웃
+
+                    if (process.ExitCode == 0)
+                    {
+                        // FFmpeg가 PATH에 있음
+                        GlobalFFOptions.Configure(new FFOptions { BinaryFolder = "" });
+                        isFFmpegAvailable = true;
+                        return;
+                    }
+                }
+                catch
+                {
+                    // PATH에서 FFmpeg를 찾지 못함 - 로컬 폴더에서 찾기
+                }
+
+                // 로컬 폴더에서 FFmpeg 찾기
+                string localFFmpegPath = Path.Combine(Application.StartupPath, "ffmpeg");
+                string ffmpegExe = Path.Combine(localFFmpegPath, "ffmpeg.exe");
+                
+                if (File.Exists(ffmpegExe))
+                {
+                    GlobalFFOptions.Configure(new FFOptions { BinaryFolder = localFFmpegPath });
+                    isFFmpegAvailable = true;
+                }
+                else
+                {
+                    // FFmpeg를 찾을 수 없음
+                    isFFmpegAvailable = false;
+                    MessageBox.Show(
+                        "FFmpeg를 찾을 수 없습니다.\n\n" +
+                        "비디오 내 자막 추출 기능을 사용하려면:\n" +
+                        "1. FFmpeg를 다운로드 (https://ffmpeg.org/download.html)\n" +
+                        "2. 시스템 PATH에 추가하거나\n" +
+                        "3. 실행 파일과 같은 폴더에 'ffmpeg' 폴더를 만들고 ffmpeg.exe를 넣어주세요\n\n" +
+                        "※ 외부 SRT 파일이 있으면 자동으로 로드됩니다.",
+                        "FFmpeg 없음",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                isFFmpegAvailable = false;
+                MessageBox.Show(
+                    $"FFmpeg 설정 중 오류:\n{ex.Message}\n\n" +
+                    "외부 SRT 파일만 사용 가능합니다.",
+                    "FFmpeg 오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
 
         private void InitializeYoloModel()
         {
@@ -355,6 +448,70 @@ namespace WinFormsApp1
             this.WindowState = this.WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
         }
         private void btnMinimize_Click(object sender, EventArgs e) => this.WindowState = FormWindowState.Minimized;
+
+        private async void btnExportJson_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(currentVideoFile))
+            {
+                MessageBox.Show("먼저 비디오 파일을 로드해주세요.", "경고", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (boundingBoxes.Count == 0)
+            {
+                MessageBox.Show("저장할 라벨링 데이터가 없습니다.", "경고", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 저장 중 폼 생성
+            Form loadingForm = new Form
+            {
+                Width = 300,
+                Height = 120,
+                Text = "JSON 저장",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                TopMost = true
+            };
+
+            Label loadingLabel = new Label
+            {
+                Text = "저장 중...",
+                AutoSize = true,
+                Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold),
+                Location = new System.Drawing.Point(100, 30)
+            };
+
+            loadingForm.Controls.Add(loadingLabel);
+            loadingForm.Show();
+            loadingForm.Refresh();
+
+            try
+            {
+                // 비동기로 저장 작업 수행
+                await Task.Run(() => SaveCurrentLabelingData());
+                
+                loadingForm.Close();
+
+                string videoDir = Path.GetDirectoryName(currentVideoFile);
+                string labelsDir = Path.Combine(videoDir, "labels");
+                
+                MessageBox.Show(
+                    $"JSON 파일이 저장되었습니다.\n\n" +
+                    $"위치: {labelsDir}\n" +
+                    $"박스 개수: {boundingBoxes.Count}개",
+                    "저장 완료",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                loadingForm.Close();
+                MessageBox.Show($"JSON 저장 중 오류가 발생했습니다:\n{ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
         #endregion
 
         #region Theme
@@ -384,7 +541,7 @@ namespace WinFormsApp1
         #endregion
 
         #region Video Loading
-        private void btnSelectFolder_Click(object sender, EventArgs e)
+        private async void btnSelectFolder_Click(object sender, EventArgs e)
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
             {
@@ -394,20 +551,21 @@ namespace WinFormsApp1
 
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    if (!string.IsNullOrEmpty(currentVideoFile))
-                        SaveCurrentLabelingData();
+                    // 비디오 전환 시 자동 저장 제거 - 수동으로만 저장
 
                     videoFileList.Clear();
                     videoFileList.AddRange(ofd.FileNames);
                     currentVideoIndex = 0;
 
                     if (videoFileList.Count > 0)
-                        LoadVideo(videoFileList[0]);
+                    {
+                        await LoadVideoWithSubtitle(videoFileList[0]);
+                    }
                 }
             }
         }
 
-        private void btnSelectFolderPath_Click(object sender, EventArgs e)
+        private async void btnSelectFolderPath_Click(object sender, EventArgs e)
         {
             using (FolderBrowserDialog fbd = new FolderBrowserDialog())
             {
@@ -415,8 +573,7 @@ namespace WinFormsApp1
 
                 if (fbd.ShowDialog() == DialogResult.OK)
                 {
-                    if (!string.IsNullOrEmpty(currentVideoFile))
-                        SaveCurrentLabelingData();
+                    // 비디오 전환 시 자동 저장 제거 - 수동으로만 저장
 
                     videoFileList.Clear();
                     string[] videoExtensions = { "*.avi", "*.mp4", "*.mkv", "*.mov", "*.flv", "*.wmv" };
@@ -436,7 +593,7 @@ namespace WinFormsApp1
                     }
 
                     currentVideoIndex = 0;
-                    LoadVideo(videoFileList[0]);
+                    await LoadVideoWithSubtitle(videoFileList[0]);
                     boundingBoxes.Clear();
                     selectedBox = null;
                     UpdateBoxCount();
@@ -444,6 +601,36 @@ namespace WinFormsApp1
 
                     MessageBox.Show($"총 {videoFileList.Count}개의 영상 파일을 불러왔습니다.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
+            }
+        }
+
+        private async Task LoadVideoWithSubtitle(string filePath)
+        {
+            try
+            {
+                // 기존 비디오 로드
+                LoadVideo(filePath);
+
+                // 1. 먼저 외부 SRT 파일이 있는지 확인
+                string videoDir = Path.GetDirectoryName(filePath);
+                string videoName = Path.GetFileNameWithoutExtension(filePath);
+                string externalSrtPath = Path.Combine(videoDir, $"{videoName}.srt");
+
+                if (File.Exists(externalSrtPath))
+                {
+                    // 외부 SRT 파일이 있으면 바로 로드
+                    currentSrtFile = externalSrtPath;
+                    await LoadSrtFile(externalSrtPath);
+                    return;
+                }
+
+                // 2. 외부 SRT 파일이 없으면 비디오 내부에서 자막 추출 시도
+                await ExtractSrtFromVideo(filePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"비디오 로드 중 오류가 발생했습니다:\n{ex.Message}", 
+                    "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -528,7 +715,16 @@ namespace WinFormsApp1
             TimeSpan totalTime = TimeSpan.FromSeconds(totalSeconds);
 
             string speedText = playbackSpeed == 1.0 ? "" : $" ({playbackSpeed}x)";
-            labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} x264{speedText}";
+            string subtitleText = GetCurrentSubtitle();
+            
+            if (!string.IsNullOrEmpty(subtitleText))
+            {
+                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} x264{speedText}\n자막: {subtitleText}";
+            }
+            else
+            {
+                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} x264{speedText}";
+            }
 
             timelineProgress = totalFrames > 0 ? (float)currentFrameIndex / totalFrames : 0;
             panelTimeline.Invalidate();
@@ -955,7 +1151,7 @@ namespace WinFormsApp1
             }
         }
 
-        private void VideoListView_DoubleClick(object sender, EventArgs e)
+        private async void VideoListView_DoubleClick(object sender, EventArgs e)
         {
             if (videoListView.SelectedItems.Count == 0)
                 return;
@@ -964,9 +1160,9 @@ namespace WinFormsApp1
 
             if (selectedIndex != currentVideoIndex)
             {
-                SaveCurrentLabelingData();
+                // 비디오 전환 시 자동 저장 제거 - 수동으로만 저장
                 currentVideoIndex = selectedIndex;
-                LoadVideo(videoFileList[currentVideoIndex]);
+                await LoadVideoWithSubtitle(videoFileList[currentVideoIndex]);
                 boundingBoxes.Clear();
                 selectedBox = null;
                 UpdateBoxCount();
@@ -1577,13 +1773,17 @@ namespace WinFormsApp1
                     double frameSeconds = frameGroup.Key / fps;
                     DateTime frameTime = DateTime.Now.AddSeconds(frameSeconds);
 
+                    // 자막에서 타임스탬프 추출 시도
+                    string subtitleTimestamp = GetSubtitleTimestampForFrame(frameGroup.Key);
+                    string timestamp = subtitleTimestamp ?? frameTime.ToString("yyyy-MM-ddTHH:mm:ss.fff");
+
                     var imageInfo = new ImageInfo
                     {
                         Id = imageId,
                         Height = (int)videoCapture.Get(VideoCaptureProperties.FrameHeight),
                         Width = (int)videoCapture.Get(VideoCaptureProperties.FrameWidth),
                         FrameNumber = frameGroup.Key,
-                        Timestamp = frameTime.ToString("yyyy-MM-ddTHH:mm:ss.fff")
+                        Timestamp = timestamp
                     };
 
                     images.Add(imageInfo);
@@ -1601,6 +1801,20 @@ namespace WinFormsApp1
                             };
                         }
 
+                        // Entry와 Exit 프레임 계산
+                        int entryFrame = boundingBoxes.Where(b => b.PersonId == box.PersonId).Min(b => b.FrameIndex);
+                        int exitFrame = boundingBoxes.Where(b => b.PersonId == box.PersonId).Max(b => b.FrameIndex);
+
+                        // 자막에서 타임스탬프 추출 시도
+                        string entryTimestamp = GetSubtitleTimestampForFrame(entryFrame);
+                        string exitTimestamp = GetSubtitleTimestampForFrame(exitFrame);
+
+                        // 자막 타임스탬프가 없으면 계산된 시간 사용
+                        double entrySeconds = entryFrame / fps;
+                        double exitSeconds = exitFrame / fps;
+                        DateTime entryTime = DateTime.Now.AddSeconds(entrySeconds);
+                        DateTime exitTime = DateTime.Now.AddSeconds(exitSeconds);
+
                         var annotation = new AnnotationData
                         {
                             Id = nextAnnotationId++,
@@ -1614,13 +1828,13 @@ namespace WinFormsApp1
                             {
                                 Entry = new TrackEntry
                                 {
-                                    Frame = boundingBoxes.Where(b => b.PersonId == box.PersonId).Min(b => b.FrameIndex),
-                                    Timestamp = frameTime.ToString("yyyy-MM-ddTHH:mm:ss.fff")
+                                    Frame = entryFrame,
+                                    Timestamp = entryTimestamp ?? entryTime.ToString("yyyy-MM-ddTHH:mm:ss.fff")
                                 },
                                 Exit = new TrackEntry
                                 {
-                                    Frame = boundingBoxes.Where(b => b.PersonId == box.PersonId).Max(b => b.FrameIndex),
-                                    Timestamp = frameTime.ToString("yyyy-MM-ddTHH:mm:ss.fff")
+                                    Frame = exitFrame,
+                                    Timestamp = exitTimestamp ?? exitTime.ToString("yyyy-MM-ddTHH:mm:ss.fff")
                                 },
                                 CurrentClipCount = 1
                             }
@@ -1898,6 +2112,195 @@ namespace WinFormsApp1
         }
         #endregion
 
+        #region SRT Subtitle Extraction
+        private async Task<bool> ExtractSrtFromVideo(string videoPath)
+        {
+            // FFmpeg가 없으면 자막 추출 건너뛰기
+            if (!isFFmpegAvailable)
+            {
+                return false;
+            }
+
+            try
+            {
+                string videoDir = Path.GetDirectoryName(videoPath);
+                string videoName = Path.GetFileNameWithoutExtension(videoPath);
+                string srtPath = Path.Combine(videoDir, $"{videoName}.srt");
+
+                // 기존 SRT 파일이 있으면 삭제
+                if (File.Exists(srtPath))
+                {
+                    File.Delete(srtPath);
+                }
+
+                // FFmpeg를 사용하여 자막 추출 (비디오 내부에 포함된 자막 스트림)
+                var ffTask = FFMpegArguments
+                    .FromFileInput(videoPath)
+                    .OutputToFile(srtPath, true, options => options
+                        .WithCustomArgument("-map 0:s:0")  // 첫 번째 자막 스트림 선택
+                        .WithCustomArgument("-c:s srt")    // SRT 형식으로 출력
+                    )
+                    .ProcessAsynchronously();
+
+                var result = await ffTask;
+
+                if (result && File.Exists(srtPath))
+                {
+                    currentSrtFile = srtPath;
+                    await LoadSrtFile(srtPath);
+                    return true;
+                }
+                else
+                {
+                    // 자막 스트림이 없는 경우 (정상 상황)
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                // 자막이 없거나 추출 실패 시 조용히 실패
+                System.Diagnostics.Debug.WriteLine($"자막 추출 실패: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task LoadSrtFile(string srtPath)
+        {
+            try
+            {
+                subtitleEntries.Clear();
+                string[] lines = await File.ReadAllLinesAsync(srtPath);
+
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    // 빈 줄 건너뛰기
+                    if (string.IsNullOrWhiteSpace(lines[i]))
+                        continue;
+
+                    // 인덱스 번호 확인
+                    if (int.TryParse(lines[i], out int index))
+                    {
+                        i++; // 다음 줄로 이동
+
+                        // 시간 정보 파싱
+                        if (i < lines.Length && lines[i].Contains("-->"))
+                        {
+                            string[] timeParts = lines[i].Split(new[] { " --> " }, StringSplitOptions.None);
+                            if (timeParts.Length == 2)
+                            {
+                                TimeSpan startTime = ParseSrtTime(timeParts[0]);
+                                TimeSpan endTime = ParseSrtTime(timeParts[1]);
+
+                                i++; // 다음 줄로 이동
+
+                                // 자막 텍스트 수집
+                                List<string> textLines = new List<string>();
+                                while (i < lines.Length && !string.IsNullOrWhiteSpace(lines[i]))
+                                {
+                                    textLines.Add(lines[i]);
+                                    i++;
+                                }
+
+                                if (textLines.Count > 0)
+                                {
+                                    subtitleEntries.Add(new SubtitleEntry
+                                    {
+                                        Index = index,
+                                        StartTime = startTime,
+                                        EndTime = endTime,
+                                        Text = string.Join(" ", textLines)
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                MessageBox.Show($"자막 파일을 성공적으로 로드했습니다.\n총 {subtitleEntries.Count}개의 자막 항목을 찾았습니다.", 
+                    "자막 로드 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"자막 파일 로드 중 오류가 발생했습니다:\n{ex.Message}", 
+                    "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private TimeSpan ParseSrtTime(string timeString)
+        {
+            // SRT 시간 형식: 00:00:00,000
+            string[] parts = timeString.Split(',');
+            if (parts.Length == 2)
+            {
+                string[] timeParts = parts[0].Split(':');
+                if (timeParts.Length == 3)
+                {
+                    int hours = int.Parse(timeParts[0]);
+                    int minutes = int.Parse(timeParts[1]);
+                    int seconds = int.Parse(timeParts[2]);
+                    int milliseconds = int.Parse(parts[1]);
+
+                    return new TimeSpan(0, hours, minutes, seconds, milliseconds);
+                }
+            }
+            return TimeSpan.Zero;
+        }
+
+        private string GetCurrentSubtitle()
+        {
+            if (subtitleEntries.Count == 0)
+                return "";
+
+            double currentSeconds = currentFrameIndex / fps;
+            TimeSpan currentTime = TimeSpan.FromSeconds(currentSeconds);
+
+            var currentSubtitle = subtitleEntries.FirstOrDefault(s => 
+                currentTime >= s.StartTime && currentTime <= s.EndTime);
+
+            return currentSubtitle?.Text ?? "";
+        }
+
+        // 자막에서 날짜-시간 형식(YYYY-MM-DD HH:mm:ss) 추출
+        private string ExtractTimestampFromSubtitle(string subtitleText)
+        {
+            if (string.IsNullOrEmpty(subtitleText))
+                return null;
+
+            // 정규식 패턴: YYYY-MM-DD HH:mm:ss
+            var regex = new System.Text.RegularExpressions.Regex(@"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}");
+            var match = regex.Match(subtitleText);
+
+            if (match.Success)
+            {
+                // ISO 8601 형식으로 변환 (YYYY-MM-DDTHH:mm:ss)
+                string timestamp = match.Value.Replace(" ", "T");
+                return timestamp;
+            }
+
+            return null;
+        }
+
+        // 특정 프레임의 자막 타임스탬프 가져오기
+        private string GetSubtitleTimestampForFrame(int frameIndex)
+        {
+            if (subtitleEntries.Count == 0)
+                return null;
+
+            double frameSeconds = frameIndex / fps;
+            TimeSpan frameTime = TimeSpan.FromSeconds(frameSeconds);
+
+            var subtitle = subtitleEntries.FirstOrDefault(s => 
+                frameTime >= s.StartTime && frameTime <= s.EndTime);
+
+            if (subtitle != null)
+            {
+                return ExtractTimestampFromSubtitle(subtitle.Text);
+            }
+
+            return null;
+        }
+        #endregion
+
         #region Helper Methods
         private BoundingBox CloneBoundingBox(BoundingBox box)
         {
@@ -1918,7 +2321,7 @@ namespace WinFormsApp1
         {
             base.OnFormClosing(e);
 
-            SaveCurrentLabelingData();
+            // 프로그램 종료 시 자동 저장 제거 - 수동으로만 저장
 
             if (videoCapture != null)
             {

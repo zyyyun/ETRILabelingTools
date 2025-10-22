@@ -70,6 +70,7 @@
             this.labelPerson = new System.Windows.Forms.Label();
             this.panelLabelEvent = new System.Windows.Forms.Panel();
             this.labelEvent = new System.Windows.Forms.Label();
+            this.btnExportJson = new System.Windows.Forms.Button();
 
             // Timer
             this.timerPlayback = new System.Windows.Forms.Timer(this.components);
@@ -87,6 +88,7 @@
             this.panelHeader.Height = 50;
             this.panelHeader.Controls.Add(this.labelTitle);
             this.panelHeader.Controls.Add(this.btnSelectFolder);
+            this.panelHeader.Controls.Add(this.btnExportJson);
             this.panelHeader.Controls.Add(this.labelBoxCount);
             this.panelHeader.Controls.Add(this.btnMinimize);
             this.panelHeader.Controls.Add(this.btnMaximize);
@@ -115,6 +117,16 @@
             this.btnSelectFolderPath.BackColor = System.Drawing.Color.FromArgb(226, 232, 240);
             this.btnSelectFolderPath.Click += new System.EventHandler(this.btnSelectFolderPath_Click);
             this.panelHeader.Controls.Add(this.btnSelectFolderPath);
+
+            // Export JSON Button
+            this.btnExportJson.Text = "JSON 저장";
+            this.btnExportJson.Location = new System.Drawing.Point(370, 10);
+            this.btnExportJson.Size = new System.Drawing.Size(90, 30);
+            this.btnExportJson.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnExportJson.BackColor = System.Drawing.Color.FromArgb(34, 197, 94);
+            this.btnExportJson.ForeColor = System.Drawing.Color.White;
+            this.btnExportJson.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnExportJson.Click += new System.EventHandler(this.btnExportJson_Click);
 
             // Box Count Label
             this.labelBoxCount.Text = "박스 개수:";
@@ -504,6 +516,7 @@
         private System.Windows.Forms.Label labelTitle;
         private System.Windows.Forms.Button btnSelectFolder;
         private System.Windows.Forms.Button btnSelectFolderPath;
+        private System.Windows.Forms.Button btnExportJson;
         private System.Windows.Forms.Label labelBoxCount;
         private System.Windows.Forms.Button btnMinimize;
         private System.Windows.Forms.Button btnMaximize;
