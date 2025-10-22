@@ -258,9 +258,6 @@ namespace WinFormsApp1
         private double msPerFrame = 0;
         private bool isTimelineDragging = false;
 
-        // 실시간(자막 대체) 표시용 기준 시각/프레임
-        private DateTime? realTimeBase = null; // 사용자가 입력한 실제 시간 (현재 프레임 기준)
-        private int realTimeBaseFrame = 0;     // 기준이 설정된 프레임 인덱스
 
         private Stack<UndoAction> undoStack = new Stack<UndoAction>();
         private Stack<UndoAction> redoStack = new Stack<UndoAction>();
@@ -301,28 +298,6 @@ namespace WinFormsApp1
             InitializeYoloModel();
         }
 
-        private void btnSetRealTime_Click(object sender, EventArgs e)
-        {
-            // 현재 프레임에 해당하는 실제 시간을 사용자에게 입력받는다
-            string input = ShowInputDialog("시간 기준 설정", "현재 프레임의 실제 시간을 입력 (예: 07:22:15.123)");
-            if (string.IsNullOrWhiteSpace(input))
-                return;
-
-            // 허용 포맷: HH:mm:ss 또는 HH:mm:ss.fff
-            if (DateTime.TryParseExact(input, new[] { "HH:mm:ss.fff", "HH:mm:ss" },
-                System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None,
-                out DateTime parsed))
-            {
-                realTimeBase = parsed;
-                realTimeBaseFrame = currentFrameIndex;
-                UpdateTimeLabels();
-            }
-            else
-            {
-                MessageBox.Show("형식이 올바르지 않습니다. 예: 07:22:15 또는 07:22:15.123", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
 
         private void InitializeYoloModel()
         {
@@ -495,9 +470,6 @@ namespace WinFormsApp1
                 fps = videoCapture.Get(VideoCaptureProperties.Fps);
                 currentFrameIndex = 0;
 
-                // 새로운 영상 로드 시 실시간 기준 리셋
-                realTimeBase = null;
-                realTimeBaseFrame = 0;
 
                 LoadFrame(0);
                 UpdateTimeLabels();
@@ -557,18 +529,6 @@ namespace WinFormsApp1
 
             string speedText = playbackSpeed == 1.0 ? "" : $" ({playbackSpeed}x)";
             labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} x264{speedText}";
-
-            // 실시간(자막 시간 대체) 표시
-            if (realTimeBase.HasValue)
-            {
-                double deltaSeconds = (currentFrameIndex - realTimeBaseFrame) / fps;
-                DateTime realTime = realTimeBase.Value.AddSeconds(deltaSeconds);
-                labelRealTime.Text = realTime.ToString("HH:mm:ss.fff");
-            }
-            else
-            {
-                labelRealTime.Text = "--:--:--.---";
-            }
 
             timelineProgress = totalFrames > 0 ? (float)currentFrameIndex / totalFrames : 0;
             panelTimeline.Invalidate();
@@ -1709,7 +1669,7 @@ namespace WinFormsApp1
             if (e.KeyCode == Keys.Space && (btnPlay.Focused || btnRewind.Focused || btnForward.Focused))
                 return;
             if ((e.KeyCode == Keys.Left || e.KeyCode == Keys.Right) && 
-                (btnEntry.Focused || btnExit.Focused || btnSetRealTime.Focused))
+                (btnEntry.Focused || btnExit.Focused))
                 return;
 
             if (e.KeyCode == Keys.Space)
