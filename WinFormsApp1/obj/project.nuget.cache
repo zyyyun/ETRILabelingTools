@@ -1,10 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "/NjFMxz2S70=",
+  "dgSpecHash": "c0JT8LS/Dmo=",
   "success": true,
   "projectFilePath": "C:\\Users\\ANNA\\ETRILabelingTool\\WinFormsApp1\\WinFormsApp1.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\ANNA\\.nuget\\packages\\clipper2\\1.4.0\\clipper2.1.4.0.nupkg.sha512",
+    "C:\\Users\\ANNA\\.nuget\\packages\\ffmpegcore\\5.1.0\\ffmpegcore.5.1.0.nupkg.sha512",
+    "C:\\Users\\ANNA\\.nuget\\packages\\instances\\3.0.0\\instances.3.0.0.nupkg.sha512",
     "C:\\Users\\ANNA\\.nuget\\packages\\microsoft.extensions.dependencyinjection\\8.0.1\\microsoft.extensions.dependencyinjection.8.0.1.nupkg.sha512",
     "C:\\Users\\ANNA\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.2\\microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
     "C:\\Users\\ANNA\\.nuget\\packages\\microsoft.ml.onnxruntime\\1.19.2\\microsoft.ml.onnxruntime.1.19.2.nupkg.sha512",
@@ -19,6 +21,8 @@
     "C:\\Users\\ANNA\\.nuget\\packages\\sixlabors.imagesharp.drawing\\2.1.4\\sixlabors.imagesharp.drawing.2.1.4.nupkg.sha512",
     "C:\\Users\\ANNA\\.nuget\\packages\\system.drawing.common\\8.0.11\\system.drawing.common.8.0.11.nupkg.sha512",
     "C:\\Users\\ANNA\\.nuget\\packages\\system.memory\\4.6.3\\system.memory.4.6.3.nupkg.sha512",
+    "C:\\Users\\ANNA\\.nuget\\packages\\system.text.encodings.web\\7.0.0\\system.text.encodings.web.7.0.0.nupkg.sha512",
+    "C:\\Users\\ANNA\\.nuget\\packages\\system.text.json\\7.0.2\\system.text.json.7.0.2.nupkg.sha512",
     "C:\\Users\\ANNA\\.nuget\\packages\\yolosharp\\6.0.0\\yolosharp.6.0.0.nupkg.sha512"
   ],
   "logs": []

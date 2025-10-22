@@ -8,9 +8,11 @@
     ".NETCoreApp,Version=v8.0": {
       "WinFormsApp1/1.0.0": {
         "dependencies": {
+          "FFMpegCore": "5.1.0",
           "Newtonsoft.Json": "13.0.3",
           "OpenCvSharp4": "4.11.0.20250507",
           "OpenCvSharp4.Extensions": "4.11.0.20250507",
+          "OpenCvSharp4.runtime.win": "4.11.0.20250507",
           "System.Drawing.Common": "8.0.11",
           "YoloSharp": "6.0.0"
         },
@@ -23,6 +25,26 @@
           "lib/netstandard2.0/Clipper2Lib.dll": {
             "assemblyVersion": "1.4.0.0",
             "fileVersion": "1.4.0.0"
+          }
+        }
+      },
+      "FFMpegCore/5.1.0": {
+        "dependencies": {
+          "Instances": "3.0.0",
+          "System.Text.Json": "7.0.2"
+        },
+        "runtime": {
+          "lib/netstandard2.0/FFMpegCore.dll": {
+            "assemblyVersion": "5.0.0.0",
+            "fileVersion": "5.0.0.0"
+          }
+        }
+      },
+      "Instances/3.0.0": {
+        "runtime": {
+          "lib/netstandard2.0/Instances.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
           }
         }
       },
@@ -195,6 +217,30 @@
           }
         }
       },
+      "OpenCvSharp4.runtime.win/4.11.0.20250507": {
+        "runtimeTargets": {
+          "runtimes/win-x64/native/OpenCvSharpExtern.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/opencv_videoio_ffmpeg4110_64.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "2024.12.0.0"
+          },
+          "runtimes/win-x86/native/OpenCvSharpExtern.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x86/native/opencv_videoio_ffmpeg4110.dll": {
+            "rid": "win-x86",
+            "assetType": "native",
+            "fileVersion": "2024.12.0.0"
+          }
+        }
+      },
       "SixLabors.Fonts/2.0.4": {
         "runtime": {
           "lib/net6.0/SixLabors.Fonts.dll": {
@@ -235,6 +281,12 @@
         }
       },
       "System.Memory/4.6.3": {},
+      "System.Text.Encodings.Web/7.0.0": {},
+      "System.Text.Json/7.0.2": {
+        "dependencies": {
+          "System.Text.Encodings.Web": "7.0.0"
+        }
+      },
       "YoloSharp/6.0.0": {
         "dependencies": {
           "Clipper2": "1.4.0",
@@ -264,6 +316,20 @@
       "sha512": "sha512-NmUzuJNhA6mTeILHj3hUO3skZH8i8dyUjK0b3bbCciP025T8I+hJLilII32qJ5Z/krHEh++PA/9WuvqfGd4QqQ==",
       "path": "clipper2/1.4.0",
       "hashPath": "clipper2.1.4.0.nupkg.sha512"
+    },
+    "FFMpegCore/5.1.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-cCzfCElrq9IziByiho3oeK/T2hDfM0jjMQmo22cLoAt7bptNNhEiRhF9X0lKwLBoK9vjZKn06+gaUfbfmS9m3Q==",
+      "path": "ffmpegcore/5.1.0",
+      "hashPath": "ffmpegcore.5.1.0.nupkg.sha512"
+    },
+    "Instances/3.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-wlZ0V+S7X7kMKbjC7EZJf5A1FNlldQrS0tKMNXP1Ued/6XCo6t5kpFDS3X72cd+SGaX+q+FOlWO7r18GlxcKAQ==",
+      "path": "instances/3.0.0",
+      "hashPath": "instances.3.0.0.nupkg.sha512"
     },
     "Microsoft.Extensions.DependencyInjection/8.0.1": {
       "type": "package",
@@ -321,6 +387,13 @@
       "path": "opencvsharp4.extensions/4.11.0.20250507",
       "hashPath": "opencvsharp4.extensions.4.11.0.20250507.nupkg.sha512"
     },
+    "OpenCvSharp4.runtime.win/4.11.0.20250507": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-3PxMXyzR+pkL9UOx2PiBjZm+/iyCIu5D6OlA1sq9MH7oWrfvVnCXJlUYhIJv67F7SLUwUuGwXDIQBfdsL/54lg==",
+      "path": "opencvsharp4.runtime.win/4.11.0.20250507",
+      "hashPath": "opencvsharp4.runtime.win.4.11.0.20250507.nupkg.sha512"
+    },
     "SixLabors.Fonts/2.0.4": {
       "type": "package",
       "serviceable": true,
@@ -355,6 +428,20 @@
       "sha512": "sha512-qdcDOgnFZY40+Q9876JUHnlHu7bosOHX8XISRoH94fwk6hgaeQGSgfZd8srWRZNt5bV9ZW2TljcegDNxsf+96A==",
       "path": "system.memory/4.6.3",
       "hashPath": "system.memory.4.6.3.nupkg.sha512"
+    },
+    "System.Text.Encodings.Web/7.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-OP6umVGxc0Z0MvZQBVigj4/U31Pw72ITihDWP9WiWDm+q5aoe0GaJivsfYGq53o6dxH7DcXWiCTl7+0o2CGdmg==",
+      "path": "system.text.encodings.web/7.0.0",
+      "hashPath": "system.text.encodings.web.7.0.0.nupkg.sha512"
+    },
+    "System.Text.Json/7.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-/LZf/JrGyilojqwpaywb+sSz8Tew7ij4K/Sk+UW8AKfAK7KRhR6mKpKtTm06cYA7bCpGTWfYksIW+mVsdxPegQ==",
+      "path": "system.text.json/7.0.2",
+      "hashPath": "system.text.json.7.0.2.nupkg.sha512"
     },
     "YoloSharp/6.0.0": {
       "type": "package",
