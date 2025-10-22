@@ -168,9 +168,21 @@ namespace WinFormsApp1
             int endFrame,
             double fps)
         {
+            System.Diagnostics.Debug.WriteLine($"[YOLO] TrackObjects 호출 - Label: {startBox.Label}, PersonId: {startBox.PersonId}, VehicleId: {startBox.VehicleId}, EventId: {startBox.EventId}");
+            System.Diagnostics.Debug.WriteLine($"[YOLO] Frame 범위: {startFrame} ~ {endFrame}");
+            
             var trackedBoxes = new List<BoundingBox>();
             videoCapture.Set(VideoCaptureProperties.PosFrames, startFrame);
             Mat frame = new Mat();
+
+            // 이전 프레임 박스 초기화: 사용자 지정 startBox로 시작
+            Rectangle previousRect = startBox.Rectangle;
+            string fixedLabel = startBox.Label;
+            int fixedIdPerson = startBox.PersonId;
+            int fixedIdVehicle = startBox.VehicleId;
+            int fixedIdEvent = startBox.EventId;
+
+            System.Diagnostics.Debug.WriteLine($"[YOLO] 추적 시작 박스: {previousRect}, Label: {fixedLabel}, PersonId: {fixedIdPerson}, VehicleId: {fixedIdVehicle}, EventId: {fixedIdEvent}");
 
             for (int i = startFrame; i <= endFrame; i++)
             {
@@ -179,31 +191,53 @@ namespace WinFormsApp1
 
                 try
                 {
-                    // Mat을 임시 파일로 저장
+                    // Mat을 임시 파일로 저장 (YoloSharp는 파일 입력을 요구)
                     Cv2.ImWrite(_tempImagePath, frame);
 
-                    // YoloSharp의 Detect 메서드에 파일 경로 전달
-                    var result = _predictor.Detect(_tempImagePath);
+                    var detections = _predictor.Detect(_tempImagePath);
+                    System.Diagnostics.Debug.WriteLine($"[YOLO] Frame {i}: {detections.Count}개 검출");
 
-                    // 결과에서 BoundingBox 추출 (열거형으로 접근)
-                    foreach (var detection in result)
+                    // 이전 박스와 IoU가 가장 큰 검출만 채택 (사용자 박스 기반 추적)
+                    double bestIou = 0.0;
+                    OpenCvSharp.Rect? best = null;
+                    foreach (var d in detections)
                     {
-                        var trackedBox = new BoundingBox
-                        {
-                            FrameIndex = i,
-                            Rectangle = new Rectangle(
-                                (int)detection.Bounds.Left,
-                                (int)detection.Bounds.Top,
-                                (int)detection.Bounds.Width,
-                                (int)detection.Bounds.Height
-                            ),
-                            Label = detection.Name?.Name ?? startBox.Label,
-                            PersonId = startBox.PersonId,
-                            Action = "waypoint"
-                        };
+                        var rect = new OpenCvSharp.Rect(
+                            (int)d.Bounds.Left,
+                            (int)d.Bounds.Top,
+                            (int)d.Bounds.Width,
+                            (int)d.Bounds.Height);
 
-                        trackedBoxes.Add(trackedBox);
+                        double iou = ComputeIoU(previousRect, new Rectangle(rect.X, rect.Y, rect.Width, rect.Height));
+                        if (iou > bestIou)
+                        {
+                            bestIou = iou;
+                            best = rect;
+                        }
                     }
+                    
+                    System.Diagnostics.Debug.WriteLine($"[YOLO] Frame {i}: BestIoU = {bestIou:F3}, Best = {best?.ToString() ?? "null"}");
+
+                    // 매칭이 없으면 이전 박스를 그대로 유지해 연속성 보장
+                    var nextRect = previousRect;
+                    if (best.HasValue)
+                    {
+                        nextRect = new Rectangle(best.Value.X, best.Value.Y, best.Value.Width, best.Value.Height);
+                    }
+
+                    var trackedBox = new BoundingBox
+                    {
+                        FrameIndex = i,
+                        Rectangle = nextRect, // 좌표는 항상 이미지 픽셀 기준
+                        Label = fixedLabel,
+                        PersonId = fixedIdPerson,
+                        VehicleId = fixedIdVehicle,
+                        EventId = fixedIdEvent,
+                        Action = "waypoint"
+                    };
+
+                    trackedBoxes.Add(trackedBox);
+                    previousRect = nextRect;
                 }
                 catch (Exception ex)
                 {
@@ -214,7 +248,6 @@ namespace WinFormsApp1
 
             frame.Dispose();
 
-            // 임시 파일 정리
             try
             {
                 if (File.Exists(_tempImagePath))
@@ -223,6 +256,24 @@ namespace WinFormsApp1
             catch { }
 
             return trackedBoxes;
+        }
+
+        private static double ComputeIoU(Rectangle a, Rectangle b)
+        {
+            int x1 = Math.Max(a.Left, b.Left);
+            int y1 = Math.Max(a.Top, b.Top);
+            int x2 = Math.Min(a.Right, b.Right);
+            int y2 = Math.Min(a.Bottom, b.Bottom);
+
+            int interW = Math.Max(0, x2 - x1);
+            int interH = Math.Max(0, y2 - y1);
+            double inter = interW * interH;
+
+            double areaA = a.Width * a.Height;
+            double areaB = b.Width * b.Height;
+            double union = areaA + areaB - inter;
+            if (union <= 0) return 0;
+            return inter / union;
         }
 
         public void Dispose()
@@ -900,9 +951,9 @@ namespace WinFormsApp1
                 return;
             }
 
-            // Entry 프레임의 박스를 찾아서 PersonId와 Label 가져오기
-            var entryBox = boundingBoxes.FirstOrDefault(b => b.FrameIndex == entryFrameIndex.Value);
-            if (entryBox == null)
+            // Entry 프레임의 모든 박스를 찾기
+            var entryBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value).ToList();
+            if (entryBoxes.Count == 0)
             {
                 MessageBox.Show("Entry 프레임에 박스가 없습니다. 먼저 박스를 그려주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
@@ -914,6 +965,9 @@ namespace WinFormsApp1
 
             btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
 
+            System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Entry 프레임 {entryFrameIndex.Value}에 {entryBoxes.Count}개의 박스 발견");
+
+            // 하나의 waypoint 생성 (첫 번째 박스 기준으로, 나머지는 추적 시 함께 처리)
             var waypoint = new WaypointMarker
             {
                 EntryFrame = entryFrameIndex.Value,
@@ -921,16 +975,18 @@ namespace WinFormsApp1
                 MarkerColor = markerColors[currentColorIndex % markerColors.Length],
                 EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                 ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                ObjectId = GetBoxId(entryBox),
-                Label = entryBox.Label
+                ObjectId = 0, // 여러 객체를 포함하는 waypoint이므로 0으로 설정
+                Label = "multi" // 여러 객체 타입
             };
+
+            System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Multi-object waypoint: {entryBoxes.Count}개 객체 ({waypoint.EntryTime} ~ {waypoint.ExitTime})");
 
             waypointMarkers.Add(waypoint);
             currentColorIndex++;
 
             var item = new ListViewItem(waypoint.EntryTime);
             item.SubItems.Add(waypoint.ExitTime);
-            item.SubItems.Add("●");
+            item.SubItems.Add($"● {entryBoxes.Count}개 객체");
             item.ForeColor = waypoint.MarkerColor;
             item.Tag = waypoint;
             listViewWaypoints.Items.Add(item);
@@ -943,7 +999,7 @@ namespace WinFormsApp1
             panelTimeline.Invalidate();
 
             var result = MessageBox.Show(
-                "Waypoint가 생성되었습니다.\n자동 추적을 수행하시겠습니까?",
+                $"Waypoint가 생성되었습니다. ({entryBoxes.Count}개 객체)\n자동 추적을 수행하시겠습니까?",
                 "Auto Tracking",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -1017,19 +1073,17 @@ namespace WinFormsApp1
         {
             if (currentMode == DrawMode.Draw)
             {
-                if (!entryFrameIndex.HasValue)
-                {
-                    MessageBox.Show("먼저 Entry 마커를 설정해주세요. (E키)", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
+                // Entry 마커 체크 제거 - YOLO 추적 시에만 필요
                 isDrawing = true;
-                drawStartPoint = e.Location;
+                drawStartPoint = e.Location; // 뷰 좌표로 저장
 
+                // 이미지 좌표로 변환하여 저장
+                var imagePoint = ViewToImage(new PointF(e.X, e.Y));
+                
                 drawingBox = new BoundingBox
                 {
                     FrameIndex = currentFrameIndex,
-                    Rectangle = new Rectangle(e.Location, new System.Drawing.Size(0, 0)),
+                    Rectangle = new Rectangle((int)imagePoint.X, (int)imagePoint.Y, 0, 0),
                     Label = currentSelectedLabel,
                     PersonId = currentSelectedLabel == "person" ? currentAssignedId : 0,
                     VehicleId = currentSelectedLabel == "vehicle" ? currentAssignedId : 0,
@@ -1044,7 +1098,10 @@ namespace WinFormsApp1
                 if (selectedBox != null)
                 {
                     isDragging = true;
-                    dragOffset = new System.Drawing.Point(e.X - selectedBox.Rectangle.X, e.Y - selectedBox.Rectangle.Y);
+                    // 뷰 좌표로 변환한 박스 위치 기준으로 드래그 오프셋 계산
+                    var viewRect = ImageToView(new RectangleF(selectedBox.Rectangle.X, selectedBox.Rectangle.Y, 
+                        selectedBox.Rectangle.Width, selectedBox.Rectangle.Height));
+                    dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
                     UpdateObjectInfo(selectedBox);
                 }
             }
@@ -1054,23 +1111,28 @@ namespace WinFormsApp1
         {
             if (isDrawing && drawingBox != null)
             {
-                int width = e.X - drawStartPoint.X;
-                int height = e.Y - drawStartPoint.Y;
+                // 뷰 좌표에서 이미지 좌표로 변환
+                var startImagePoint = ViewToImage(new PointF(drawStartPoint.X, drawStartPoint.Y));
+                var currentImagePoint = ViewToImage(new PointF(e.X, e.Y));
 
-                drawingBox.Rectangle = new Rectangle(
-                    Math.Min(drawStartPoint.X, e.X),
-                    Math.Min(drawStartPoint.Y, e.Y),
-                    Math.Abs(width),
-                    Math.Abs(height)
-                );
+                int x = (int)Math.Min(startImagePoint.X, currentImagePoint.X);
+                int y = (int)Math.Min(startImagePoint.Y, currentImagePoint.Y);
+                int width = (int)Math.Abs(currentImagePoint.X - startImagePoint.X);
+                int height = (int)Math.Abs(currentImagePoint.Y - startImagePoint.Y);
+
+                drawingBox.Rectangle = new Rectangle(x, y, width, height);
 
                 pictureBoxVideo.Invalidate();
             }
             else if (isDragging && selectedBox != null)
             {
+                // 뷰 좌표에서 이미지 좌표로 변환
+                var viewPos = new PointF(e.X - dragOffset.X, e.Y - dragOffset.Y);
+                var imagePos = ViewToImage(viewPos);
+
                 selectedBox.Rectangle = new Rectangle(
-                    e.X - dragOffset.X,
-                    e.Y - dragOffset.Y,
+                    (int)imagePos.X,
+                    (int)imagePos.Y,
                     selectedBox.Rectangle.Width,
                     selectedBox.Rectangle.Height
                 );
@@ -1116,12 +1178,33 @@ namespace WinFormsApp1
 
             foreach (var box in currentFrameBoxes)
             {
-                // 웨이포인트 확인: 해당 박스의 PersonId와 일치하는 웨이포인트 찾기
-                var waypoint = waypointMarkers.FirstOrDefault(w => 
-                    w.ObjectId == GetBoxId(box) && 
-                    w.Label == box.Label);
+                // 웨이포인트 확인: 해당 박스가 속한 waypoint 찾기
+                // 1. 먼저 multi-object waypoint 확인 (ObjectId=0, Label="multi")
+                // 2. 없으면 개별 객체 waypoint 확인 (하위 호환성)
+                var waypoint = waypointMarkers.FirstOrDefault(w =>
+                {
+                    // Entry/Exit 프레임 범위 내에 박스가 있는지 확인
+                    bool isInRange = currentFrameIndex >= w.EntryFrame && currentFrameIndex <= w.ExitFrame;
+                    if (!isInRange) return false;
 
-                // 웨이포인트가 있으면 Entry 프레임 이후에만 표시
+                    // Multi-object waypoint인 경우: 이 박스가 entry 프레임에 있었는지 확인
+                    if (w.Label == "multi" && w.ObjectId == 0)
+                    {
+                        // 이 박스가 해당 waypoint의 entry 프레임에 존재하는지 확인
+                        bool boxExistsAtEntry = boundingBoxes.Any(b =>
+                            b.FrameIndex == w.EntryFrame &&
+                            b.Label == box.Label &&
+                            GetBoxId(b) == GetBoxId(box));
+                        return boxExistsAtEntry;
+                    }
+                    // 개별 객체 waypoint (하위 호환성)
+                    else
+                    {
+                        return w.ObjectId == GetBoxId(box) && w.Label == box.Label;
+                    }
+                });
+
+                // 웨이포인트가 있으면 Entry~Exit 프레임 범위 내에서만 표시
                 if (waypoint != null)
                 {
                     if (currentFrameIndex < waypoint.EntryFrame)
@@ -1131,43 +1214,54 @@ namespace WinFormsApp1
                         continue; // Exit 이후에도 표시 안 함
                 }
 
+                // 이미지 좌표를 뷰 좌표로 변환
+                var viewRect = ImageToView(new RectangleF(box.Rectangle.X, box.Rectangle.Y, 
+                    box.Rectangle.Width, box.Rectangle.Height));
+
                 Color boxColor = GetColorForLabel(box.Label);
                 using (Pen pen = new Pen(boxColor, 3))
                 {
                     if (box == selectedBox)
                         pen.Width = 5;
-                    g.DrawRectangle(pen, box.Rectangle);
+                    g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
                 }
 
                 string labelText = $"{box.Label}_{GetBoxId(box):D2}";
                 using (Font font = new Font("Segoe UI", 10F, FontStyle.Bold))
                 {
                     SizeF textSize = g.MeasureString(labelText, font);
-                    Rectangle labelBg = new Rectangle(
-                        box.Rectangle.X,
-                        box.Rectangle.Y - (int)textSize.Height - 4,
-                        (int)textSize.Width + 8,
-                        (int)textSize.Height + 4
+                    RectangleF labelBg = new RectangleF(
+                        viewRect.X,
+                        viewRect.Y - textSize.Height - 4,
+                        textSize.Width + 8,
+                        textSize.Height + 4
                     );
 
                     using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(200, boxColor)))
                         g.FillRectangle(bgBrush, labelBg);
 
                     using (SolidBrush textBrush = new SolidBrush(Color.White))
-                        g.DrawString(labelText, font, textBrush, box.Rectangle.X + 4, box.Rectangle.Y - textSize.Height - 2);
+                        g.DrawString(labelText, font, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
                 }
             }
 
             if (isDrawing && drawingBox != null)
             {
+                // 이미지 좌표를 뷰 좌표로 변환
+                var viewRect = ImageToView(new RectangleF(drawingBox.Rectangle.X, drawingBox.Rectangle.Y, 
+                    drawingBox.Rectangle.Width, drawingBox.Rectangle.Height));
+
                 Color boxColor = GetColorForLabel(drawingBox.Label);
                 using (Pen pen = new Pen(boxColor, 3) { DashStyle = DashStyle.Dash })
-                    g.DrawRectangle(pen, drawingBox.Rectangle);
+                    g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
             }
         }
 
         private BoundingBox GetBoundingBoxAt(System.Drawing.Point location)
         {
+            // 뷰 좌표를 이미지 좌표로 변환
+            var imageLocation = ViewToImage(new PointF(location.X, location.Y));
+            
             // 현재 프레임에 해당하는 박스들을 필터링
             var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex);
 
@@ -1185,7 +1279,8 @@ namespace WinFormsApp1
                         continue;
                 }
 
-                if (box.Rectangle.Contains(location))
+                // 이미지 좌표로 비교
+                if (box.Rectangle.Contains((int)imageLocation.X, (int)imageLocation.Y))
                     return box;
             }
             return null;
@@ -1221,7 +1316,19 @@ namespace WinFormsApp1
             {
                 var item = new ListViewItem(waypoint.EntryTime);
                 item.SubItems.Add(waypoint.ExitTime);
-                item.SubItems.Add("●");
+                
+                // multi-object waypoint인 경우 객체 개수 표시
+                if (waypoint.Label == "multi" && waypoint.ObjectId == 0)
+                {
+                    int objectCount = boundingBoxes.Count(b => b.FrameIndex == waypoint.EntryFrame);
+                    item.SubItems.Add($"● {objectCount}개 객체");
+                }
+                else
+                {
+                    // 기존 단일 객체 waypoint (하위 호환성)
+                    item.SubItems.Add($"● {waypoint.Label}_{waypoint.ObjectId:D2}");
+                }
+                
                 item.ForeColor = waypoint.MarkerColor;
                 item.Tag = waypoint;
                 listViewWaypoints.Items.Add(item);
@@ -1745,12 +1852,13 @@ namespace WinFormsApp1
         {
             try
             {
-                var startBox = boundingBoxes.FirstOrDefault(b => b.FrameIndex == waypoint.EntryFrame);
+                // Entry 프레임의 모든 박스를 찾기 (multi-object waypoint)
+                var startBoxes = boundingBoxes.Where(b => b.FrameIndex == waypoint.EntryFrame).ToList();
 
-                if (startBox == null)
+                if (startBoxes.Count == 0)
                 {
                     MessageBox.Show(
-                        "Entry 프레임에 BBox를 찾을 수 없습니다.\n\n" +
+                        $"Entry 프레임에 BBox를 찾을 수 없습니다.\n\n" +
                         "추적하려면:\n" +
                         "1. Entry 프레임으로 이동\n" +
                         "2. BBox 그리기\n" +
@@ -1761,12 +1869,20 @@ namespace WinFormsApp1
                     return;
                 }
 
+                // 디버깅: 찾은 박스 정보 확인
+                System.Diagnostics.Debug.WriteLine($"[추적 시작] {startBoxes.Count}개의 객체 추적");
+                foreach (var box in startBoxes)
+                {
+                    System.Diagnostics.Debug.WriteLine($"  - {box.Label}_{GetBoxId(box):D2}");
+                }
+                System.Diagnostics.Debug.WriteLine($"[추적 모드] useYolo: {useYolo}, isYoloAvailable: {isYoloAvailable}");
+
                 // 추적 중 로딩 폼 생성
                 Form loadingForm = new Form
                 {
                     Width = 350,
                     Height = 120,
-                    Text = "YOLO 추적 중",
+                    Text = useYolo ? "YOLO 추적 중" : "OpenCV 추적 중",
                     StartPosition = FormStartPosition.CenterParent,
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     MaximizeBox = false,
@@ -1776,7 +1892,7 @@ namespace WinFormsApp1
 
                 Label loadingLabel = new Label
                 {
-                    Text = "YOLO 추적 중... 잠시만 기다려주세요.",
+                    Text = useYolo ? "YOLO 추적 중... 잠시만 기다려주세요." : "OpenCV 추적 중... 잠시만 기다려주세요.",
                     AutoSize = true,
                     Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
                     Location = new System.Drawing.Point(40, 35)
@@ -1786,23 +1902,36 @@ namespace WinFormsApp1
                 loadingForm.Show();
                 loadingForm.Refresh();
 
-                List<BoundingBox> trackedBoxes = new List<BoundingBox>();
+                List<BoundingBox> allTrackedBoxes = new List<BoundingBox>();
 
                 if (useYolo && isYoloAvailable)
                 {
-                    // YOLO 추적을 비동기로 실행
-                    trackedBoxes = await Task.Run(() => trackingEngine.TrackObjects(
-                        videoCapture,
-                        startBox,
-                        waypoint.EntryFrame,
-                        waypoint.ExitFrame,
-                        fps));
+                    System.Diagnostics.Debug.WriteLine($"[추적] {startBoxes.Count}개 객체에 대해 YOLO 추적 시작");
+                    
+                    // 각 startBox에 대해 개별적으로 YOLO 추적 수행
+                    foreach (var startBox in startBoxes)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[추적] {startBox.Label}_{GetBoxId(startBox):D2} 추적 중...");
+                        
+                        var trackedBoxes = await Task.Run(() => trackingEngine.TrackObjects(
+                            videoCapture,
+                            startBox,
+                            waypoint.EntryFrame,
+                            waypoint.ExitFrame,
+                            fps));
+                        
+                        allTrackedBoxes.AddRange(trackedBoxes);
+                        System.Diagnostics.Debug.WriteLine($"[추적] {startBox.Label}_{GetBoxId(startBox):D2}: {trackedBoxes.Count}개 프레임 추적 완료");
+                    }
                 }
                 else 
                 {
+                    System.Diagnostics.Debug.WriteLine($"[추적] YOLO 사용 불가 - useYolo: {useYolo}, isYoloAvailable: {isYoloAvailable}");
                     loadingForm.Close();
                     MessageBox.Show(
-                        "YOLO 모델을 사용할 수 없습니다.\n",
+                        "YOLO 모델을 사용할 수 없습니다.\n" +
+                        $"useYolo: {useYolo}\n" +
+                        $"isYoloAvailable: {isYoloAvailable}",
                         "정보",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
@@ -1812,19 +1941,19 @@ namespace WinFormsApp1
                 loadingForm.Close();
 
                 // 추적된 박스 추가
-                foreach (var box in trackedBoxes)
+                foreach (var box in allTrackedBoxes)
                 {
                     boundingBoxes.Add(box);
                 }
 
-                if (trackedBoxes.Count > 0)
+                if (allTrackedBoxes.Count > 0)
                 {
-                    AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = trackedBoxes });
+                    AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = allTrackedBoxes });
                 }
 
                 UpdateBoxCount();
                 MessageBox.Show(
-                    $"추적 완료! {trackedBoxes.Count} 프레임에 BBox가 추가되었습니다.",
+                    $"추적 완료! {startBoxes.Count}개 객체, 총 {allTrackedBoxes.Count}개 BBox가 추가되었습니다.",
                     "성공",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -1915,7 +2044,7 @@ namespace WinFormsApp1
                     if (annotation.Id >= nextAnnotationId)
                         nextAnnotationId = annotation.Id + 1;
 
-                    // 웨이포인트 정보 복원
+                    // 웨이포인트 정보 복원 (multi-object waypoint 지원)
                     if (annotation.TrackInfo != null && 
                         annotation.TrackInfo.Entry != null && 
                         annotation.TrackInfo.Exit != null)
@@ -1923,24 +2052,25 @@ namespace WinFormsApp1
                         int entryFrame = annotation.TrackInfo.Entry.Frame;
                         int exitFrame = annotation.TrackInfo.Exit.Frame;
 
-                        // 이미 같은 personId와 entry/exit를 가진 웨이포인트가 있는지 확인
+                        // 같은 entry/exit 프레임을 가진 웨이포인트가 있는지 확인 (multi-object)
                         bool waypointExists = waypointMarkers.Any(w => 
-                            w.ObjectId == trackId && 
-                            w.Label == label &&
                             w.EntryFrame == entryFrame && 
                             w.ExitFrame == exitFrame);
 
                         if (!waypointExists)
                         {
+                            // Entry 프레임에 몇 개의 객체가 있는지 확인
+                            int objectCount = boundingBoxes.Count(b => b.FrameIndex == entryFrame);
+                            
                             var waypoint = new WaypointMarker
                             {
-                                ObjectId = trackId,
-                                Label = label,
+                                ObjectId = 0, // multi-object waypoint
+                                Label = "multi",
                                 EntryFrame = entryFrame,
                                 ExitFrame = exitFrame,
                                 EntryTime = FormatFrameTime(entryFrame),
                                 ExitTime = FormatFrameTime(exitFrame),
-                                MarkerColor = GetColorForLabel(label)
+                                MarkerColor = markerColors[waypointMarkers.Count % markerColors.Length]
                             };
 
                             waypointMarkers.Add(waypoint);
@@ -2176,13 +2306,7 @@ namespace WinFormsApp1
             if (videoCapture == null || !videoCapture.IsOpened())
                 return;
 
-            // 특정 컨트롤이 포커스를 받고 있으면 해당 키만 무시
-            if (e.KeyCode == Keys.Space && (btnPlay.Focused || btnRewind.Focused || btnForward.Focused))
-                return;
-            if ((e.KeyCode == Keys.Left || e.KeyCode == Keys.Right) && 
-                (btnEntry.Focused || btnExit.Focused))
-                return;
-
+            // 모든 버튼이 TabStop = false이므로 포커스 문제 없음
             if (e.KeyCode == Keys.Space)
             {
                 btnPlay_Click(sender, e);
@@ -2598,6 +2722,98 @@ namespace WinFormsApp1
             }
 
             return null;
+        }
+        #endregion
+
+        #region Coordinate Transformation
+        // PictureBox의 Zoom 모드에서 실제 이미지가 표시되는 영역 계산
+        private RectangleF GetImageDisplayRectangle()
+        {
+            if (pictureBoxVideo.Image == null)
+                return RectangleF.Empty;
+
+            float imageAspect = (float)pictureBoxVideo.Image.Width / pictureBoxVideo.Image.Height;
+            float controlAspect = (float)pictureBoxVideo.Width / pictureBoxVideo.Height;
+
+            float renderWidth, renderHeight;
+            float renderX = 0, renderY = 0;
+
+            if (imageAspect > controlAspect)
+            {
+                // 이미지가 더 넓음 - 좌우에 맞춤
+                renderWidth = pictureBoxVideo.Width;
+                renderHeight = pictureBoxVideo.Width / imageAspect;
+                renderY = (pictureBoxVideo.Height - renderHeight) / 2f;
+            }
+            else
+            {
+                // 이미지가 더 높음 - 상하에 맞춤
+                renderHeight = pictureBoxVideo.Height;
+                renderWidth = pictureBoxVideo.Height * imageAspect;
+                renderX = (pictureBoxVideo.Width - renderWidth) / 2f;
+            }
+
+            return new RectangleF(renderX, renderY, renderWidth, renderHeight);
+        }
+
+        // 이미지 좌표 → 뷰(PictureBox) 좌표 변환
+        private PointF ImageToView(PointF imagePoint)
+        {
+            if (pictureBoxVideo.Image == null)
+                return imagePoint;
+
+            var displayRect = GetImageDisplayRectangle();
+            
+            float scaleX = displayRect.Width / pictureBoxVideo.Image.Width;
+            float scaleY = displayRect.Height / pictureBoxVideo.Image.Height;
+
+            return new PointF(
+                displayRect.X + imagePoint.X * scaleX,
+                displayRect.Y + imagePoint.Y * scaleY
+            );
+        }
+
+        private RectangleF ImageToView(RectangleF imageRect)
+        {
+            var topLeft = ImageToView(new PointF(imageRect.X, imageRect.Y));
+            var bottomRight = ImageToView(new PointF(imageRect.Right, imageRect.Bottom));
+            
+            return new RectangleF(
+                topLeft.X,
+                topLeft.Y,
+                bottomRight.X - topLeft.X,
+                bottomRight.Y - topLeft.Y
+            );
+        }
+
+        // 뷰(PictureBox) 좌표 → 이미지 좌표 변환
+        private PointF ViewToImage(PointF viewPoint)
+        {
+            if (pictureBoxVideo.Image == null)
+                return viewPoint;
+
+            var displayRect = GetImageDisplayRectangle();
+            
+            float scaleX = pictureBoxVideo.Image.Width / displayRect.Width;
+            float scaleY = pictureBoxVideo.Image.Height / displayRect.Height;
+
+            return new PointF(
+                (viewPoint.X - displayRect.X) * scaleX,
+                (viewPoint.Y - displayRect.Y) * scaleY
+            );
+        }
+
+        private RectangleF ViewToImage(RectangleF viewRect)
+        {
+            var topLeft = ViewToImage(new PointF(viewRect.X, viewRect.Y));
+            var bottomRight = ViewToImage(new PointF(viewRect.Right, viewRect.Bottom));
+            
+            return new RectangleF(
+                topLeft.X,
+                topLeft.Y,
+                bottomRight.X - topLeft.X,
+                bottomRight.Y - topLeft.Y
+            );
         }
         #endregion
 
