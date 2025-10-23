@@ -414,6 +414,7 @@
             this.listViewWaypoints.Columns.Add("Entry", 80);
             this.listViewWaypoints.Columns.Add("Exit", 80);
             this.listViewWaypoints.Columns.Add("객체", 60);
+            this.listViewWaypoints.Click += new System.EventHandler(this.listViewWaypoints_Click);
 
             // Delete waypoint button
             this.btnDeleteWaypoint = new System.Windows.Forms.Button();

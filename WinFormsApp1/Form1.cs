@@ -843,13 +843,15 @@ namespace WinFormsApp1
                 labelSubtitleTimestamp.Visible = false;
             }
             
+            // x264 대신 실제 재생 속도(1.0x, 2.0x 등)로 표기
+            string speedInfo = $"{playbackSpeed:0.##}x";
             if (!string.IsNullOrEmpty(subtitleText))
             {
-                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} x264{speedText}\n자막: {subtitleText}";
+                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} {speedInfo}\n자막: {subtitleText}";
             }
             else
             {
-                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} x264{speedText}";
+                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} {speedInfo}";
             }
 
             timelineProgress = totalFrames > 0 ? (float)currentFrameIndex / totalFrames : 0;
@@ -1087,6 +1089,21 @@ namespace WinFormsApp1
             if (result == DialogResult.Yes)
             {
                 PerformTrackingForWaypoint(waypoint, true);
+            }
+        }
+
+        private void listViewWaypoints_Click(object sender, EventArgs e)
+        {
+            // Waypoint 항목을 클릭하면 해당 Entry 프레임으로 이동
+            if (listViewWaypoints.SelectedItems.Count > 0)
+            {
+                var selectedItem = listViewWaypoints.SelectedItems[0];
+                var waypoint = selectedItem.Tag as WaypointMarker;
+
+                if (waypoint != null)
+                {
+                    LoadFrame(waypoint.EntryFrame);
+                }
             }
         }
 
@@ -2514,7 +2531,8 @@ namespace WinFormsApp1
                     "성공",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
-                LoadFrame(waypoint.ExitFrame);
+                // 추적 완료 후 Entry 프레임으로 이동
+                LoadFrame(waypoint.EntryFrame);
             }
             catch (Exception ex)
             {
@@ -2908,7 +2926,7 @@ namespace WinFormsApp1
                 btnPlay_Click(sender, e);
                 e.Handled = true;
             }
-            else if (e.KeyCode == Keys.Left)
+            else if (e.KeyCode == Keys.Left && !e.Shift && !e.Control && !e.Alt)
             {
                 // 5초씩 뒤로 이동 (fps * 5 프레임)
                 int framesToMove = (int)(fps * 5);
@@ -2916,12 +2934,48 @@ namespace WinFormsApp1
                 LoadFrame(newFrame);
                 e.Handled = true;
             }
-            else if (e.KeyCode == Keys.Right)
+            else if (e.KeyCode == Keys.Right && !e.Shift && !e.Control && !e.Alt)
             {
                 // 5초씩 앞으로 이동 (fps * 5 프레임)
                 int framesToMove = (int)(fps * 5);
                 int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
                 LoadFrame(newFrame);
+                e.Handled = true;
+            }
+            else if (e.Shift && e.KeyCode == Keys.OemPeriod) // Shift + > (> 키)
+            {
+                // 속도 빠르게 (1.0x → 16.0x)
+                if (playbackSpeed < 1.0) playbackSpeed = 1.0;
+                else if (playbackSpeed < 4.0) playbackSpeed = 4.0;
+                else if (playbackSpeed < 8.0) playbackSpeed = 8.0;
+                else if (playbackSpeed < 16.0) playbackSpeed = 16.0;
+                
+                if (isPlaying)
+                    lastFrameTime = DateTime.Now.Ticks / 10000;
+                UpdateTimeLabels();
+                e.Handled = true;
+            }
+            else if (e.Shift && e.KeyCode == Keys.Oemcomma) // Shift + < (< 키)
+            {
+                // 속도 느리게 (16.0x → 1.0x)
+                if (playbackSpeed > 8.0) playbackSpeed = 8.0;
+                else if (playbackSpeed > 4.0) playbackSpeed = 4.0;
+                else if (playbackSpeed > 1.0) playbackSpeed = 1.0;
+                else playbackSpeed = 0.5;
+                
+                if (isPlaying)
+                    lastFrameTime = DateTime.Now.Ticks / 10000;
+                UpdateTimeLabels();
+                e.Handled = true;
+            }
+            else if (e.Shift && e.KeyCode == Keys.OemQuestion) // Shift + / 키
+            {
+                // 속도 초기화
+                playbackSpeed = 1.0;
+                if (isPlaying)
+                    lastFrameTime = DateTime.Now.Ticks / 10000;
+                UpdateTimeLabels();
+                MessageBox.Show("재생 속도를 1.0x로 초기화했습니다.", "속도 초기화", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 e.Handled = true;
             }
             else if (selectedBox != null && (e.KeyCode == Keys.W || e.KeyCode == Keys.A || e.KeyCode == Keys.S || e.KeyCode == Keys.D))
@@ -2964,17 +3018,20 @@ namespace WinFormsApp1
             {
                 if (e.Shift)
                 {
-                    // Ctrl+Shift+Z는 이미 위에서 ID 설정으로 처리됨
-                    // Redo는 Ctrl+Y로만 사용
+                    // Ctrl+Shift+Z: Redo
+                    Redo();
+                    e.Handled = true;
                 }
                 else
                 {
+                    // Ctrl+Z: Undo
                     Undo();
                     e.Handled = true;
                 }
             }
             else if (e.Control && e.KeyCode == Keys.Y)
             {
+                // Ctrl+Y: Redo
                 Redo();
                 e.Handled = true;
             }
@@ -3061,36 +3118,10 @@ namespace WinFormsApp1
                 AssignPersonId(id);
                 e.Handled = true;
             }
-            else if (e.Control && e.KeyCode == Keys.A)
-            {
-                playbackSpeed = 1.0;
-                if (isPlaying)
-                    lastFrameTime = DateTime.Now.Ticks / 10000;
-                UpdateTimeLabels();
-                e.Handled = true;
-            }
             else if (e.Control && e.KeyCode == Keys.S)
             {
-                playbackSpeed = 4.0;
-                if (isPlaying)
-                    lastFrameTime = DateTime.Now.Ticks / 10000;
-                UpdateTimeLabels();
-                e.Handled = true;
-            }
-            else if (e.Control && e.KeyCode == Keys.D)
-            {
-                playbackSpeed = 8.0;
-                if (isPlaying)
-                    lastFrameTime = DateTime.Now.Ticks / 10000;
-                UpdateTimeLabels();
-                e.Handled = true;
-            }
-            else if (e.Control && e.KeyCode == Keys.F)
-            {
-                playbackSpeed = 16.0;
-                if (isPlaying)
-                    lastFrameTime = DateTime.Now.Ticks / 10000;
-                UpdateTimeLabels();
+                // Ctrl+S: JSON 저장 및 추출
+                btnExportJson_Click(sender, e);
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.Escape)
