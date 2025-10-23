@@ -363,14 +363,13 @@ namespace WinFormsApp1
             {"person_01", 1}, {"person_02", 2}, {"person_03", 3}, {"person_04", 4},
             {"person_05", 5}, {"person_06", 6}, {"person_07", 7}, {"person_08", 8},
             {"person_09", 9}, {"person_10", 10}, {"person_11", 11}, {"person_12", 12},
-            {"person_13", 13}, {"person14", 14},
+            {"person_13", 13}, {"person_14", 14},
             
             // Vehicle categories (15~18)
             {"car", 15}, {"motorcycle", 16}, {"e_scooter", 17}, {"bicycle", 18},
             
-            // Event categories (19~24)
-            {"contact", 19}, {"close", 20}, {"signal", 21}, 
-            {"board", 22}, {"final", 23}, {"V_U_TURN", 24}
+            // Event categories (19~22)
+            {"contact", 19}, {"exchange", 20}, {"board", 21}, {"final_exchange", 22}
         };
 
 
@@ -1282,7 +1281,29 @@ namespace WinFormsApp1
                     g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
                 }
 
-                string labelText = $"{box.Label}_{GetBoxId(box):D2}";
+                // 라벨 텍스트 생성
+                string labelText = "";
+                if (box.Label == "person")
+                {
+                    labelText = $"person_{box.PersonId:D2}";
+                }
+                else if (box.Label == "vehicle")
+                {
+                    string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+                    if (box.VehicleId > 0 && box.VehicleId <= vehicleTypes.Length)
+                        labelText = $"vehicle_{vehicleTypes[box.VehicleId - 1]}";
+                    else
+                        labelText = $"vehicle_{box.VehicleId}";
+                }
+                else if (box.Label == "event")
+                {
+                    string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                    if (box.EventId > 0 && box.EventId <= eventTypes.Length)
+                        labelText = $"event_{eventTypes[box.EventId - 1]}";
+                    else
+                        labelText = $"event_{box.EventId}";
+                }
+                
                 using (Font font = new Font("Segoe UI", 10F, FontStyle.Bold))
                 {
                     SizeF textSize = g.MeasureString(labelText, font);
@@ -1399,7 +1420,29 @@ namespace WinFormsApp1
 
         private void UpdateObjectInfo(BoundingBox box)
         {
-            labelObjectLabel.Text = $"Label: {box.Label}_{GetBoxId(box):D2}";
+            string labelText = "";
+            if (box.Label == "person")
+            {
+                labelText = $"Label: person_{box.PersonId:D2}";
+            }
+            else if (box.Label == "vehicle")
+            {
+                string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+                if (box.VehicleId > 0 && box.VehicleId <= vehicleTypes.Length)
+                    labelText = $"Label: vehicle_{vehicleTypes[box.VehicleId - 1]}";
+                else
+                    labelText = $"Label: vehicle_{box.VehicleId}";
+            }
+            else if (box.Label == "event")
+            {
+                string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                if (box.EventId > 0 && box.EventId <= eventTypes.Length)
+                    labelText = $"Label: event_{eventTypes[box.EventId - 1]}";
+                else
+                    labelText = $"Label: event_{box.EventId}";
+            }
+            
+            labelObjectLabel.Text = labelText;
             labelPrevWaypoint.Text = "Previous Waypoint: C0001.mp4, 00:10:32 - 00:11:05";
             labelNextWaypoint.Text = "Next Waypoint: C0003.mp4, 00:15:21 - 00:16:01";
         }
@@ -1539,79 +1582,78 @@ namespace WinFormsApp1
         private void btnLabelPerson_Click(object sender, EventArgs e)
         {
             currentSelectedLabel = "person";
+            currentAssignedId = 1; // 기본값 person_01
             
-            // Person ID 선택 다이얼로그
-            string input = ShowInputDialog("Person ID 선택", "Person ID를 입력하세요 (1~19):");
-            if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int personId))
+            // 선택된 bbox가 있으면 해당 박스를 person으로 변경
+            if (selectedBox != null)
             {
-                if (personId >= 1 && personId <= 19)
+                string oldLabel = selectedBox.Label;
+                
+                selectedBox.Label = "person";
+                SetBoxId(selectedBox, "person", 1); // 기본값 person_01
+                
+                AddUndoAction(new UndoAction
                 {
-                    currentAssignedId = personId;
-                    MessageBox.Show($"person_{personId:D2} 라벨이 선택되었습니다.", "라벨 선택");
-                }
-                else
-                {
-                    MessageBox.Show("1~19 사이의 숫자를 입력해주세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    currentAssignedId = 1;
-                }
-            }
-            else
-            {
-                currentAssignedId = 1; // 기본값
+                    Type = UndoActionType.ModifyBox,
+                    Box = CloneBoundingBox(selectedBox),
+                    OriginalLabel = oldLabel
+                });
+                
+                pictureBoxVideo.Invalidate();
+                UpdateBboxListDisplay();
+                UpdateObjectInfo(selectedBox);
             }
         }
 
         private void btnLabelVehicle_Click(object sender, EventArgs e)
         {
             currentSelectedLabel = "vehicle";
+            currentAssignedId = 1; // 기본값 vehicle_car
             
-            // Vehicle 타입 선택 다이얼로그
-            string message = "Vehicle 타입을 선택하세요:\n1: car\n2: motorcycle\n3: bicycle\n4: e_scooter";
-            string input = ShowInputDialog("Vehicle 타입 선택", message);
-            if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int vehicleId))
+            // 선택된 bbox가 있으면 해당 박스를 vehicle로 변경
+            if (selectedBox != null)
             {
-                if (vehicleId >= 1 && vehicleId <= 4)
+                string oldLabel = selectedBox.Label;
+                
+                selectedBox.Label = "vehicle";
+                SetBoxId(selectedBox, "vehicle", 1); // 기본값 vehicle_car
+                
+                AddUndoAction(new UndoAction
                 {
-                    currentAssignedId = vehicleId;
-                    string[] types = { "car", "motorcycle", "bicycle", "e_scooter" };
-                    MessageBox.Show($"vehicle_{types[vehicleId - 1]} 라벨이 선택되었습니다.", "라벨 선택");
-                }
-                else
-                {
-                    MessageBox.Show("1~4 사이의 숫자를 입력해주세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    currentAssignedId = 1;
-                }
-            }
-            else
-            {
-                currentAssignedId = 1; // 기본값
+                    Type = UndoActionType.ModifyBox,
+                    Box = CloneBoundingBox(selectedBox),
+                    OriginalLabel = oldLabel
+                });
+                
+                pictureBoxVideo.Invalidate();
+                UpdateBboxListDisplay();
+                UpdateObjectInfo(selectedBox);
             }
         }
 
         private void btnLabelEvent_Click(object sender, EventArgs e)
         {
             currentSelectedLabel = "event";
+            currentAssignedId = 1; // 기본값 event_contact
             
-            // Event 타입 선택 다이얼로그
-            string message = "Event 타입을 선택하세요:\n1: board\n2: close\n3: contact\n4: signal\n5: final\n6: V_U_TURN";
-            string input = ShowInputDialog("Event 타입 선택", message);
-            if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int eventId))
+            // 선택된 bbox가 있으면 해당 박스를 event로 변경
+            if (selectedBox != null)
             {
-                if (eventId >= 1 && eventId <= 6)
+                string oldLabel = selectedBox.Label;
+                
+                selectedBox.Label = "event";
+                SetBoxId(selectedBox, "event", 1); // 기본값 event_contact
+                
+                AddUndoAction(new UndoAction
                 {
-                    currentAssignedId = eventId;
-                    string[] types = { "board", "close", "contact", "signal", "final", "V_U_TURN" };
-                    MessageBox.Show($"event_{types[eventId - 1]} 라벨이 선택되었습니다.", "라벨 선택");
-                }
-                else
-                {
-                    MessageBox.Show("1~6 사이의 숫자를 입력해주세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    currentAssignedId = 1;
-                }
-            }
-            else
-            {
-                currentAssignedId = 1; // 기본값
+                    Type = UndoActionType.ModifyBox,
+                    Box = CloneBoundingBox(selectedBox),
+                    OriginalLabel = oldLabel
+                });
+                
+                pictureBoxVideo.Invalidate();
+                UpdateBboxListDisplay();
+                UpdateObjectInfo(selectedBox);
             }
         }
 
@@ -1662,7 +1704,7 @@ namespace WinFormsApp1
                 }
                 else if (box.Label == "event")
                 {
-                    string[] eventTypes = { "board", "close", "contact", "signal", "final", "V_U_TURN" };
+                    string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
                     if (box.EventId > 0 && box.EventId <= eventTypes.Length)
                         displayText = $"event_{eventTypes[box.EventId - 1]}";
                     else
@@ -1721,13 +1763,11 @@ namespace WinFormsApp1
                 }
                 else if (box.Label == "event")
                 {
-                    comboBox.Items.Add("event_board");
-                    comboBox.Items.Add("event_close");
                     comboBox.Items.Add("event_contact");
-                    comboBox.Items.Add("event_signal");
-                    comboBox.Items.Add("event_final");
-                    comboBox.Items.Add("event_V_U_TURN");
-                    if (box.EventId >= 1 && box.EventId <= 6)
+                    comboBox.Items.Add("event_exchange");
+                    comboBox.Items.Add("event_board");
+                    comboBox.Items.Add("event_final_exchange");
+                    if (box.EventId >= 1 && box.EventId <= 4)
                         comboBox.SelectedIndex = box.EventId - 1;
                 }
                 
@@ -1771,16 +1811,13 @@ namespace WinFormsApp1
                     }
                     else if (selected.StartsWith("event_"))
                     {
-                        string[] parts = selected.Split('_');
-                        if (parts.Length == 2)
+                        string eventType = selected.Substring(6); // "event_" 이후의 문자열
+                        string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                        int eventId = Array.IndexOf(eventTypes, eventType) + 1;
+                        if (eventId > 0)
                         {
-                            string[] eventTypes = { "board", "close", "contact", "signal", "final", "V_U_TURN" };
-                            int eventId = Array.IndexOf(eventTypes, parts[1]) + 1;
-                            if (eventId > 0)
-                            {
-                                targetBox.Label = "event";
-                                SetBoxId(targetBox, "event", eventId);
-                            }
+                            targetBox.Label = "event";
+                            SetBoxId(targetBox, "event", eventId);
                         }
                     }
                     
@@ -1888,34 +1925,30 @@ namespace WinFormsApp1
         {
             if (label == "person")
             {
-                // person14는 언더스코어 없음 (스펙에 따름)
-                if (boxId == 14) return "person14";
+                // person은 person_01 ~ person_14 형식
                 return $"person_{boxId:D2}";
             }
             else if (label == "vehicle")
             {
-                // vehicle은 고유 이름 매핑
-                // 임시로 순서대로 매핑 (추후 UI에서 선택 가능하도록 개선)
+                // vehicle은 고유 이름 매핑 (ID 15~18)
                 switch (boxId)
                 {
-                    case 1: return "car";
-                    case 2: return "motorcycle";
-                    case 3: return "e_scooter";
-                    case 4: return "bicycle";
+                    case 1: return "car";           // ID: 15
+                    case 2: return "motorcycle";    // ID: 16
+                    case 3: return "e_scooter";     // ID: 17
+                    case 4: return "bicycle";       // ID: 18
                     default: return "car"; // 기본값
                 }
             }
             else if (label == "event")
             {
-                // event도 고유 이름 매핑
+                // event는 고유 이름 매핑 (ID 19~22)
                 switch (boxId)
                 {
-                    case 1: return "contact";
-                    case 2: return "close";
-                    case 3: return "signal";
-                    case 4: return "board";
-                    case 5: return "final";
-                    case 6: return "V_U_TURN";
+                    case 1: return "contact";         // ID: 19
+                    case 2: return "exchange";        // ID: 20
+                    case 3: return "board";           // ID: 21
+                    case 4: return "final_exchange";  // ID: 22
                     default: return "contact"; // 기본값
                 }
             }
