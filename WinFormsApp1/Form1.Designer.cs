@@ -297,7 +297,7 @@
             this.btnForward.Click += new System.EventHandler(this.btnForward_Click);
 
             // Time Info
-            this.labelTimeInfo.Text = "00:00:00 / 00:00:00 x264";
+            this.labelTimeInfo.Text = "00:00:00 / 00:00:00 1.0x";
             this.labelTimeInfo.Location = new System.Drawing.Point(160, 24);
             this.labelTimeInfo.Size = new System.Drawing.Size(200, 25);
             this.labelTimeInfo.ForeColor = System.Drawing.Color.Gray;

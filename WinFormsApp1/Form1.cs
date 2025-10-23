@@ -1049,6 +1049,9 @@ namespace WinFormsApp1
 
             System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Entry 프레임 {entryFrameIndex.Value}에 {entryBoxes.Count}개의 박스 발견");
 
+            // Entry 프레임의 Event 박스들을 Exit까지 자동 전파
+            PropagateAllEventBoxesInRange(entryFrameIndex.Value, exitFrameIndex.Value);
+
             // 하나의 waypoint 생성 (첫 번째 박스 기준으로, 나머지는 추적 시 함께 처리)
             var waypoint = new WaypointMarker
             {
@@ -1120,13 +1123,24 @@ namespace WinFormsApp1
 
             if (waypoint != null)
             {
-                // 해당 웨이포인트의 ObjectId와 프레임 범위에 일치하는 박스만 삭제
+                // 삭제 확인 메시지
+                var result = MessageBox.Show(
+                    $"선택한 Waypoint를 삭제하시겠습니까?\n\n" +
+                    $"Entry: {waypoint.EntryTime}\n" +
+                    $"Exit: {waypoint.ExitTime}\n\n" +
+                    $"⚠️ 주의: 관련된 JSON 파일도 함께 삭제됩니다.",
+                    "Waypoint 삭제 확인",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (result != DialogResult.Yes)
+                    return;
+
+                // ✅ 해당 웨이포인트의 Entry~Exit 프레임 범위 내 모든 박스 삭제
                 var boxesToDelete = boundingBoxes
                     .Where(b => 
                         b.FrameIndex >= waypoint.EntryFrame && 
-                        b.FrameIndex <= waypoint.ExitFrame &&
-                        GetBoxId(b) == waypoint.ObjectId &&
-                        b.Label == waypoint.Label)
+                        b.FrameIndex <= waypoint.ExitFrame)
                     .ToList();
 
                 foreach (var box in boxesToDelete)
@@ -1140,9 +1154,22 @@ namespace WinFormsApp1
 
                 waypointMarkers.Remove(waypoint);
                 listViewWaypoints.Items.Remove(selectedItem);
+                InvalidateBoxCache();
                 UpdateBoxCount();
+                UpdateBboxListDisplay();
                 panelTimeline.Invalidate();
                 pictureBoxVideo.Invalidate();
+
+                // JSON 파일 삭제
+                DeleteJsonFileForCurrentVideo();
+
+                MessageBox.Show(
+                    "✅ Waypoint가 삭제되었습니다.\n\n" +
+                    $"삭제된 박스: {boxesToDelete.Count}개\n" +
+                    "JSON 파일도 삭제되었습니다.",
+                    "삭제 완료",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
         }
         #endregion
@@ -1254,6 +1281,9 @@ namespace WinFormsApp1
                     UpdateObjectInfo(selectedBox);
                     UpdateBoxCount();
                     UpdateBboxListDisplay();
+                    
+                    // Event 박스 자동 전파: Entry~Exit 프레임까지 자동 생성
+                    PropagateEventBoxIfNeeded(drawingBox);
                 }
 
                 drawingBox = null;
@@ -1263,6 +1293,12 @@ namespace WinFormsApp1
             else if (isDragging)
             {
                 isDragging = false;
+                
+                // 박스 이동/수정 완료 시에도 Event 박스 전파
+                if (selectedBox != null && selectedBox.Label == "event")
+                {
+                    PropagateEventBoxFromCurrentFrame(selectedBox);
+                }
             }
         }
 
@@ -1997,7 +2033,7 @@ namespace WinFormsApp1
             // 기본값 처리 (매핑되지 않은 경우)
             if (label == "person") return Math.Min(boxId, 14); // 1~14
             if (label == "vehicle") return Math.Min(15 + (boxId - 1), 18); // 15~18
-            if (label == "event") return Math.Min(19 + (boxId - 1), 24); // 19~24
+            if (label == "event") return Math.Min(19 + (boxId - 1), 22); // 19~22 (4개)
             
             return boxId;
         }
@@ -2406,6 +2442,166 @@ namespace WinFormsApp1
         }
         #endregion
 
+        #region Event Box Propagation
+        /// <summary>
+        /// Entry 프레임에 있는 모든 Event 박스를 Exit 프레임까지 자동 전파
+        /// (Exit 마커 설정 시 호출됨)
+        /// </summary>
+        private void PropagateAllEventBoxesInRange(int entryFrame, int exitFrame)
+        {
+            // Entry 프레임의 모든 Event 박스 찾기
+            var eventBoxesAtEntry = boundingBoxes
+                .Where(b => b.FrameIndex == entryFrame && b.Label == "event")
+                .ToList();
+
+            if (eventBoxesAtEntry.Count == 0)
+                return; // Event 박스가 없으면 전파할 필요 없음
+
+            int totalPropagated = 0;
+
+            foreach (var eventBox in eventBoxesAtEntry)
+            {
+                // Entry 다음 프레임부터 Exit까지 전파
+                for (int frame = entryFrame + 1; frame <= exitFrame; frame++)
+                {
+                    // 이미 해당 프레임에 동일한 Event 박스가 있는지 확인
+                    bool exists = boundingBoxes.Any(b =>
+                        b.FrameIndex == frame &&
+                        b.Label == "event" &&
+                        b.EventId == eventBox.EventId);
+
+                    if (!exists)
+                    {
+                        var newBox = new BoundingBox
+                        {
+                            Rectangle = eventBox.Rectangle,
+                            Label = eventBox.Label,
+                            FrameIndex = frame,
+                            PersonId = eventBox.PersonId,
+                            VehicleId = eventBox.VehicleId,
+                            EventId = eventBox.EventId,
+                            Action = "waypoint"
+                        };
+                        boundingBoxes.Add(newBox);
+                        totalPropagated++;
+                    }
+                }
+            }
+
+            if (totalPropagated > 0)
+            {
+                InvalidateBoxCache();
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Event 전파] {eventBoxesAtEntry.Count}개의 Event 박스를 " +
+                    $"프레임 {entryFrame + 1}~{exitFrame}까지 전파 완료 (총 {totalPropagated}개 생성)");
+            }
+        }
+
+        /// <summary>
+        /// Event 박스가 Entry 프레임에서 생성되었을 때 자동으로 Exit 프레임까지 전파
+        /// (실시간 그리기 시 호출됨 - 하지만 주로 Exit 마커 설정 시 일괄 처리)
+        /// </summary>
+        private void PropagateEventBoxIfNeeded(BoundingBox box)
+        {
+            // Event 라벨이 아니면 전파하지 않음
+            if (box.Label != "event")
+                return;
+
+            // Entry/Exit 마커가 이미 설정되어 있으면 PropagateAllEventBoxesInRange에서 처리
+            // 여기서는 수동 전파만 안내
+            if (entryFrameIndex.HasValue && exitFrameIndex.HasValue && box.FrameIndex == entryFrameIndex.Value)
+            {
+                // Exit 마커 설정 시 자동으로 처리되므로 별도 전파 불필요
+                return;
+            }
+        }
+
+        /// <summary>
+        /// Event 박스가 중간 프레임에서 수정되었을 때 해당 프레임부터 Exit까지 전파
+        /// </summary>
+        private void PropagateEventBoxFromCurrentFrame(BoundingBox box)
+        {
+            // Event 라벨이 아니면 전파하지 않음
+            if (box.Label != "event")
+                return;
+
+            // 현재 박스가 속한 Waypoint 찾기
+            var waypoint = waypointMarkers.FirstOrDefault(w =>
+                box.FrameIndex >= w.EntryFrame &&
+                box.FrameIndex <= w.ExitFrame);
+
+            if (waypoint == null)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Event 전파 실패] 프레임 {box.FrameIndex}에 해당하는 Waypoint를 찾을 수 없습니다.");
+                return;
+            }
+
+            int startFrame = box.FrameIndex + 1; // 다음 프레임부터
+            int endFrame = waypoint.ExitFrame;
+
+            // 현재 프레임이 Exit 프레임이면 전파할 필요 없음
+            if (box.FrameIndex >= endFrame)
+                return;
+
+            System.Diagnostics.Debug.WriteLine($"[Event 전파] 프레임 {box.FrameIndex}에서 수정 감지, {startFrame}~{endFrame}까지 전파 시작");
+
+            // 현재 프레임 이후의 동일한 Event 박스들을 찾아서 업데이트
+            var boxesToUpdate = boundingBoxes.Where(b =>
+                b.FrameIndex > box.FrameIndex &&
+                b.FrameIndex <= endFrame &&
+                b.Label == "event" &&
+                b.EventId == box.EventId).ToList();
+
+            int updatedCount = 0;
+            foreach (var targetBox in boxesToUpdate)
+            {
+                targetBox.Rectangle = box.Rectangle;
+                updatedCount++;
+            }
+
+            // 업데이트된 박스가 없으면 새로 생성
+            if (updatedCount == 0)
+            {
+                for (int frame = startFrame; frame <= endFrame; frame++)
+                {
+                    bool exists = boundingBoxes.Any(b =>
+                        b.FrameIndex == frame &&
+                        b.Label == "event" &&
+                        b.EventId == box.EventId);
+
+                    if (!exists)
+                    {
+                        var newBox = new BoundingBox
+                        {
+                            Rectangle = box.Rectangle,
+                            Label = box.Label,
+                            FrameIndex = frame,
+                            PersonId = box.PersonId,
+                            VehicleId = box.VehicleId,
+                            EventId = box.EventId,
+                            Action = "waypoint"
+                        };
+                        boundingBoxes.Add(newBox);
+                        updatedCount++;
+                    }
+                }
+            }
+
+            if (updatedCount > 0)
+            {
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                UpdateBboxListDisplay();
+                
+                System.Diagnostics.Debug.WriteLine($"[Event 전파 완료] {updatedCount}개 프레임 업데이트됨 ({startFrame}~{endFrame})");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[Event 전파] 업데이트할 박스 없음 (이미 존재하거나 범위 밖)");
+            }
+        }
+        #endregion
+
         #region Tracking Algorithm
         private async void PerformTrackingForWaypoint(WaypointMarker waypoint, bool useYolo = false)
         {
@@ -2426,6 +2622,24 @@ namespace WinFormsApp1
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                     return;
+                }
+
+                // Event 라벨 체크 - 자동 추적에서 제외
+                var eventBoxes = startBoxes.Where(b => b.Label == "event").ToList();
+                if (eventBoxes.Count > 0)
+                {
+                    var nonEventBoxes = startBoxes.Where(b => b.Label != "event").ToList();
+                    
+                    if (nonEventBoxes.Count == 0)
+                    {
+                        // 모든 박스가 Event인 경우 - 추적 안함
+                        return;
+                    }
+                    else
+                    {
+                        // 일부만 Event인 경우 - Event 제외하고 계속 진행
+                        startBoxes = nonEventBoxes;
+                    }
                 }
 
                 // 디버깅: 찾은 박스 정보 확인
@@ -2526,11 +2740,41 @@ namespace WinFormsApp1
 
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
+
+                // ✅ YOLO 추적 완료 후 자동 JSON 저장 및 재로드
+                System.Diagnostics.Debug.WriteLine("[추적 완료] JSON 저장 시작");
+                
+                string videoDir = Path.GetDirectoryName(currentVideoFile);
+                string saveDir = Path.Combine(videoDir, "labels");
+                
+                if (!Directory.Exists(saveDir))
+                {
+                    Directory.CreateDirectory(saveDir);
+                }
+                
+                string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                string jsonFilePath = Path.Combine(saveDir, fileName);
+                
+                // JSON 저장
+                await Task.Run(() => ExportToJsonExtended(jsonFilePath));
+                System.Diagnostics.Debug.WriteLine($"[추적 완료] JSON 저장 완료: {jsonFilePath}");
+                
+                // JSON 재로드하여 추적 데이터 기반으로 표시
+                if (File.Exists(jsonFilePath))
+                {
+                    LoadLabelingData(jsonFilePath);
+                    System.Diagnostics.Debug.WriteLine("[추적 완료] JSON 재로드 완료 - 이제 JSON 기반 박스로 표시됩니다.");
+                }
+
                 MessageBox.Show(
-                    $"추적 완료! {startBoxes.Count}개 객체, 총 {allTrackedBoxes.Count}개 BBox가 추가되었습니다.",
+                    $"추적 완료!\n\n" +
+                    $"✅ {startBoxes.Count}개 객체, 총 {allTrackedBoxes.Count}개 BBox 추가\n" +
+                    $"✅ JSON 저장 및 재로드 완료\n\n" +
+                    $"💾 저장 위치: {jsonFilePath}",
                     "성공",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
+                    
                 // 추적 완료 후 Entry 프레임으로 이동
                 LoadFrame(waypoint.EntryFrame);
             }
@@ -2612,7 +2856,7 @@ namespace WinFormsApp1
                     {
                         label = "vehicle";
                     }
-                    else if (catId >= 19 && catId <= 24)
+                    else if (catId >= 19 && catId <= 22)  // ✅ 19~22로 수정 (4개 이벤트)
                     {
                         label = "event";
                     }
@@ -2623,9 +2867,8 @@ namespace WinFormsApp1
                         if (categoryName.Contains("car") || categoryName.Contains("motorcycle") || 
                             categoryName.Contains("scooter") || categoryName.Contains("bicycle"))
                             label = "vehicle";
-                        else if (categoryName.Contains("contact") || categoryName.Contains("close") || 
-                                 categoryName.Contains("signal") || categoryName.Contains("board") ||
-                                 categoryName.Contains("final") || categoryName.Contains("TURN"))
+                        else if (categoryName.Contains("contact") || categoryName.Contains("exchange") || 
+                                 categoryName.Contains("board") || categoryName.Contains("final"))
                             label = "event";
                         else if (categoryName.StartsWith("person"))
                             label = "person";
@@ -2638,14 +2881,34 @@ namespace WinFormsApp1
                         frameNumber = imageIdToFrameNumber[annotation.ImageId];
                     }
 
+                    // EventId 계산 로직 수정: CategoryId에서 역산
+                    int personId = 0;
+                    int vehicleId = 0;
+                    int eventId = 0;
+                    
+                    if (label == "person")
+                    {
+                        personId = trackId;
+                    }
+                    else if (label == "vehicle")
+                    {
+                        // Vehicle: CategoryId 15~18 → VehicleId 1~4
+                        vehicleId = catId >= 15 && catId <= 18 ? (catId - 14) : trackId;
+                    }
+                    else if (label == "event")
+                    {
+                        // Event: CategoryId 19~22 → EventId 1~4
+                        eventId = catId >= 19 && catId <= 22 ? (catId - 18) : trackId;
+                    }
+
                     var box = new BoundingBox
                     {
                         FrameIndex = frameNumber, // 실제 프레임 번호 사용
                         Rectangle = new Rectangle(annotation.Bbox[0], annotation.Bbox[1], annotation.Bbox[2], annotation.Bbox[3]),
                         Label = label,
-                        PersonId = label == "person" ? trackId : 0,
-                        VehicleId = label == "vehicle" ? trackId : 0,
-                        EventId = label == "event" ? trackId : 0,
+                        PersonId = personId,
+                        VehicleId = vehicleId,
+                        EventId = eventId,
                         Action = "waypoint"
                     };
 
@@ -2739,6 +3002,39 @@ namespace WinFormsApp1
             catch (Exception ex)
             {
                 MessageBox.Show($"라벨링 데이터 저장 중 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 현재 비디오에 대한 JSON 파일 삭제
+        /// </summary>
+        private void DeleteJsonFileForCurrentVideo()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(currentVideoFile))
+                    return;
+
+                string videoDir = Path.GetDirectoryName(currentVideoFile);
+                if (string.IsNullOrEmpty(videoDir) || !Directory.Exists(videoDir))
+                    return;
+
+                string saveDir = Path.Combine(videoDir, "labels");
+                if (!Directory.Exists(saveDir))
+                    return;
+
+                string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                string jsonPath = Path.Combine(saveDir, fileName);
+
+                if (File.Exists(jsonPath))
+                {
+                    File.Delete(jsonPath);
+                    System.Diagnostics.Debug.WriteLine($"[JSON 삭제] {jsonPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"JSON 파일 삭제 중 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
