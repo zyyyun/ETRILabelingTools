@@ -355,6 +355,9 @@ namespace WinFormsApp1
         
         // 현재 선택된 라벨 (person, vehicle, event)
         private string currentSelectedLabel = "person";
+        
+        // bbox 리스트 렌더링 최적화를 위한 변수
+        private int lastRenderedBoxCount = -1;
 
         // 카테고리 ID 매핑 (스펙에 따른 고정 매핑)
         private static readonly Dictionary<string, int> CategoryIdMap = new Dictionary<string, int>
@@ -789,7 +792,13 @@ namespace WinFormsApp1
 
             currentFrameIndex = frameIndex;
             UpdateTimeLabels();
-            UpdateBboxListDisplay();
+            
+            // Waypoint entry 프레임에서만 bbox 리스트 업데이트 (리소스 최적화)
+            if (ShouldUpdateBboxList(frameIndex))
+            {
+                UpdateBboxListDisplay();
+            }
+            
             pictureBoxVideo.Invalidate();
         }
 
@@ -1657,6 +1666,27 @@ namespace WinFormsApp1
             }
         }
 
+        // bbox 리스트 업데이트가 필요한지 확인 (리소스 최적화)
+        private bool ShouldUpdateBboxList(int frameIndex)
+        {
+            // 1. Waypoint entry 프레임인 경우
+            foreach (var waypoint in waypointMarkers)
+            {
+                if (waypoint.EntryFrame == frameIndex)
+                    return true;
+            }
+            
+            // 2. 현재 프레임의 bbox 개수가 변경된 경우
+            int currentBoxCount = boundingBoxes.Count(b => b.FrameIndex == frameIndex);
+            if (currentBoxCount != lastRenderedBoxCount)
+            {
+                lastRenderedBoxCount = currentBoxCount;
+                return true;
+            }
+            
+            return false;
+        }
+        
         // 현재 프레임의 bbox 목록을 동적으로 생성하여 표시
         private void UpdateBboxListDisplay()
         {
@@ -2415,8 +2445,20 @@ namespace WinFormsApp1
                     boundingBoxes.Add(box);
                 }
 
+                // 추적이 성공적으로 완료되면 Entry 프레임의 사용자가 지정한 초기 박스 삭제
                 if (allTrackedBoxes.Count > 0)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[추적 완료] Entry 프레임의 초기 박스 {startBoxes.Count}개 삭제 중...");
+                    
+                    foreach (var startBox in startBoxes)
+                    {
+                        if (boundingBoxes.Contains(startBox))
+                        {
+                            boundingBoxes.Remove(startBox);
+                            System.Diagnostics.Debug.WriteLine($"  - 삭제: {startBox.Label}_{GetBoxId(startBox):D2} (Frame: {startBox.FrameIndex})");
+                        }
+                    }
+                    
                     AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = allTrackedBoxes });
                 }
 
