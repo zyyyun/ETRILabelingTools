@@ -1932,8 +1932,34 @@ namespace WinFormsApp1
                         int eventId = Array.IndexOf(eventTypes, eventType) + 1;
                         if (eventId > 0)
                         {
+                            int oldEventId = targetBox.EventId;
                             targetBox.Label = "event";
                             SetBoxId(targetBox, "event", eventId);
+                            
+                            // ✅ Event 타입 변경 시 동일한 EventId를 가진 모든 박스 업데이트
+                            if (oldEventId != eventId)
+                            {
+                                var waypoint = waypointMarkers.FirstOrDefault(w =>
+                                    targetBox.FrameIndex >= w.EntryFrame &&
+                                    targetBox.FrameIndex <= w.ExitFrame);
+                                
+                                if (waypoint != null)
+                                {
+                                    // 해당 Waypoint 내의 동일한 oldEventId를 가진 모든 Event 박스 업데이트
+                                    var relatedBoxes = boundingBoxes.Where(b =>
+                                        b.Label == "event" &&
+                                        b.EventId == oldEventId &&
+                                        b.FrameIndex >= waypoint.EntryFrame &&
+                                        b.FrameIndex <= waypoint.ExitFrame).ToList();
+                                    
+                                    foreach (var relatedBox in relatedBoxes)
+                                    {
+                                        SetBoxId(relatedBox, "event", eventId);
+                                    }
+                                    
+                                    System.Diagnostics.Debug.WriteLine($"[Event 타입 변경] {relatedBoxes.Count}개 박스의 EventId를 {oldEventId}→{eventId}로 업데이트");
+                                }
+                            }
                         }
                     }
                     
