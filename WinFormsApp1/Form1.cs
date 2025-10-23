@@ -790,6 +790,7 @@ namespace WinFormsApp1
 
             currentFrameIndex = frameIndex;
             UpdateTimeLabels();
+            UpdateBboxListDisplay();
             pictureBoxVideo.Invalidate();
         }
 
@@ -1216,6 +1217,7 @@ namespace WinFormsApp1
                     selectedBox = drawingBox;
                     UpdateObjectInfo(selectedBox);
                     UpdateBoxCount();
+                    UpdateBboxListDisplay();
                 }
 
                 drawingBox = null;
@@ -1371,16 +1373,22 @@ namespace WinFormsApp1
                 var item = new ListViewItem(waypoint.EntryTime);
                 item.SubItems.Add(waypoint.ExitTime);
                 
-                // multi-object waypoint인 경우 객체 개수 표시
+                // multi-object waypoint인 경우 Entry 프레임의 고유 객체 개수 표시
                 if (waypoint.Label == "multi" && waypoint.ObjectId == 0)
                 {
-                    int objectCount = boundingBoxes.Count(b => b.FrameIndex == waypoint.EntryFrame);
-                    item.SubItems.Add($"● {objectCount}개 객체");
+                    // Entry 프레임에 있는 고유한 객체(label + ID 조합)의 개수만 카운트
+                    var uniqueObjects = boundingBoxes
+                        .Where(b => b.FrameIndex == waypoint.EntryFrame)
+                        .Select(b => new { b.Label, Id = GetBoxId(b) })
+                        .Distinct()
+                        .Count();
+                    
+                    item.SubItems.Add($"{uniqueObjects}개");
                 }
                 else
                 {
                     // 기존 단일 객체 waypoint (하위 호환성)
-                    item.SubItems.Add($"● {waypoint.Label}_{waypoint.ObjectId:D2}");
+                    item.SubItems.Add($"1개");
                 }
                 
                 item.ForeColor = waypoint.MarkerColor;
@@ -1527,6 +1535,321 @@ namespace WinFormsApp1
             }
         }
 
+        // 라벨 타입 선택 버튼 핸들러
+        private void btnLabelPerson_Click(object sender, EventArgs e)
+        {
+            currentSelectedLabel = "person";
+            
+            // Person ID 선택 다이얼로그
+            string input = ShowInputDialog("Person ID 선택", "Person ID를 입력하세요 (1~19):");
+            if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int personId))
+            {
+                if (personId >= 1 && personId <= 19)
+                {
+                    currentAssignedId = personId;
+                    MessageBox.Show($"person_{personId:D2} 라벨이 선택되었습니다.", "라벨 선택");
+                }
+                else
+                {
+                    MessageBox.Show("1~19 사이의 숫자를 입력해주세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    currentAssignedId = 1;
+                }
+            }
+            else
+            {
+                currentAssignedId = 1; // 기본값
+            }
+        }
+
+        private void btnLabelVehicle_Click(object sender, EventArgs e)
+        {
+            currentSelectedLabel = "vehicle";
+            
+            // Vehicle 타입 선택 다이얼로그
+            string message = "Vehicle 타입을 선택하세요:\n1: car\n2: motorcycle\n3: bicycle\n4: e_scooter";
+            string input = ShowInputDialog("Vehicle 타입 선택", message);
+            if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int vehicleId))
+            {
+                if (vehicleId >= 1 && vehicleId <= 4)
+                {
+                    currentAssignedId = vehicleId;
+                    string[] types = { "car", "motorcycle", "bicycle", "e_scooter" };
+                    MessageBox.Show($"vehicle_{types[vehicleId - 1]} 라벨이 선택되었습니다.", "라벨 선택");
+                }
+                else
+                {
+                    MessageBox.Show("1~4 사이의 숫자를 입력해주세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    currentAssignedId = 1;
+                }
+            }
+            else
+            {
+                currentAssignedId = 1; // 기본값
+            }
+        }
+
+        private void btnLabelEvent_Click(object sender, EventArgs e)
+        {
+            currentSelectedLabel = "event";
+            
+            // Event 타입 선택 다이얼로그
+            string message = "Event 타입을 선택하세요:\n1: board\n2: close\n3: contact\n4: signal\n5: final\n6: V_U_TURN";
+            string input = ShowInputDialog("Event 타입 선택", message);
+            if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int eventId))
+            {
+                if (eventId >= 1 && eventId <= 6)
+                {
+                    currentAssignedId = eventId;
+                    string[] types = { "board", "close", "contact", "signal", "final", "V_U_TURN" };
+                    MessageBox.Show($"event_{types[eventId - 1]} 라벨이 선택되었습니다.", "라벨 선택");
+                }
+                else
+                {
+                    MessageBox.Show("1~6 사이의 숫자를 입력해주세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    currentAssignedId = 1;
+                }
+            }
+            else
+            {
+                currentAssignedId = 1; // 기본값
+            }
+        }
+
+        // 현재 프레임의 bbox 목록을 동적으로 생성하여 표시
+        private void UpdateBboxListDisplay()
+        {
+            panelBboxList.Controls.Clear();
+            
+            var currentBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex).ToList();
+            
+            if (currentBoxes.Count == 0)
+            {
+                Label emptyLabel = new Label
+                {
+                    Text = "현재 프레임에 bbox가 없습니다.",
+                    Font = new System.Drawing.Font("Segoe UI", 9F),
+                    ForeColor = System.Drawing.Color.Gray,
+                    Location = new System.Drawing.Point(10, 10),
+                    Size = new System.Drawing.Size(230, 20),
+                    AutoSize = true
+                };
+                panelBboxList.Controls.Add(emptyLabel);
+                return;
+            }
+            
+            int yPos = 5;
+            foreach (var box in currentBoxes)
+            {
+                string displayText = "";
+                System.Drawing.Color bgColor = System.Drawing.Color.White;
+                System.Drawing.Color fgColor = System.Drawing.Color.Black;
+                
+                if (box.Label == "person")
+                {
+                    displayText = $"person_{box.PersonId:D2}";
+                    bgColor = System.Drawing.Color.FromArgb(252, 231, 243);
+                    fgColor = System.Drawing.Color.FromArgb(157, 23, 77);
+                }
+                else if (box.Label == "vehicle")
+                {
+                    string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+                    if (box.VehicleId > 0 && box.VehicleId <= vehicleTypes.Length)
+                        displayText = $"vehicle_{vehicleTypes[box.VehicleId - 1]}";
+                    else
+                        displayText = $"vehicle_{box.VehicleId}";
+                    bgColor = System.Drawing.Color.FromArgb(219, 234, 254);
+                    fgColor = System.Drawing.Color.FromArgb(30, 64, 175);
+                }
+                else if (box.Label == "event")
+                {
+                    string[] eventTypes = { "board", "close", "contact", "signal", "final", "V_U_TURN" };
+                    if (box.EventId > 0 && box.EventId <= eventTypes.Length)
+                        displayText = $"event_{eventTypes[box.EventId - 1]}";
+                    else
+                        displayText = $"event_{box.EventId}";
+                    bgColor = System.Drawing.Color.FromArgb(220, 252, 231);
+                    fgColor = System.Drawing.Color.FromArgb(20, 83, 45);
+                }
+                
+                // 각 bbox 항목 패널 (높이 증가 - 드롭다운 공간)
+                Panel itemPanel = new Panel
+                {
+                    Location = new System.Drawing.Point(5, yPos),
+                    Size = new System.Drawing.Size(256, 65),
+                    BackColor = bgColor,
+                    BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
+                    Tag = box
+                };
+                
+                Label itemLabel = new Label
+                {
+                    Text = displayText,
+                    Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold),
+                    ForeColor = fgColor,
+                    Location = new System.Drawing.Point(8, 5),
+                    Size = new System.Drawing.Size(200, 20),
+                    AutoSize = true
+                };
+                
+                // 드롭다운 생성 (라벨 타입에 따라)
+                ComboBox comboBox = new ComboBox
+                {
+                    Location = new System.Drawing.Point(8, 30),
+                    Size = new System.Drawing.Size(240, 25),
+                    DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList,
+                    Font = new System.Drawing.Font("Segoe UI", 8F),
+                    Tag = box
+                };
+                
+                // 라벨 타입에 따라 아이템 추가
+                if (box.Label == "person")
+                {
+                    for (int i = 1; i <= 19; i++)
+                    {
+                        comboBox.Items.Add($"person_{i:D2}");
+                    }
+                    comboBox.SelectedIndex = box.PersonId - 1;
+                }
+                else if (box.Label == "vehicle")
+                {
+                    comboBox.Items.Add("vehicle_car");
+                    comboBox.Items.Add("vehicle_motorcycle");
+                    comboBox.Items.Add("vehicle_bicycle");
+                    comboBox.Items.Add("vehicle_e_scooter");
+                    if (box.VehicleId >= 1 && box.VehicleId <= 4)
+                        comboBox.SelectedIndex = box.VehicleId - 1;
+                }
+                else if (box.Label == "event")
+                {
+                    comboBox.Items.Add("event_board");
+                    comboBox.Items.Add("event_close");
+                    comboBox.Items.Add("event_contact");
+                    comboBox.Items.Add("event_signal");
+                    comboBox.Items.Add("event_final");
+                    comboBox.Items.Add("event_V_U_TURN");
+                    if (box.EventId >= 1 && box.EventId <= 6)
+                        comboBox.SelectedIndex = box.EventId - 1;
+                }
+                
+                // 드롭다운 변경 이벤트
+                comboBox.SelectedIndexChanged += (s, e) =>
+                {
+                    ComboBox cb = (ComboBox)s;
+                    BoundingBox targetBox = (BoundingBox)cb.Tag;
+                    string selected = cb.SelectedItem?.ToString() ?? "";
+                    
+                    if (string.IsNullOrEmpty(selected))
+                        return;
+                    
+                    string oldLabel = targetBox.Label;
+                    int oldId = GetBoxId(targetBox);
+                    Rectangle oldRect = targetBox.Rectangle;
+                    
+                    // 라벨 업데이트
+                    if (selected.StartsWith("person_"))
+                    {
+                        string[] parts = selected.Split('_');
+                        if (parts.Length == 2 && int.TryParse(parts[1], out int personId))
+                        {
+                            targetBox.Label = "person";
+                            SetBoxId(targetBox, "person", personId);
+                        }
+                    }
+                    else if (selected.StartsWith("vehicle_"))
+                    {
+                        string[] parts = selected.Split('_');
+                        if (parts.Length == 2)
+                        {
+                            string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+                            int vehicleId = Array.IndexOf(vehicleTypes, parts[1]) + 1;
+                            if (vehicleId > 0)
+                            {
+                                targetBox.Label = "vehicle";
+                                SetBoxId(targetBox, "vehicle", vehicleId);
+                            }
+                        }
+                    }
+                    else if (selected.StartsWith("event_"))
+                    {
+                        string[] parts = selected.Split('_');
+                        if (parts.Length == 2)
+                        {
+                            string[] eventTypes = { "board", "close", "contact", "signal", "final", "V_U_TURN" };
+                            int eventId = Array.IndexOf(eventTypes, parts[1]) + 1;
+                            if (eventId > 0)
+                            {
+                                targetBox.Label = "event";
+                                SetBoxId(targetBox, "event", eventId);
+                            }
+                        }
+                    }
+                    
+                    AddUndoAction(new UndoAction
+                    {
+                        Type = UndoActionType.ModifyBox,
+                        Box = CloneBoundingBox(targetBox),
+                        OriginalLabel = oldLabel,
+                        OriginalObjectId = oldId,
+                        OriginalRectangle = oldRect
+                    });
+                    
+                    if (selectedBox == targetBox)
+                    {
+                        UpdateObjectInfo(selectedBox);
+                    }
+                    
+                    UpdateBboxListDisplay();
+                    pictureBoxVideo.Invalidate();
+                };
+                
+                itemPanel.Controls.Add(itemLabel);
+                itemPanel.Controls.Add(comboBox);
+                
+                // 클릭 이벤트 - 박스 선택
+                EventHandler clickHandler = (s, e) =>
+                {
+                    selectedBox = box;
+                    UpdateObjectInfo(selectedBox);
+                    pictureBoxVideo.Invalidate();
+                    
+                    // 선택된 항목 강조 표시
+                    foreach (Control ctrl in panelBboxList.Controls)
+                    {
+                        if (ctrl is Panel p)
+                        {
+                            if (p == itemPanel)
+                                p.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+                            else
+                                p.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+                        }
+                    }
+                };
+                
+                itemPanel.Click += clickHandler;
+                itemLabel.Click += clickHandler;
+                
+                panelBboxList.Controls.Add(itemPanel);
+                yPos += 70;
+            }
+        }
+        
+        // 선택한 bbox 삭제 버튼 핸들러
+        private void btnDeleteLabel_Click(object sender, EventArgs e)
+        {
+            if (selectedBox == null)
+            {
+                MessageBox.Show("삭제할 bbox를 먼저 선택해주세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            
+            AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
+            boundingBoxes.Remove(selectedBox);
+            selectedBox = null;
+            UpdateBoxCount();
+            UpdateBboxListDisplay();
+            pictureBoxVideo.Invalidate();
+        }
+
         // 박스의 현재 라벨에 해당하는 ID 가져오기
         private int GetBoxId(BoundingBox box)
         {
@@ -1617,6 +1940,7 @@ namespace WinFormsApp1
                     OriginalRectangle = oldRect
                 });
 
+                UpdateBboxListDisplay();
                 pictureBoxVideo.Invalidate();
             }
         }
@@ -1904,6 +2228,7 @@ namespace WinFormsApp1
 
             redoStack.Push(action);
             UpdateBoxCount();
+            UpdateBboxListDisplay();
             pictureBoxVideo.Invalidate();
         }
 
@@ -1953,6 +2278,7 @@ namespace WinFormsApp1
 
             undoStack.Push(action);
             UpdateBoxCount();
+            UpdateBboxListDisplay();
             pictureBoxVideo.Invalidate();
         }
         #endregion
@@ -2062,6 +2388,7 @@ namespace WinFormsApp1
                 }
 
                 UpdateBoxCount();
+                UpdateBboxListDisplay();
                 MessageBox.Show(
                     $"추적 완료! {startBoxes.Count}개 객체, 총 {allTrackedBoxes.Count}개 BBox가 추가되었습니다.",
                     "성공",
@@ -2508,6 +2835,7 @@ namespace WinFormsApp1
                 boundingBoxes.Remove(selectedBox);
                 selectedBox = null;
                 UpdateBoxCount();
+                UpdateBboxListDisplay();
                 pictureBoxVideo.Invalidate();
                 e.Handled = true;
             }
