@@ -358,6 +358,14 @@ namespace WinFormsApp1
         
         // bbox 리스트 렌더링 최적화를 위한 변수
         private int lastRenderedBoxCount = -1;
+        
+        // 성능 최적화: 프레임별 박스 캐시
+        private Dictionary<int, List<BoundingBox>> frameBoxCache = new Dictionary<int, List<BoundingBox>>();
+        private int lastCachedFrameForPaint = -1;
+        private List<BoundingBox> cachedCurrentFrameBoxes = new List<BoundingBox>();
+        
+        // 성능 최적화: 재사용 가능한 Font 객체
+        private Font labelFont = new Font("Segoe UI", 10F, FontStyle.Bold);
 
         // 카테고리 ID 매핑 (스펙에 따른 고정 매핑)
         private static readonly Dictionary<string, int> CategoryIdMap = new Dictionary<string, int>
@@ -1175,6 +1183,8 @@ namespace WinFormsApp1
                         selectedBox.Rectangle.Width, selectedBox.Rectangle.Height));
                     dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
                     UpdateObjectInfo(selectedBox);
+                    UpdateBboxListDisplay(); // 선택 후 우측 패널 동기화
+                    pictureBoxVideo.Invalidate();
                 }
             }
         }
@@ -1220,6 +1230,7 @@ namespace WinFormsApp1
                 if (drawingBox.Rectangle.Width > 10 && drawingBox.Rectangle.Height > 10)
                 {
                     boundingBoxes.Add(drawingBox);
+                    InvalidateBoxCache();
                     AddUndoAction(new UndoAction { Type = UndoActionType.AddBox, Box = drawingBox });
 
                     selectedBox = drawingBox;
@@ -1270,10 +1281,14 @@ namespace WinFormsApp1
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // 현재 프레임에 해당하는 박스들을 필터링
-            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex);
+            // 성능 최적화: 현재 프레임의 박스를 캐시에서 가져오기
+            if (lastCachedFrameForPaint != currentFrameIndex)
+            {
+                cachedCurrentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex).ToList();
+                lastCachedFrameForPaint = currentFrameIndex;
+            }
 
-            foreach (var box in currentFrameBoxes)
+            foreach (var box in cachedCurrentFrameBoxes)
             {
                 // 현재 프레임의 박스만 표시 (box.FrameIndex == currentFrameIndex)
                 // currentFrameBoxes에서 이미 필터링되었으므로 추가 체크 불필요
@@ -1290,45 +1305,23 @@ namespace WinFormsApp1
                     g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
                 }
 
-                // 라벨 텍스트 생성
-                string labelText = "";
-                if (box.Label == "person")
-                {
-                    labelText = $"person_{box.PersonId:D2}";
-                }
-                else if (box.Label == "vehicle")
-                {
-                    string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
-                    if (box.VehicleId > 0 && box.VehicleId <= vehicleTypes.Length)
-                        labelText = $"vehicle_{vehicleTypes[box.VehicleId - 1]}";
-                    else
-                        labelText = $"vehicle_{box.VehicleId}";
-                }
-                else if (box.Label == "event")
-                {
-                    string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
-                    if (box.EventId > 0 && box.EventId <= eventTypes.Length)
-                        labelText = $"event_{eventTypes[box.EventId - 1]}";
-                    else
-                        labelText = $"event_{box.EventId}";
-                }
+                // 라벨 텍스트 생성 (성능 최적화: 캐싱된 배열 사용)
+                string labelText = GetBoxLabelText(box);
                 
-                using (Font font = new Font("Segoe UI", 10F, FontStyle.Bold))
-                {
-                    SizeF textSize = g.MeasureString(labelText, font);
-                    RectangleF labelBg = new RectangleF(
-                        viewRect.X,
-                        viewRect.Y - textSize.Height - 4,
-                        textSize.Width + 8,
-                        textSize.Height + 4
-                    );
+                // 성능 최적화: 재사용 가능한 Font 사용
+                SizeF textSize = g.MeasureString(labelText, labelFont);
+                RectangleF labelBg = new RectangleF(
+                    viewRect.X,
+                    viewRect.Y - textSize.Height - 4,
+                    textSize.Width + 8,
+                    textSize.Height + 4
+                );
 
-                    using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(200, boxColor)))
-                        g.FillRectangle(bgBrush, labelBg);
+                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(200, boxColor)))
+                    g.FillRectangle(bgBrush, labelBg);
 
-                    using (SolidBrush textBrush = new SolidBrush(Color.White))
-                        g.DrawString(labelText, font, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
-                }
+                using (SolidBrush textBrush = new SolidBrush(Color.White))
+                    g.DrawString(labelText, labelFont, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
             }
 
             if (isDrawing && drawingBox != null)
@@ -1608,6 +1601,7 @@ namespace WinFormsApp1
                     OriginalLabel = oldLabel
                 });
                 
+                InvalidateBoxCache();
                 pictureBoxVideo.Invalidate();
                 UpdateBboxListDisplay();
                 UpdateObjectInfo(selectedBox);
@@ -1634,6 +1628,7 @@ namespace WinFormsApp1
                     OriginalLabel = oldLabel
                 });
                 
+                InvalidateBoxCache();
                 pictureBoxVideo.Invalidate();
                 UpdateBboxListDisplay();
                 UpdateObjectInfo(selectedBox);
@@ -1660,12 +1655,47 @@ namespace WinFormsApp1
                     OriginalLabel = oldLabel
                 });
                 
+                InvalidateBoxCache();
                 pictureBoxVideo.Invalidate();
                 UpdateBboxListDisplay();
                 UpdateObjectInfo(selectedBox);
             }
         }
 
+        // 성능 최적화: 박스 라벨 텍스트 생성 (재사용 가능한 배열 사용)
+        private static readonly string[] VehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+        private static readonly string[] EventTypes = { "contact", "exchange", "board", "final_exchange" };
+        
+        private string GetBoxLabelText(BoundingBox box)
+        {
+            if (box.Label == "person")
+            {
+                return $"person_{box.PersonId:D2}";
+            }
+            else if (box.Label == "vehicle")
+            {
+                if (box.VehicleId > 0 && box.VehicleId <= VehicleTypes.Length)
+                    return $"vehicle_{VehicleTypes[box.VehicleId - 1]}";
+                else
+                    return $"vehicle_{box.VehicleId}";
+            }
+            else if (box.Label == "event")
+            {
+                if (box.EventId > 0 && box.EventId <= EventTypes.Length)
+                    return $"event_{EventTypes[box.EventId - 1]}";
+                else
+                    return $"event_{box.EventId}";
+            }
+            return "";
+        }
+        
+        // 성능 최적화: 박스 데이터가 변경되면 캐시 무효화
+        private void InvalidateBoxCache()
+        {
+            lastCachedFrameForPaint = -1;
+            cachedCurrentFrameBoxes.Clear();
+        }
+        
         // bbox 리스트 업데이트가 필요한지 확인 (리소스 최적화)
         private bool ShouldUpdateBboxList(int frameIndex)
         {
@@ -1712,33 +1742,36 @@ namespace WinFormsApp1
             int yPos = 5;
             foreach (var box in currentBoxes)
             {
+                // 클로저 캡처 문제 해결: 로컬 변수로 복사
+                var currentBox = box;
+                
                 string displayText = "";
                 System.Drawing.Color bgColor = System.Drawing.Color.White;
                 System.Drawing.Color fgColor = System.Drawing.Color.Black;
                 
-                if (box.Label == "person")
+                if (currentBox.Label == "person")
                 {
-                    displayText = $"person_{box.PersonId:D2}";
+                    displayText = $"person_{currentBox.PersonId:D2}";
                     bgColor = System.Drawing.Color.FromArgb(252, 231, 243);
                     fgColor = System.Drawing.Color.FromArgb(157, 23, 77);
                 }
-                else if (box.Label == "vehicle")
+                else if (currentBox.Label == "vehicle")
                 {
                     string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
-                    if (box.VehicleId > 0 && box.VehicleId <= vehicleTypes.Length)
-                        displayText = $"vehicle_{vehicleTypes[box.VehicleId - 1]}";
+                    if (currentBox.VehicleId > 0 && currentBox.VehicleId <= vehicleTypes.Length)
+                        displayText = $"vehicle_{vehicleTypes[currentBox.VehicleId - 1]}";
                     else
-                        displayText = $"vehicle_{box.VehicleId}";
+                        displayText = $"vehicle_{currentBox.VehicleId}";
                     bgColor = System.Drawing.Color.FromArgb(219, 234, 254);
                     fgColor = System.Drawing.Color.FromArgb(30, 64, 175);
                 }
-                else if (box.Label == "event")
+                else if (currentBox.Label == "event")
                 {
                     string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
-                    if (box.EventId > 0 && box.EventId <= eventTypes.Length)
-                        displayText = $"event_{eventTypes[box.EventId - 1]}";
+                    if (currentBox.EventId > 0 && currentBox.EventId <= eventTypes.Length)
+                        displayText = $"event_{eventTypes[currentBox.EventId - 1]}";
                     else
-                        displayText = $"event_{box.EventId}";
+                        displayText = $"event_{currentBox.EventId}";
                     bgColor = System.Drawing.Color.FromArgb(220, 252, 231);
                     fgColor = System.Drawing.Color.FromArgb(20, 83, 45);
                 }
@@ -1750,7 +1783,7 @@ namespace WinFormsApp1
                     Size = new System.Drawing.Size(256, 65),
                     BackColor = bgColor,
                     BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
-                    Tag = box
+                    Tag = currentBox
                 };
                 
                 Label itemLabel = new Label
@@ -1770,35 +1803,35 @@ namespace WinFormsApp1
                     Size = new System.Drawing.Size(240, 25),
                     DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList,
                     Font = new System.Drawing.Font("Segoe UI", 8F),
-                    Tag = box
+                    Tag = currentBox
                 };
                 
                 // 라벨 타입에 따라 아이템 추가
-                if (box.Label == "person")
+                if (currentBox.Label == "person")
                 {
                     for (int i = 1; i <= 19; i++)
                     {
                         comboBox.Items.Add($"person_{i:D2}");
                     }
-                    comboBox.SelectedIndex = box.PersonId - 1;
+                    comboBox.SelectedIndex = currentBox.PersonId - 1;
                 }
-                else if (box.Label == "vehicle")
+                else if (currentBox.Label == "vehicle")
                 {
                     comboBox.Items.Add("vehicle_car");
                     comboBox.Items.Add("vehicle_motorcycle");
                     comboBox.Items.Add("vehicle_bicycle");
                     comboBox.Items.Add("vehicle_e_scooter");
-                    if (box.VehicleId >= 1 && box.VehicleId <= 4)
-                        comboBox.SelectedIndex = box.VehicleId - 1;
+                    if (currentBox.VehicleId >= 1 && currentBox.VehicleId <= 4)
+                        comboBox.SelectedIndex = currentBox.VehicleId - 1;
                 }
-                else if (box.Label == "event")
+                else if (currentBox.Label == "event")
                 {
                     comboBox.Items.Add("event_contact");
                     comboBox.Items.Add("event_exchange");
                     comboBox.Items.Add("event_board");
                     comboBox.Items.Add("event_final_exchange");
-                    if (box.EventId >= 1 && box.EventId <= 4)
-                        comboBox.SelectedIndex = box.EventId - 1;
+                    if (currentBox.EventId >= 1 && currentBox.EventId <= 4)
+                        comboBox.SelectedIndex = currentBox.EventId - 1;
                 }
                 
                 // 드롭다운 변경 이벤트
@@ -1865,6 +1898,7 @@ namespace WinFormsApp1
                         UpdateObjectInfo(selectedBox);
                     }
                     
+                    InvalidateBoxCache();
                     UpdateBboxListDisplay();
                     pictureBoxVideo.Invalidate();
                 };
@@ -1872,10 +1906,10 @@ namespace WinFormsApp1
                 itemPanel.Controls.Add(itemLabel);
                 itemPanel.Controls.Add(comboBox);
                 
-                // 클릭 이벤트 - 박스 선택
+                // 클릭 이벤트 - 박스 선택 (currentBox 사용)
                 EventHandler clickHandler = (s, e) =>
                 {
-                    selectedBox = box;
+                    selectedBox = currentBox;
                     UpdateObjectInfo(selectedBox);
                     pictureBoxVideo.Invalidate();
                     
@@ -1911,6 +1945,7 @@ namespace WinFormsApp1
             
             AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
             boundingBoxes.Remove(selectedBox);
+            InvalidateBoxCache();
             selectedBox = null;
             UpdateBoxCount();
             UpdateBboxListDisplay();
@@ -2259,12 +2294,14 @@ namespace WinFormsApp1
             {
                 case UndoActionType.AddBox:
                     boundingBoxes.Remove(action.Box);
+                    InvalidateBoxCache();
                     if (selectedBox == action.Box)
                         selectedBox = null;
                     break;
 
                 case UndoActionType.RemoveBox:
                     boundingBoxes.Add(action.Box);
+                    InvalidateBoxCache();
                     break;
 
                 case UndoActionType.ModifyBox:
@@ -2278,6 +2315,7 @@ namespace WinFormsApp1
                         boxToModify.Rectangle = action.OriginalRectangle;
                         boxToModify.Label = action.OriginalLabel;
                         SetBoxId(boxToModify, action.OriginalLabel, action.OriginalObjectId);
+                        InvalidateBoxCache();
                     }
                     break;
 
@@ -2286,6 +2324,7 @@ namespace WinFormsApp1
                     {
                         boundingBoxes.Remove(box);
                     }
+                    InvalidateBoxCache();
                     break;
             }
 
@@ -2309,10 +2348,12 @@ namespace WinFormsApp1
             {
                 case UndoActionType.AddBox:
                     boundingBoxes.Add(action.Box);
+                    InvalidateBoxCache();
                     break;
 
                 case UndoActionType.RemoveBox:
                     boundingBoxes.Remove(action.Box);
+                    InvalidateBoxCache();
                     if (selectedBox == action.Box)
                         selectedBox = null;
                     break;
@@ -2328,6 +2369,7 @@ namespace WinFormsApp1
                         boxToModify.Rectangle = action.Box.Rectangle;
                         boxToModify.Label = action.Box.Label;
                         SetBoxId(boxToModify, action.Box.Label, GetBoxId(action.Box));
+                        InvalidateBoxCache();
                     }
                     break;
 
@@ -2336,6 +2378,7 @@ namespace WinFormsApp1
                     {
                         boundingBoxes.Add(box);
                     }
+                    InvalidateBoxCache();
                     break;
             }
 
@@ -2444,6 +2487,7 @@ namespace WinFormsApp1
                 {
                     boundingBoxes.Add(box);
                 }
+                InvalidateBoxCache();
 
                 // 추적이 성공적으로 완료되면 Entry 프레임의 사용자가 지정한 초기 박스 삭제
                 if (allTrackedBoxes.Count > 0)
@@ -2459,6 +2503,7 @@ namespace WinFormsApp1
                         }
                     }
                     
+                    InvalidateBoxCache();
                     AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = allTrackedBoxes });
                 }
 
@@ -2627,7 +2672,8 @@ namespace WinFormsApp1
 
                 // 웨이포인트 리스트뷰 갱신
                 UpdateWaypointListView();
-
+                
+                InvalidateBoxCache();
                 UpdateBoxCount();
                 pictureBoxVideo.Invalidate();
             }
