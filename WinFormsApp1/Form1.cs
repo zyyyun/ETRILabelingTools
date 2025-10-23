@@ -592,7 +592,18 @@ namespace WinFormsApp1
                 
                 loadingForm.Close();
 
+                // ✅ JSON 저장 후 자동 재로드
+                string videoFileName = Path.GetFileNameWithoutExtension(currentVideoFile);
                 string videoDir = Path.GetDirectoryName(currentVideoFile);
+                string jsonFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"{videoFileName}.json");
+                
+                if (File.Exists(jsonFilePath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[JSON 저장 완료] 재로드 시작: {jsonFilePath}");
+                    LoadLabelingData(currentVideoFile); // JSON 재로드
+                    System.Diagnostics.Debug.WriteLine("[JSON 재로드 완료]");
+                }
+                
                 string labelsDir = Path.Combine(videoDir, "labels");
                 
                 MessageBox.Show(
@@ -769,6 +780,12 @@ namespace WinFormsApp1
 
                 // 동일 파일명의 JSON 자동 로드
                 LoadLabelingData(filePath);
+                
+                // ✅ 영상 로드 후 자동 재생 시작
+                if (!isPlaying)
+                {
+                    btnPlay_Click(null, EventArgs.Empty);
+                }
             }
             catch (Exception ex)
             {
@@ -1449,12 +1466,12 @@ namespace WinFormsApp1
                 var item = new ListViewItem(waypoint.EntryTime);
                 item.SubItems.Add(waypoint.ExitTime);
                 
-                // multi-object waypoint인 경우 Entry 프레임의 고유 객체 개수 표시
+                // multi-object waypoint인 경우 해당 Waypoint 전체 구간의 고유 객체 개수 표시
                 if (waypoint.Label == "multi" && waypoint.ObjectId == 0)
                 {
-                    // Entry 프레임에 있는 고유한 객체(label + ID 조합)의 개수만 카운트
+                    // ✅ Waypoint 전체 구간(Entry~Exit)에 있는 고유한 객체(label + ID 조합)의 개수 카운트
                     var uniqueObjects = boundingBoxes
-                        .Where(b => b.FrameIndex == waypoint.EntryFrame)
+                        .Where(b => b.FrameIndex >= waypoint.EntryFrame && b.FrameIndex <= waypoint.ExitFrame)
                         .Select(b => new { b.Label, Id = GetBoxId(b) })
                         .Distinct()
                         .Count();
@@ -1857,6 +1874,12 @@ namespace WinFormsApp1
                     DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList,
                     Font = new System.Drawing.Font("Segoe UI", 8F),
                     Tag = currentBox
+                };
+                
+                // ✅ 마우스 휠 스크롤 무시 (클릭 시에만 동작)
+                comboBox.MouseWheel += (s, e) =>
+                {
+                    ((System.Windows.Forms.HandledMouseEventArgs)e).Handled = true;
                 };
                 
                 // 라벨 타입에 따라 아이템 추가
@@ -2524,8 +2547,8 @@ namespace WinFormsApp1
         }
 
         /// <summary>
-        /// Event 박스가 Entry 프레임에서 생성되었을 때 자동으로 Exit 프레임까지 전파
-        /// (실시간 그리기 시 호출됨 - 하지만 주로 Exit 마커 설정 시 일괄 처리)
+        /// Event 박스가 새로 생성되었을 때 현재 프레임부터 Waypoint Exit까지 전파
+        /// (Waypoint 중간 프레임에서 생성된 Event도 자동으로 Exit까지 전파됨)
         /// </summary>
         private void PropagateEventBoxIfNeeded(BoundingBox box)
         {
@@ -2533,12 +2556,65 @@ namespace WinFormsApp1
             if (box.Label != "event")
                 return;
 
-            // Entry/Exit 마커가 이미 설정되어 있으면 PropagateAllEventBoxesInRange에서 처리
-            // 여기서는 수동 전파만 안내
-            if (entryFrameIndex.HasValue && exitFrameIndex.HasValue && box.FrameIndex == entryFrameIndex.Value)
+            // 현재 박스가 속한 Waypoint 찾기
+            var waypoint = waypointMarkers.FirstOrDefault(w =>
+                box.FrameIndex >= w.EntryFrame &&
+                box.FrameIndex <= w.ExitFrame);
+
+            if (waypoint == null)
             {
-                // Exit 마커 설정 시 자동으로 처리되므로 별도 전파 불필요
+                // Waypoint가 없으면 전파 불가 (Entry/Exit 마커가 아직 설정되지 않음)
+                System.Diagnostics.Debug.WriteLine($"[Event 생성] 프레임 {box.FrameIndex}에 Waypoint가 없어 전파하지 않음");
                 return;
+            }
+
+            int startFrame = box.FrameIndex + 1; // 다음 프레임부터
+            int endFrame = waypoint.ExitFrame;
+
+            // 현재 프레임이 Exit 프레임이면 전파할 필요 없음
+            if (box.FrameIndex >= endFrame)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Event 생성] 프레임 {box.FrameIndex}가 Exit 프레임이므로 전파 불필요");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[Event 생성 전파] 프레임 {box.FrameIndex}에서 생성된 Event를 {startFrame}~{endFrame}까지 전파 시작");
+
+            int createdCount = 0;
+            for (int frame = startFrame; frame <= endFrame; frame++)
+            {
+                // 이미 동일한 EventId를 가진 박스가 존재하는지 확인
+                bool exists = boundingBoxes.Any(b =>
+                    b.FrameIndex == frame &&
+                    b.Label == "event" &&
+                    b.EventId == box.EventId);
+
+                if (!exists)
+                {
+                    var newBox = new BoundingBox
+                    {
+                        Rectangle = box.Rectangle,
+                        Label = box.Label,
+                        FrameIndex = frame,
+                        PersonId = box.PersonId,
+                        VehicleId = box.VehicleId,
+                        EventId = box.EventId,
+                        Action = "waypoint"
+                    };
+                    boundingBoxes.Add(newBox);
+                    createdCount++;
+                }
+            }
+
+            if (createdCount > 0)
+            {
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                System.Diagnostics.Debug.WriteLine($"[Event 생성 전파 완료] {createdCount}개 프레임에 박스 생성됨 ({startFrame}~{endFrame})");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[Event 생성 전파] 생성할 박스 없음 (이미 존재)");
             }
         }
 
@@ -3300,7 +3376,7 @@ namespace WinFormsApp1
                 MessageBox.Show("재생 속도를 1.0x로 초기화했습니다.", "속도 초기화", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 e.Handled = true;
             }
-            else if (selectedBox != null && (e.KeyCode == Keys.W || e.KeyCode == Keys.A || e.KeyCode == Keys.S || e.KeyCode == Keys.D))
+            else if (selectedBox != null && !e.Control && (e.KeyCode == Keys.W || e.KeyCode == Keys.A || e.KeyCode == Keys.S || e.KeyCode == Keys.D))
             {
                 int moveAmount = e.Shift ? 10 : 2;
                 Rectangle rect = selectedBox.Rectangle;
