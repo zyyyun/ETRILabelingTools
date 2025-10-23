@@ -351,6 +351,7 @@ namespace WinFormsApp1
         private string currentSrtFile = "";
         private List<SubtitleEntry> subtitleEntries = new List<SubtitleEntry>();
         private bool isFFmpegAvailable = false;
+        private bool isSubtitleVisible = false; // 자막 표시 상태
         
         // 현재 선택된 라벨 (person, vehicle, event)
         private string currentSelectedLabel = "person";
@@ -360,6 +361,14 @@ namespace WinFormsApp1
         {
             InitializeComponent();
             UpdateBoxCount();
+            
+            // 자막 초기 상태를 닫힌 상태로 설정
+            btnToggleSubtitle.Text = "자막 열기";
+            btnToggleSubtitle.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
+            if (labelSubtitleTimestamp != null)
+            {
+                labelSubtitleTimestamp.Visible = false;
+            }
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -779,14 +788,21 @@ namespace WinFormsApp1
             TimeSpan totalTime = TimeSpan.FromSeconds(totalSeconds);
 
             string speedText = playbackSpeed == 1.0 ? "" : $" ({playbackSpeed}x)";
-            string subtitleText = GetCurrentSubtitle();
+            string subtitleText = isSubtitleVisible ? GetCurrentSubtitle() : "";
             
-            // 자막에서 타임스탬프 추출하여 우측 하단에 표시
-            string timestamp = ExtractTimestampFromSubtitle(subtitleText);
-            if (!string.IsNullOrEmpty(timestamp))
+            // 자막이 표시 상태일 때만 타임스탬프 추출하여 우측 하단에 표시
+            if (isSubtitleVisible)
             {
-                labelSubtitleTimestamp.Text = timestamp;
-                labelSubtitleTimestamp.Visible = true;
+                string timestamp = ExtractTimestampFromSubtitle(subtitleText);
+                if (!string.IsNullOrEmpty(timestamp))
+                {
+                    labelSubtitleTimestamp.Text = timestamp;
+                    labelSubtitleTimestamp.Visible = true;
+                }
+                else
+                {
+                    labelSubtitleTimestamp.Visible = false;
+                }
             }
             else
             {
@@ -911,6 +927,24 @@ namespace WinFormsApp1
                 "안내",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+        }
+
+        private void btnToggleSubtitle_Click(object sender, EventArgs e)
+        {
+            isSubtitleVisible = !isSubtitleVisible;
+            btnToggleSubtitle.Text = isSubtitleVisible ? "자막 닫기" : "자막 열기";
+            btnToggleSubtitle.BackColor = isSubtitleVisible 
+                ? System.Drawing.Color.FromArgb(239, 68, 68) // 빨강 (닫기)
+                : System.Drawing.Color.FromArgb(100, 116, 139); // 회색 (열기)
+            
+            // 자막 레이블 표시/숨기기
+            if (labelSubtitleTimestamp != null)
+            {
+                labelSubtitleTimestamp.Visible = isSubtitleVisible;
+            }
+            
+            // 시간 정보 업데이트하여 자막 텍스트 반영
+            UpdateTimeLabels();
         }
 
         private void btnExit_Click(object sender, EventArgs e)
@@ -1179,12 +1213,24 @@ namespace WinFormsApp1
 
         private void pictureBoxVideo_Resize(object sender, EventArgs e)
         {
-            // PictureBox 크기가 변경될 때 타임스탬프 Label 위치 조정 (우측 하단)
+            // PictureBox 크기가 변경될 때 타임스탬프 Label 위치 조정 (좌측 하단)
             if (labelSubtitleTimestamp != null && pictureBoxVideo != null)
             {
                 labelSubtitleTimestamp.Location = new System.Drawing.Point(
-                    pictureBoxVideo.Width - labelSubtitleTimestamp.Width - 20,
-                    pictureBoxVideo.Height - labelSubtitleTimestamp.Height - 20
+                    50,
+                    pictureBoxVideo.Height - labelSubtitleTimestamp.Height - 30
+                );
+            }
+        }
+
+        private void panelVideoControls_Resize(object sender, EventArgs e)
+        {
+            // panelVideoControls 크기가 변경될 때 panelTimeline을 가운데 정렬
+            if (panelTimeline != null && panelVideoControls != null)
+            {
+                panelTimeline.Location = new System.Drawing.Point(
+                    (panelVideoControls.Width - panelTimeline.Width) / 2,
+                    panelTimeline.Location.Y // Y 위치는 유지
                 );
             }
         }

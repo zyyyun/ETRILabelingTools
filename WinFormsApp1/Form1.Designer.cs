@@ -49,6 +49,7 @@
             this.labelTimeInfo = new System.Windows.Forms.Label();
             this.btnEntry = new System.Windows.Forms.Button();
             this.btnExit = new System.Windows.Forms.Button();
+            this.btnToggleSubtitle = new System.Windows.Forms.Button();
             this.trackBarVolume = new System.Windows.Forms.TrackBar();
             this.panelTimeline = new System.Windows.Forms.Panel();
 
@@ -237,7 +238,7 @@
             this.pictureBoxVideo.MouseUp += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseUp);
 
             // 
-            // labelSubtitleTimestamp (자막 타임스탬프 표시 - 우측 하단)
+            // labelSubtitleTimestamp (자막 타임스탬프 표시 - 좌측 하단)
             // 
             this.labelSubtitleTimestamp = new System.Windows.Forms.Label();
             this.labelSubtitleTimestamp.AutoSize = false;
@@ -247,7 +248,7 @@
             this.labelSubtitleTimestamp.Font = new System.Drawing.Font("Consolas", 11F, System.Drawing.FontStyle.Bold);
             this.labelSubtitleTimestamp.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.labelSubtitleTimestamp.Text = "";
-            this.labelSubtitleTimestamp.Anchor = System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right;
+            this.labelSubtitleTimestamp.Anchor = System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left;
             this.pictureBoxVideo.Controls.Add(this.labelSubtitleTimestamp);
             this.pictureBoxVideo.Resize += new System.EventHandler(this.pictureBoxVideo_Resize);
 
@@ -264,8 +265,10 @@
             this.panelVideoControls.Controls.Add(this.labelTimeInfo);
             this.panelVideoControls.Controls.Add(this.btnEntry);
             this.panelVideoControls.Controls.Add(this.btnExit);
+            this.panelVideoControls.Controls.Add(this.btnToggleSubtitle);
             this.panelVideoControls.Controls.Add(this.trackBarVolume);
             this.panelVideoControls.Controls.Add(this.panelTimeline);
+            this.panelVideoControls.Resize += new System.EventHandler(this.panelVideoControls_Resize);
 
             // Playback buttons
             this.btnPlay.Text = "▶";
@@ -293,7 +296,7 @@
             this.btnForward.Click += new System.EventHandler(this.btnForward_Click);
 
             // Time Info
-            this.labelTimeInfo.Text = "00:00:00 / 01:00:00 x264";
+            this.labelTimeInfo.Text = "00:00:00 / 00:00:00 x264";
             this.labelTimeInfo.Location = new System.Drawing.Point(160, 24);
             this.labelTimeInfo.Size = new System.Drawing.Size(200, 25);
             this.labelTimeInfo.ForeColor = System.Drawing.Color.Gray;
@@ -302,7 +305,7 @@
             // Real-time (subtitle replacement) label
 
             // Entry/Exit buttons
-            this.btnEntry.Text = "Entry: 07:22:15";
+            this.btnEntry.Text = "Entry";
             this.btnEntry.Location = new System.Drawing.Point(600, 16);
             this.btnEntry.Size = new System.Drawing.Size(130, 40);
             this.btnEntry.BackColor = System.Drawing.Color.FromArgb(250, 204, 21);
@@ -311,7 +314,7 @@
             this.btnEntry.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.btnEntry.Click += new System.EventHandler(this.btnEntry_Click);
 
-            this.btnExit.Text = "Exit: 07:22:51";
+            this.btnExit.Text = "Exit";
             this.btnExit.Location = new System.Drawing.Point(740, 16);
             this.btnExit.Size = new System.Drawing.Size(130, 40);
             this.btnExit.BackColor = System.Drawing.Color.FromArgb(250, 204, 21);
@@ -319,6 +322,18 @@
             this.btnExit.FlatAppearance.BorderSize = 0;
             this.btnExit.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.btnExit.Click += new System.EventHandler(this.btnExit_Click);
+
+            // btnToggleSubtitle (자막 열기/닫기)
+            this.btnToggleSubtitle.Text = "자막 열기";
+            this.btnToggleSubtitle.Location = new System.Drawing.Point(480, 16);
+            this.btnToggleSubtitle.Size = new System.Drawing.Size(100, 40);
+            this.btnToggleSubtitle.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
+            this.btnToggleSubtitle.ForeColor = System.Drawing.Color.White;
+            this.btnToggleSubtitle.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnToggleSubtitle.FlatAppearance.BorderSize = 0;
+            this.btnToggleSubtitle.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.btnToggleSubtitle.TabStop = false;
+            this.btnToggleSubtitle.Click += new System.EventHandler(this.btnToggleSubtitle_Click);
 
             // Volume control
             this.trackBarVolume.Location = new System.Drawing.Point(920, 20);
@@ -332,6 +347,7 @@
             // 
             this.panelTimeline.Location = new System.Drawing.Point(16, 70);
             this.panelTimeline.Size = new System.Drawing.Size(1000, 30);
+            this.panelTimeline.Anchor = System.Windows.Forms.AnchorStyles.Top;
             this.panelTimeline.BackColor = System.Drawing.Color.FromArgb(229, 231, 235);
             this.panelTimeline.Paint += new System.Windows.Forms.PaintEventHandler(this.panelTimeline_Paint);
             this.panelTimeline.MouseDown += new System.Windows.Forms.MouseEventHandler(this.panelTimeline_MouseDown);
@@ -559,6 +575,7 @@
         private System.Windows.Forms.Label labelSubtitleTimestamp;
         private System.Windows.Forms.Button btnEntry;
         private System.Windows.Forms.Button btnExit;
+        private System.Windows.Forms.Button btnToggleSubtitle;
         private System.Windows.Forms.TrackBar trackBarVolume;
         private System.Windows.Forms.Panel panelTimeline;
 
