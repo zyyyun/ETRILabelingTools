@@ -67,6 +67,7 @@
             this.btnLabelEvent = new System.Windows.Forms.Button();
             this.panelBboxList = new System.Windows.Forms.Panel();
             this.btnDeleteLabel = new System.Windows.Forms.Button();
+            this.btnExportJsonInLabels = new System.Windows.Forms.Button();
             this.labelModifyBox = new System.Windows.Forms.Label();
             this.comboBoxPerson = new System.Windows.Forms.ComboBox();
             this.comboBoxVehicle = new System.Windows.Forms.ComboBox();
@@ -431,7 +432,7 @@
             // 
             this.groupBoxLabels.Text = "Labels";
             this.groupBoxLabels.Location = new System.Drawing.Point(16, rightY);
-            this.groupBoxLabels.Size = new System.Drawing.Size(280, 380);
+            this.groupBoxLabels.Size = new System.Drawing.Size(280, 425);
             this.groupBoxLabels.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
 
             // Label type selection buttons (상단 가로 배열)
@@ -489,13 +490,25 @@
             this.btnDeleteLabel.TabStop = false;
             this.btnDeleteLabel.Click += new System.EventHandler(this.btnDeleteLabel_Click);
 
+            // JSON 저장 버튼 (하단)
+            this.btnExportJsonInLabels.Text = "JSON 저장";
+            this.btnExportJsonInLabels.Location = new System.Drawing.Point(12, 320);
+            this.btnExportJsonInLabels.Size = new System.Drawing.Size(256, 35);
+            this.btnExportJsonInLabels.BackColor = System.Drawing.Color.FromArgb(34, 197, 94);
+            this.btnExportJsonInLabels.ForeColor = System.Drawing.Color.White;
+            this.btnExportJsonInLabels.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnExportJsonInLabels.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnExportJsonInLabels.TabStop = false;
+            this.btnExportJsonInLabels.Click += new System.EventHandler(this.btnExportJson_Click);
+
             this.groupBoxLabels.Controls.Add(this.btnLabelPerson);
             this.groupBoxLabels.Controls.Add(this.btnLabelVehicle);
             this.groupBoxLabels.Controls.Add(this.btnLabelEvent);
             this.groupBoxLabels.Controls.Add(this.panelBboxList);
             this.groupBoxLabels.Controls.Add(this.btnDeleteLabel);
+            this.groupBoxLabels.Controls.Add(this.btnExportJsonInLabels);
 
-            rightY += 400;
+            rightY += 445;
 
             this.panelRightSidebar.Controls.Add(this.groupBoxObjectInfo);
             this.panelRightSidebar.Controls.Add(this.groupBoxWaypoint);
@@ -583,6 +596,7 @@
         private System.Windows.Forms.Button btnLabelEvent;
         private System.Windows.Forms.Panel panelBboxList;
         private System.Windows.Forms.Button btnDeleteLabel;
+        private System.Windows.Forms.Button btnExportJsonInLabels;
         private System.Windows.Forms.Label labelModifyBox;
         private System.Windows.Forms.ComboBox comboBoxPerson;
         private System.Windows.Forms.ComboBox comboBoxVehicle;
