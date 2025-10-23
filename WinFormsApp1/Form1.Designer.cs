@@ -62,15 +62,15 @@
             this.groupBoxWaypoint = new System.Windows.Forms.GroupBox();
             this.labelWaypointTime = new System.Windows.Forms.Label();
             this.groupBoxLabels = new System.Windows.Forms.GroupBox();
-            this.btnAddLabel = new System.Windows.Forms.Button();
-            this.btnEditLabel = new System.Windows.Forms.Button();
+            this.btnLabelPerson = new System.Windows.Forms.Button();
+            this.btnLabelVehicle = new System.Windows.Forms.Button();
+            this.btnLabelEvent = new System.Windows.Forms.Button();
+            this.panelBboxList = new System.Windows.Forms.Panel();
             this.btnDeleteLabel = new System.Windows.Forms.Button();
-            this.panelLabelVehicle = new System.Windows.Forms.Panel();
-            this.labelVehicle = new System.Windows.Forms.Label();
-            this.panelLabelPerson = new System.Windows.Forms.Panel();
-            this.labelPerson = new System.Windows.Forms.Label();
-            this.panelLabelEvent = new System.Windows.Forms.Panel();
-            this.labelEvent = new System.Windows.Forms.Label();
+            this.labelModifyBox = new System.Windows.Forms.Label();
+            this.comboBoxPerson = new System.Windows.Forms.ComboBox();
+            this.comboBoxVehicle = new System.Windows.Forms.ComboBox();
+            this.comboBoxEvent = new System.Windows.Forms.ComboBox();
             this.btnExportJson = new System.Windows.Forms.Button();
 
             // Timer
@@ -412,7 +412,7 @@
             this.listViewWaypoints.FullRowSelect = true;
             this.listViewWaypoints.Columns.Add("Entry", 80);
             this.listViewWaypoints.Columns.Add("Exit", 80);
-            this.listViewWaypoints.Columns.Add("Color", 60);
+            this.listViewWaypoints.Columns.Add("객체", 60);
 
             // Delete waypoint button
             this.btnDeleteWaypoint = new System.Windows.Forms.Button();
@@ -431,83 +431,71 @@
             // 
             this.groupBoxLabels.Text = "Labels";
             this.groupBoxLabels.Location = new System.Drawing.Point(16, rightY);
-            this.groupBoxLabels.Size = new System.Drawing.Size(280, 280);
+            this.groupBoxLabels.Size = new System.Drawing.Size(280, 380);
             this.groupBoxLabels.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
 
-            // Label action buttons
-            this.btnAddLabel.Text = "+";
-            this.btnAddLabel.Location = new System.Drawing.Point(200, 0);
-            this.btnAddLabel.Size = new System.Drawing.Size(25, 25);
-            this.btnAddLabel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnAddLabel.FlatAppearance.BorderSize = 0;
+            // Label type selection buttons (상단 가로 배열)
+            this.btnLabelPerson.Text = "person";
+            this.btnLabelPerson.Location = new System.Drawing.Point(12, 25);
+            this.btnLabelPerson.Size = new System.Drawing.Size(78, 35);
+            this.btnLabelPerson.BackColor = System.Drawing.Color.FromArgb(252, 231, 243);
+            this.btnLabelPerson.ForeColor = System.Drawing.Color.FromArgb(157, 23, 77);
+            this.btnLabelPerson.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnLabelPerson.FlatAppearance.BorderSize = 2;
+            this.btnLabelPerson.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(157, 23, 77);
+            this.btnLabelPerson.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnLabelPerson.TabStop = false;
+            this.btnLabelPerson.Click += new System.EventHandler(this.btnLabelPerson_Click);
 
-            this.btnEditLabel.Text = "✎";
-            this.btnEditLabel.Location = new System.Drawing.Point(230, 0);
-            this.btnEditLabel.Size = new System.Drawing.Size(25, 25);
-            this.btnEditLabel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnEditLabel.FlatAppearance.BorderSize = 0;
+            this.btnLabelVehicle.Text = "vehicle";
+            this.btnLabelVehicle.Location = new System.Drawing.Point(95, 25);
+            this.btnLabelVehicle.Size = new System.Drawing.Size(78, 35);
+            this.btnLabelVehicle.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
+            this.btnLabelVehicle.ForeColor = System.Drawing.Color.FromArgb(30, 64, 175);
+            this.btnLabelVehicle.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnLabelVehicle.FlatAppearance.BorderSize = 2;
+            this.btnLabelVehicle.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(30, 64, 175);
+            this.btnLabelVehicle.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnLabelVehicle.TabStop = false;
+            this.btnLabelVehicle.Click += new System.EventHandler(this.btnLabelVehicle_Click);
 
-            this.btnDeleteLabel.Text = "🗑";
-            this.btnDeleteLabel.Location = new System.Drawing.Point(260, 0);
-            this.btnDeleteLabel.Size = new System.Drawing.Size(25, 25);
+            this.btnLabelEvent.Text = "event";
+            this.btnLabelEvent.Location = new System.Drawing.Point(178, 25);
+            this.btnLabelEvent.Size = new System.Drawing.Size(78, 35);
+            this.btnLabelEvent.BackColor = System.Drawing.Color.FromArgb(220, 252, 231);
+            this.btnLabelEvent.ForeColor = System.Drawing.Color.FromArgb(20, 83, 45);
+            this.btnLabelEvent.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnLabelEvent.FlatAppearance.BorderSize = 2;
+            this.btnLabelEvent.FlatAppearance.BorderColor = System.Drawing.Color.FromArgb(20, 83, 45);
+            this.btnLabelEvent.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnLabelEvent.TabStop = false;
+            this.btnLabelEvent.Click += new System.EventHandler(this.btnLabelEvent_Click);
+
+            // Bbox 목록 표시 영역 (스크롤 가능한 패널)
+            this.panelBboxList.Location = new System.Drawing.Point(12, 70);
+            this.panelBboxList.Size = new System.Drawing.Size(256, 200);
+            this.panelBboxList.BackColor = System.Drawing.Color.White;
+            this.panelBboxList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.panelBboxList.AutoScroll = true;
+
+            // 삭제 버튼
+            this.btnDeleteLabel.Text = "선택한 Bbox 삭제";
+            this.btnDeleteLabel.Location = new System.Drawing.Point(12, 278);
+            this.btnDeleteLabel.Size = new System.Drawing.Size(256, 35);
+            this.btnDeleteLabel.BackColor = System.Drawing.Color.FromArgb(220, 38, 38);
+            this.btnDeleteLabel.ForeColor = System.Drawing.Color.White;
             this.btnDeleteLabel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.btnDeleteLabel.FlatAppearance.BorderSize = 0;
+            this.btnDeleteLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnDeleteLabel.TabStop = false;
+            this.btnDeleteLabel.Click += new System.EventHandler(this.btnDeleteLabel_Click);
 
-            this.groupBoxLabels.Controls.Add(this.btnAddLabel);
-            this.groupBoxLabels.Controls.Add(this.btnEditLabel);
+            this.groupBoxLabels.Controls.Add(this.btnLabelPerson);
+            this.groupBoxLabels.Controls.Add(this.btnLabelVehicle);
+            this.groupBoxLabels.Controls.Add(this.btnLabelEvent);
+            this.groupBoxLabels.Controls.Add(this.panelBboxList);
             this.groupBoxLabels.Controls.Add(this.btnDeleteLabel);
 
-            // Label panels
-            this.panelLabelVehicle.Location = new System.Drawing.Point(12, 35);
-            this.panelLabelVehicle.Size = new System.Drawing.Size(260, 40);
-            this.panelLabelVehicle.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
-            this.panelLabelVehicle.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.panelLabelVehicle.Click += new System.EventHandler(this.panelLabelVehicle_Click);
-            this.panelLabelVehicle.Controls.Add(this.labelVehicle);
-
-            this.labelVehicle.Text = "vehicle";
-            this.labelVehicle.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.labelVehicle.ForeColor = System.Drawing.Color.FromArgb(30, 64, 175);
-            this.labelVehicle.Location = new System.Drawing.Point(12, 10);
-            this.labelVehicle.Size = new System.Drawing.Size(200, 20);
-            this.labelVehicle.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.labelVehicle.Click += new System.EventHandler(this.panelLabelVehicle_Click);
-
-            this.panelLabelPerson.Location = new System.Drawing.Point(12, 85);
-            this.panelLabelPerson.Size = new System.Drawing.Size(260, 40);
-            this.panelLabelPerson.BackColor = System.Drawing.Color.FromArgb(252, 231, 243);
-            this.panelLabelPerson.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.panelLabelPerson.Click += new System.EventHandler(this.panelLabelPerson_Click);
-            this.panelLabelPerson.Controls.Add(this.labelPerson);
-
-            this.labelPerson.Text = "person_01";
-            this.labelPerson.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.labelPerson.ForeColor = System.Drawing.Color.FromArgb(157, 23, 77);
-            this.labelPerson.Location = new System.Drawing.Point(12, 10);
-            this.labelPerson.Size = new System.Drawing.Size(200, 20);
-            this.labelPerson.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.labelPerson.Click += new System.EventHandler(this.panelLabelPerson_Click);
-
-            this.panelLabelEvent.Location = new System.Drawing.Point(12, 135);
-            this.panelLabelEvent.Size = new System.Drawing.Size(260, 40);
-            this.panelLabelEvent.BackColor = System.Drawing.Color.FromArgb(220, 252, 231);
-            this.panelLabelEvent.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.panelLabelEvent.Click += new System.EventHandler(this.panelLabelEvent_Click);
-            this.panelLabelEvent.Controls.Add(this.labelEvent);
-
-            this.labelEvent.Text = "event";
-            this.labelEvent.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
-            this.labelEvent.ForeColor = System.Drawing.Color.FromArgb(20, 83, 45);
-            this.labelEvent.Location = new System.Drawing.Point(12, 10);
-            this.labelEvent.Size = new System.Drawing.Size(200, 20);
-            this.labelEvent.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.labelEvent.Click += new System.EventHandler(this.panelLabelEvent_Click);
-
-            this.groupBoxLabels.Controls.Add(this.panelLabelVehicle);
-            this.groupBoxLabels.Controls.Add(this.panelLabelPerson);
-            this.groupBoxLabels.Controls.Add(this.panelLabelEvent);
-
-            rightY += 300;
+            rightY += 400;
 
             this.panelRightSidebar.Controls.Add(this.groupBoxObjectInfo);
             this.panelRightSidebar.Controls.Add(this.groupBoxWaypoint);
@@ -590,15 +578,15 @@
         private System.Windows.Forms.ListView listViewWaypoints;
         private System.Windows.Forms.Button btnDeleteWaypoint;
         private System.Windows.Forms.GroupBox groupBoxLabels;
-        private System.Windows.Forms.Button btnAddLabel;
-        private System.Windows.Forms.Button btnEditLabel;
+        private System.Windows.Forms.Button btnLabelPerson;
+        private System.Windows.Forms.Button btnLabelVehicle;
+        private System.Windows.Forms.Button btnLabelEvent;
+        private System.Windows.Forms.Panel panelBboxList;
         private System.Windows.Forms.Button btnDeleteLabel;
-        private System.Windows.Forms.Panel panelLabelVehicle;
-        private System.Windows.Forms.Label labelVehicle;
-        private System.Windows.Forms.Panel panelLabelPerson;
-        private System.Windows.Forms.Label labelPerson;
-        private System.Windows.Forms.Panel panelLabelEvent;
-        private System.Windows.Forms.Label labelEvent;
+        private System.Windows.Forms.Label labelModifyBox;
+        private System.Windows.Forms.ComboBox comboBoxPerson;
+        private System.Windows.Forms.ComboBox comboBoxVehicle;
+        private System.Windows.Forms.ComboBox comboBoxEvent;
 
         // Timer
         private System.Windows.Forms.Timer timerPlayback;
