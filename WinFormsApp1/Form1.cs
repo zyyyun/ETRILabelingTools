@@ -356,6 +356,23 @@ namespace WinFormsApp1
         // 현재 선택된 라벨 (person, vehicle, event)
         private string currentSelectedLabel = "person";
 
+        // 카테고리 ID 매핑 (스펙에 따른 고정 매핑)
+        private static readonly Dictionary<string, int> CategoryIdMap = new Dictionary<string, int>
+        {
+            // Person categories (1~14)
+            {"person_01", 1}, {"person_02", 2}, {"person_03", 3}, {"person_04", 4},
+            {"person_05", 5}, {"person_06", 6}, {"person_07", 7}, {"person_08", 8},
+            {"person_09", 9}, {"person_10", 10}, {"person_11", 11}, {"person_12", 12},
+            {"person_13", 13}, {"person14", 14},
+            
+            // Vehicle categories (15~18)
+            {"car", 15}, {"motorcycle", 16}, {"e_scooter", 17}, {"bicycle", 18},
+            
+            // Event categories (19~24)
+            {"contact", 19}, {"close", 20}, {"signal", 21}, 
+            {"board", 22}, {"final", 23}, {"V_U_TURN", 24}
+        };
+
 
         public Form1()
         {
@@ -1248,41 +1265,8 @@ namespace WinFormsApp1
 
             foreach (var box in currentFrameBoxes)
             {
-                // 웨이포인트 확인: 해당 박스가 속한 waypoint 찾기
-                // 1. 먼저 multi-object waypoint 확인 (ObjectId=0, Label="multi")
-                // 2. 없으면 개별 객체 waypoint 확인 (하위 호환성)
-                var waypoint = waypointMarkers.FirstOrDefault(w =>
-                {
-                    // Entry/Exit 프레임 범위 내에 박스가 있는지 확인
-                    bool isInRange = currentFrameIndex >= w.EntryFrame && currentFrameIndex <= w.ExitFrame;
-                    if (!isInRange) return false;
-
-                    // Multi-object waypoint인 경우: 이 박스가 entry 프레임에 있었는지 확인
-                    if (w.Label == "multi" && w.ObjectId == 0)
-                    {
-                        // 이 박스가 해당 waypoint의 entry 프레임에 존재하는지 확인
-                        bool boxExistsAtEntry = boundingBoxes.Any(b =>
-                            b.FrameIndex == w.EntryFrame &&
-                            b.Label == box.Label &&
-                            GetBoxId(b) == GetBoxId(box));
-                        return boxExistsAtEntry;
-                    }
-                    // 개별 객체 waypoint (하위 호환성)
-                    else
-                    {
-                        return w.ObjectId == GetBoxId(box) && w.Label == box.Label;
-                    }
-                });
-
-                // 웨이포인트가 있으면 Entry~Exit 프레임 범위 내에서만 표시
-                if (waypoint != null)
-                {
-                    if (currentFrameIndex < waypoint.EntryFrame)
-                        continue; // Entry 이전이면 표시 안 함
-                    
-                    if (currentFrameIndex > waypoint.ExitFrame)
-                        continue; // Exit 이후에도 표시 안 함
-                }
+                // 현재 프레임의 박스만 표시 (box.FrameIndex == currentFrameIndex)
+                // currentFrameBoxes에서 이미 필터링되었으므로 추가 체크 불필요
 
                 // 이미지 좌표를 뷰 좌표로 변환
                 var viewRect = ImageToView(new RectangleF(box.Rectangle.X, box.Rectangle.Y, 
@@ -1558,6 +1542,62 @@ namespace WinFormsApp1
             if (label == "person") box.PersonId = id;
             else if (label == "vehicle") box.VehicleId = id;
             else if (label == "event") box.EventId = id;
+        }
+
+        // 스펙에 맞는 Category ID를 반환 (JSON 내보내기용)
+        private int GetCategoryId(string label, int boxId)
+        {
+            string categoryName = GetCategoryName(label, boxId);
+            
+            if (CategoryIdMap.ContainsKey(categoryName))
+                return CategoryIdMap[categoryName];
+            
+            // 기본값 처리 (매핑되지 않은 경우)
+            if (label == "person") return Math.Min(boxId, 14); // 1~14
+            if (label == "vehicle") return Math.Min(15 + (boxId - 1), 18); // 15~18
+            if (label == "event") return Math.Min(19 + (boxId - 1), 24); // 19~24
+            
+            return boxId;
+        }
+
+        // 스펙에 맞는 Category Name을 반환 (JSON 내보내기용)
+        private string GetCategoryName(string label, int boxId)
+        {
+            if (label == "person")
+            {
+                // person14는 언더스코어 없음 (스펙에 따름)
+                if (boxId == 14) return "person14";
+                return $"person_{boxId:D2}";
+            }
+            else if (label == "vehicle")
+            {
+                // vehicle은 고유 이름 매핑
+                // 임시로 순서대로 매핑 (추후 UI에서 선택 가능하도록 개선)
+                switch (boxId)
+                {
+                    case 1: return "car";
+                    case 2: return "motorcycle";
+                    case 3: return "e_scooter";
+                    case 4: return "bicycle";
+                    default: return "car"; // 기본값
+                }
+            }
+            else if (label == "event")
+            {
+                // event도 고유 이름 매핑
+                switch (boxId)
+                {
+                    case 1: return "contact";
+                    case 2: return "close";
+                    case 3: return "signal";
+                    case 4: return "board";
+                    case 5: return "final";
+                    case 6: return "V_U_TURN";
+                    default: return "contact"; // 기본값
+                }
+            }
+            
+            return $"{label}_{boxId:D2}";
         }
 
         private void ApplyLabelChange(string newLabel, int newId, string oldLabel, int oldId, Rectangle oldRect)
@@ -2071,6 +2111,16 @@ namespace WinFormsApp1
                 nextAnnotationId = 1;
                 // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
 
+                // ImageId → FrameNumber 매핑 생성
+                var imageIdToFrameNumber = new Dictionary<int, int>();
+                if (labelingData.Images != null)
+                {
+                    foreach (var image in labelingData.Images)
+                    {
+                        imageIdToFrameNumber[image.Id] = image.FrameNumber;
+                    }
+                }
+
                 if (labelingData.Categories != null)
                 {
                     foreach (var category in labelingData.Categories)
@@ -2087,20 +2137,45 @@ namespace WinFormsApp1
                     int trackId = annotation.TrackId;
                     string label = "person";
 
-                    if (categoryMap.ContainsKey(annotation.CategoryId))
+                    // CategoryId 범위로 라벨 결정 (더 정확함)
+                    int catId = annotation.CategoryId;
+                    if (catId >= 1 && catId <= 14)
                     {
-                        string categoryName = categoryMap[annotation.CategoryId].Name;
-                        if (categoryName.StartsWith("person"))
-                            label = "person";
-                        else if (categoryName.StartsWith("vehicle"))
+                        label = "person";
+                    }
+                    else if (catId >= 15 && catId <= 18)
+                    {
+                        label = "vehicle";
+                    }
+                    else if (catId >= 19 && catId <= 24)
+                    {
+                        label = "event";
+                    }
+                    else if (categoryMap.ContainsKey(catId))
+                    {
+                        // fallback: 카테고리 이름으로 판단
+                        string categoryName = categoryMap[catId].Name;
+                        if (categoryName.Contains("car") || categoryName.Contains("motorcycle") || 
+                            categoryName.Contains("scooter") || categoryName.Contains("bicycle"))
                             label = "vehicle";
-                        else if (categoryName.StartsWith("event"))
+                        else if (categoryName.Contains("contact") || categoryName.Contains("close") || 
+                                 categoryName.Contains("signal") || categoryName.Contains("board") ||
+                                 categoryName.Contains("final") || categoryName.Contains("TURN"))
                             label = "event";
+                        else if (categoryName.StartsWith("person"))
+                            label = "person";
+                    }
+
+                    // ImageId로 실제 프레임 번호 찾기
+                    int frameNumber = annotation.ImageId; // 기본값
+                    if (imageIdToFrameNumber.ContainsKey(annotation.ImageId))
+                    {
+                        frameNumber = imageIdToFrameNumber[annotation.ImageId];
                     }
 
                     var box = new BoundingBox
                     {
-                        FrameIndex = annotation.ImageId,
+                        FrameIndex = frameNumber, // 실제 프레임 번호 사용
                         Rectangle = new Rectangle(annotation.Bbox[0], annotation.Bbox[1], annotation.Bbox[2], annotation.Bbox[3]),
                         Label = label,
                         PersonId = label == "person" ? trackId : 0,
@@ -2236,14 +2311,17 @@ namespace WinFormsApp1
                     {
                         // 박스의 라벨 타입에 맞는 ID 가져오기
                         int boxId = GetBoxId(box);
-                        int categoryId = boxId;
+                        
+                        // 스펙에 맞는 Category ID와 Name 사용
+                        int categoryId = GetCategoryId(box.Label, boxId);
+                        string categoryName = GetCategoryName(box.Label, boxId);
                         
                         if (!categories.ContainsKey(categoryId))
                         {
                             categories[categoryId] = new CategoryData
                             {
                                 Id = categoryId,
-                                Name = $"{box.Label}_{boxId:D2}",
+                                Name = categoryName,
                                 Supercategory = box.Label
                             };
                         }
