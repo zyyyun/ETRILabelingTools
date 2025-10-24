@@ -59,7 +59,9 @@
             this.labelObjectLabel = new System.Windows.Forms.Label();
             this.labelPrevWaypoint = new System.Windows.Forms.Label();
             this.labelNextWaypoint = new System.Windows.Forms.Label();
-            this.groupBoxWaypoint = new System.Windows.Forms.GroupBox();
+            this.groupBoxPersonWaypoint = new System.Windows.Forms.GroupBox();
+            this.groupBoxVehicleWaypoint = new System.Windows.Forms.GroupBox();
+            this.groupBoxEventWaypoint = new System.Windows.Forms.GroupBox();
             this.labelWaypointTime = new System.Windows.Forms.Label();
             this.groupBoxLabels = new System.Windows.Forms.GroupBox();
             this.btnLabelPerson = new System.Windows.Forms.Button();
@@ -404,36 +406,104 @@
             this.labelNextWaypoint.AutoSize = false;
 
             // 
-            // groupBoxWaypoint (우측 사이드바 상단에 배치, Object Info는 하단으로 이동됨)
+            // groupBoxPersonWaypoint (빨강 테마)
             // 
-            this.groupBoxWaypoint.Text = "Waypoint";
-            this.groupBoxWaypoint.Location = new System.Drawing.Point(16, 16);
-            this.groupBoxWaypoint.Size = new System.Drawing.Size(280, 150);
-            this.groupBoxWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
-            this.groupBoxWaypoint.TabStop = false;
+            this.groupBoxPersonWaypoint.Text = "■ Person Waypoint";
+            this.groupBoxPersonWaypoint.Location = new System.Drawing.Point(16, 16);
+            this.groupBoxPersonWaypoint.Size = new System.Drawing.Size(280, 150);
+            this.groupBoxPersonWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.groupBoxPersonWaypoint.ForeColor = System.Drawing.Color.FromArgb(255, 107, 107); // 빨강
+            this.groupBoxPersonWaypoint.TabStop = false;
 
-            // ListView for waypoints
-            this.listViewWaypoints = new System.Windows.Forms.ListView();
-            this.listViewWaypoints.Location = new System.Drawing.Point(12, 25);
-            this.listViewWaypoints.Size = new System.Drawing.Size(260, 80);
-            this.listViewWaypoints.View = System.Windows.Forms.View.Details;
-            this.listViewWaypoints.FullRowSelect = true;
-            this.listViewWaypoints.TabStop = false;
-            this.listViewWaypoints.Columns.Add("Entry", 80);
-            this.listViewWaypoints.Columns.Add("Exit", 80);
-            this.listViewWaypoints.Columns.Add("객체", 60);
-            this.listViewWaypoints.Click += new System.EventHandler(this.listViewWaypoints_Click);
+            this.listViewPersonWaypoints = new System.Windows.Forms.ListView();
+            this.listViewPersonWaypoints.Location = new System.Drawing.Point(12, 25);
+            this.listViewPersonWaypoints.Size = new System.Drawing.Size(260, 80);
+            this.listViewPersonWaypoints.View = System.Windows.Forms.View.Details;
+            this.listViewPersonWaypoints.FullRowSelect = true;
+            this.listViewPersonWaypoints.TabStop = false;
+            this.listViewPersonWaypoints.BackColor = System.Drawing.Color.FromArgb(255, 224, 224); // 연한 빨강
+            this.listViewPersonWaypoints.Columns.Add("Entry", 80);
+            this.listViewPersonWaypoints.Columns.Add("Exit", 80);
+            this.listViewPersonWaypoints.Columns.Add("객체", 60);
+            this.listViewPersonWaypoints.Click += new System.EventHandler(this.listViewPersonWaypoints_Click);
 
-            // Delete waypoint button
-            this.btnDeleteWaypoint = new System.Windows.Forms.Button();
-            this.btnDeleteWaypoint.Text = "선택 삭제";
-            this.btnDeleteWaypoint.Location = new System.Drawing.Point(12, 110);
-            this.btnDeleteWaypoint.Size = new System.Drawing.Size(100, 30);
-            this.btnDeleteWaypoint.TabStop = false;
-            this.btnDeleteWaypoint.Click += new System.EventHandler(this.btnDeleteWaypoint_Click);
+            this.btnDeletePersonWaypoint = new System.Windows.Forms.Button();
+            this.btnDeletePersonWaypoint.Text = "선택 삭제";
+            this.btnDeletePersonWaypoint.Location = new System.Drawing.Point(12, 110);
+            this.btnDeletePersonWaypoint.Size = new System.Drawing.Size(100, 30);
+            this.btnDeletePersonWaypoint.TabStop = false;
+            this.btnDeletePersonWaypoint.Click += new System.EventHandler(this.btnDeletePersonWaypoint_Click);
 
-            this.groupBoxWaypoint.Controls.Add(this.listViewWaypoints);
-            this.groupBoxWaypoint.Controls.Add(this.btnDeleteWaypoint);
+            this.groupBoxPersonWaypoint.Controls.Add(this.listViewPersonWaypoints);
+            this.groupBoxPersonWaypoint.Controls.Add(this.btnDeletePersonWaypoint);
+
+            rightY += 170;
+
+            // 
+            // groupBoxVehicleWaypoint (파랑 테마)
+            // 
+            this.groupBoxVehicleWaypoint.Text = "■ Vehicle Waypoint";
+            this.groupBoxVehicleWaypoint.Location = new System.Drawing.Point(16, rightY);
+            this.groupBoxVehicleWaypoint.Size = new System.Drawing.Size(280, 150);
+            this.groupBoxVehicleWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.groupBoxVehicleWaypoint.ForeColor = System.Drawing.Color.FromArgb(107, 158, 255); // 파랑
+            this.groupBoxVehicleWaypoint.TabStop = false;
+
+            this.listViewVehicleWaypoints = new System.Windows.Forms.ListView();
+            this.listViewVehicleWaypoints.Location = new System.Drawing.Point(12, 25);
+            this.listViewVehicleWaypoints.Size = new System.Drawing.Size(260, 80);
+            this.listViewVehicleWaypoints.View = System.Windows.Forms.View.Details;
+            this.listViewVehicleWaypoints.FullRowSelect = true;
+            this.listViewVehicleWaypoints.TabStop = false;
+            this.listViewVehicleWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 232, 255); // 연한 파랑
+            this.listViewVehicleWaypoints.Columns.Add("Entry", 80);
+            this.listViewVehicleWaypoints.Columns.Add("Exit", 80);
+            this.listViewVehicleWaypoints.Columns.Add("객체", 60);
+            this.listViewVehicleWaypoints.Click += new System.EventHandler(this.listViewVehicleWaypoints_Click);
+
+            this.btnDeleteVehicleWaypoint = new System.Windows.Forms.Button();
+            this.btnDeleteVehicleWaypoint.Text = "선택 삭제";
+            this.btnDeleteVehicleWaypoint.Location = new System.Drawing.Point(12, 110);
+            this.btnDeleteVehicleWaypoint.Size = new System.Drawing.Size(100, 30);
+            this.btnDeleteVehicleWaypoint.TabStop = false;
+            this.btnDeleteVehicleWaypoint.Click += new System.EventHandler(this.btnDeleteVehicleWaypoint_Click);
+
+            this.groupBoxVehicleWaypoint.Controls.Add(this.listViewVehicleWaypoints);
+            this.groupBoxVehicleWaypoint.Controls.Add(this.btnDeleteVehicleWaypoint);
+
+            rightY += 170;
+
+            // 
+            // groupBoxEventWaypoint (초록 테마)
+            // 
+            this.groupBoxEventWaypoint.Text = "■ Event Waypoint";
+            this.groupBoxEventWaypoint.Location = new System.Drawing.Point(16, rightY);
+            this.groupBoxEventWaypoint.Size = new System.Drawing.Size(280, 150);
+            this.groupBoxEventWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.groupBoxEventWaypoint.ForeColor = System.Drawing.Color.FromArgb(107, 255, 107); // 초록
+            this.groupBoxEventWaypoint.TabStop = false;
+
+            this.listViewEventWaypoints = new System.Windows.Forms.ListView();
+            this.listViewEventWaypoints.Location = new System.Drawing.Point(12, 25);
+            this.listViewEventWaypoints.Size = new System.Drawing.Size(260, 80);
+            this.listViewEventWaypoints.View = System.Windows.Forms.View.Details;
+            this.listViewEventWaypoints.FullRowSelect = true;
+            this.listViewEventWaypoints.TabStop = false;
+            this.listViewEventWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 255, 224); // 연한 초록
+            this.listViewEventWaypoints.Columns.Add("Entry", 80);
+            this.listViewEventWaypoints.Columns.Add("Exit", 80);
+            this.listViewEventWaypoints.Columns.Add("객체", 60);
+            this.listViewEventWaypoints.Click += new System.EventHandler(this.listViewEventWaypoints_Click);
+
+            this.btnDeleteEventWaypoint = new System.Windows.Forms.Button();
+            this.btnDeleteEventWaypoint.Text = "선택 삭제";
+            this.btnDeleteEventWaypoint.Location = new System.Drawing.Point(12, 110);
+            this.btnDeleteEventWaypoint.Size = new System.Drawing.Size(100, 30);
+            this.btnDeleteEventWaypoint.TabStop = false;
+            this.btnDeleteEventWaypoint.Click += new System.EventHandler(this.btnDeleteEventWaypoint_Click);
+
+            this.groupBoxEventWaypoint.Controls.Add(this.listViewEventWaypoints);
+            this.groupBoxEventWaypoint.Controls.Add(this.btnDeleteEventWaypoint);
 
             rightY += 170;
 
@@ -597,7 +667,9 @@
 
             rightY += 275;
 
-            this.panelRightSidebar.Controls.Add(this.groupBoxWaypoint);
+            this.panelRightSidebar.Controls.Add(this.groupBoxPersonWaypoint);
+            this.panelRightSidebar.Controls.Add(this.groupBoxVehicleWaypoint);
+            this.panelRightSidebar.Controls.Add(this.groupBoxEventWaypoint);
             this.panelRightSidebar.Controls.Add(this.groupBoxLabels);
 
             // 
@@ -672,10 +744,16 @@
         private System.Windows.Forms.Label labelObjectLabel;
         private System.Windows.Forms.Label labelPrevWaypoint;
         private System.Windows.Forms.Label labelNextWaypoint;
-        private System.Windows.Forms.GroupBox groupBoxWaypoint;
+        private System.Windows.Forms.GroupBox groupBoxPersonWaypoint;
+        private System.Windows.Forms.GroupBox groupBoxVehicleWaypoint;
+        private System.Windows.Forms.GroupBox groupBoxEventWaypoint;
         private System.Windows.Forms.Label labelWaypointTime;
-        private System.Windows.Forms.ListView listViewWaypoints;
-        private System.Windows.Forms.Button btnDeleteWaypoint;
+        private System.Windows.Forms.ListView listViewPersonWaypoints;
+        private System.Windows.Forms.ListView listViewVehicleWaypoints;
+        private System.Windows.Forms.ListView listViewEventWaypoints;
+        private System.Windows.Forms.Button btnDeletePersonWaypoint;
+        private System.Windows.Forms.Button btnDeleteVehicleWaypoint;
+        private System.Windows.Forms.Button btnDeleteEventWaypoint;
         private System.Windows.Forms.GroupBox groupBoxLabels;
         private System.Windows.Forms.Button btnLabelPerson;
         private System.Windows.Forms.Button btnLabelVehicle;

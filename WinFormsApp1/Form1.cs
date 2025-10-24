@@ -999,10 +999,10 @@ namespace WinFormsApp1
         #region Entry/Exit Markers
         private void btnEntry_Click(object sender, EventArgs e)
         {
-            // 선택된 웨이포인트가 있는지 확인
-            if (listViewWaypoints.SelectedItems.Count > 0)
+            // 선택된 Person 웨이포인트가 있는지 확인
+            if (listViewPersonWaypoints.SelectedItems.Count > 0)
             {
-                var selectedItem = listViewWaypoints.SelectedItems[0];
+                var selectedItem = listViewPersonWaypoints.SelectedItems[0];
                 var waypoint = selectedItem.Tag as WaypointMarker;
 
                 if (waypoint != null)
@@ -1049,10 +1049,10 @@ namespace WinFormsApp1
 
         private void btnExit_Click(object sender, EventArgs e)
         {
-            // 선택된 웨이포인트가 있는지 확인
-            if (listViewWaypoints.SelectedItems.Count > 0)
+            // 선택된 Person 웨이포인트가 있는지 확인
+            if (listViewPersonWaypoints.SelectedItems.Count > 0)
             {
-                var selectedItem = listViewWaypoints.SelectedItems[0];
+                var selectedItem = listViewPersonWaypoints.SelectedItems[0];
                 var waypoint = selectedItem.Tag as WaypointMarker;
 
                 if (waypoint != null)
@@ -1097,11 +1097,13 @@ namespace WinFormsApp1
                 return;
             }
 
-            // Entry 프레임의 모든 박스를 찾기
-            var entryBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value).ToList();
-            if (entryBoxes.Count == 0)
+            // Entry 프레임의 Person 또는 Vehicle 박스 찾기
+            var entryPersonBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "person").ToList();
+            var entryVehicleBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "vehicle").ToList();
+            
+            if (entryPersonBoxes.Count == 0 && entryVehicleBoxes.Count == 0)
             {
-                MessageBox.Show("Entry 프레임에 박스가 없습니다. 먼저 박스를 그려주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Entry 프레임에 Person 또는 Vehicle 박스가 없습니다.\n박스를 그린 후 X키를 눌러주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -1111,64 +1113,72 @@ namespace WinFormsApp1
 
             btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
 
-            // Entry 프레임의 Event 박스들을 Exit까지 자동 전파
-            PropagateAllEventBoxesInRange(entryFrameIndex.Value, exitFrameIndex.Value);
+            // Person과 Vehicle을 구분하여 각각의 Waypoint 생성
+            WaypointMarker waypoint = null;
+            string waypointType = "";
 
-            // 하나의 waypoint 생성 (첫 번째 박스 기준으로, 나머지는 추적 시 함께 처리)
-            var waypoint = new WaypointMarker
+            if (entryPersonBoxes.Count > 0)
             {
-                EntryFrame = entryFrameIndex.Value,
-                ExitFrame = exitFrameIndex.Value,
-                MarkerColor = markerColors[currentColorIndex % markerColors.Length],
-                EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
-                ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                ObjectId = 0, // 여러 객체를 포함하는 waypoint이므로 0으로 설정
-                Label = "multi" // 여러 객체 타입
-            };
+                // Person Waypoint 생성 (빨강 색상)
+                waypoint = new WaypointMarker
+                {
+                    EntryFrame = entryFrameIndex.Value,
+                    ExitFrame = exitFrameIndex.Value,
+                    MarkerColor = System.Drawing.Color.FromArgb(255, 107, 107), // 빨강
+                    EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
+                    ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                    ObjectId = 0,
+                    Label = "person"
+                };
+                waypointType = "Person";
+            }
+            else if (entryVehicleBoxes.Count > 0)
+            {
+                // Vehicle Waypoint 생성 (파랑 색상)
+                waypoint = new WaypointMarker
+                {
+                    EntryFrame = entryFrameIndex.Value,
+                    ExitFrame = exitFrameIndex.Value,
+                    MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255), // 파랑
+                    EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
+                    ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                    ObjectId = 0,
+                    Label = "vehicle"
+                };
+                waypointType = "Vehicle";
+            }
 
-            waypointMarkers.Add(waypoint);
-            currentColorIndex++;
-
-            var item = new ListViewItem(waypoint.EntryTime);
-            item.SubItems.Add(waypoint.ExitTime);
-            item.SubItems.Add($"● {entryBoxes.Count}개 객체");
-            item.ForeColor = waypoint.MarkerColor;
-            item.Tag = waypoint;
-            listViewWaypoints.Items.Add(item);
-
-            entryFrameIndex = null;
-            exitFrameIndex = null;
             if (waypoint != null)
             {
-                btnEntry.Text = $"Entry: {waypoint.EntryTime}";
-                btnExit.Text = $"Exit: {waypoint.ExitTime}";
-            }
-            else
-            {
+                waypointMarkers.Add(waypoint);
+                UpdateWaypointListView();
+
+                entryFrameIndex = null;
+                exitFrameIndex = null;
                 btnEntry.Text = "Entry";
                 btnExit.Text = "Exit";
-            }
 
-            panelTimeline.Invalidate();
+                panelTimeline.Invalidate();
 
-            var result = MessageBox.Show(
-                $"Waypoint가 생성되었습니다. ({entryBoxes.Count}개 객체)\n자동 추적을 수행하시겠습니까?",
-                "Auto Tracking",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
+                var result = MessageBox.Show(
+                    $"{waypointType} Waypoint가 생성되었습니다.\n자동 추적을 수행하시겠습니까?",
+                    $"{waypointType} Waypoint",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
 
-            if (result == DialogResult.Yes)
-            {
-                PerformTrackingForWaypoint(waypoint, true);
+                if (result == DialogResult.Yes)
+                {
+                    PerformTrackingForWaypoint(waypoint, true);
+                }
             }
         }
 
-        private void listViewWaypoints_Click(object sender, EventArgs e)
+        private void listViewPersonWaypoints_Click(object sender, EventArgs e)
         {
-            // Waypoint 항목을 클릭하면 해당 Entry 프레임으로 이동
-            if (listViewWaypoints.SelectedItems.Count > 0)
+            // Person Waypoint 항목을 클릭하면 해당 Entry 프레임으로 이동
+            if (listViewPersonWaypoints.SelectedItems.Count > 0)
             {
-                var selectedItem = listViewWaypoints.SelectedItems[0];
+                var selectedItem = listViewPersonWaypoints.SelectedItems[0];
                 var waypoint = selectedItem.Tag as WaypointMarker;
 
                 if (waypoint != null)
@@ -1178,35 +1188,65 @@ namespace WinFormsApp1
             }
         }
 
-        private void btnDeleteWaypoint_Click(object sender, EventArgs e)
+        private void listViewVehicleWaypoints_Click(object sender, EventArgs e)
         {
-            if (listViewWaypoints.SelectedItems.Count == 0)
+            // Vehicle Waypoint 항목을 클릭하면 해당 프레임으로 이동 (단일 프레임)
+            if (listViewVehicleWaypoints.SelectedItems.Count > 0)
             {
-                MessageBox.Show("삭제할 Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var selectedItem = listViewVehicleWaypoints.SelectedItems[0];
+                var waypoint = selectedItem.Tag as WaypointMarker;
+
+                if (waypoint != null)
+                {
+                    LoadFrame(waypoint.EntryFrame); // Entry = Exit (단일 프레임)
+                }
+            }
+        }
+
+        private void listViewEventWaypoints_Click(object sender, EventArgs e)
+        {
+            // Event Waypoint 항목을 클릭하면 해당 Entry 프레임으로 이동
+            if (listViewEventWaypoints.SelectedItems.Count > 0)
+            {
+                var selectedItem = listViewEventWaypoints.SelectedItems[0];
+                var waypoint = selectedItem.Tag as WaypointMarker;
+
+                if (waypoint != null)
+                {
+                    LoadFrame(waypoint.EntryFrame);
+                }
+            }
+        }
+
+        private void btnDeletePersonWaypoint_Click(object sender, EventArgs e)
+        {
+            if (listViewPersonWaypoints.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("삭제할 Person Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            var selectedItem = listViewWaypoints.SelectedItems[0];
+            var selectedItem = listViewPersonWaypoints.SelectedItems[0];
             var waypoint = selectedItem.Tag as WaypointMarker;
 
             if (waypoint != null)
             {
-                // 삭제 확인 메시지
                 var result = MessageBox.Show(
-                    $"선택한 Waypoint를 삭제하시겠습니까?\n\n" +
+                    $"선택한 Person Waypoint를 삭제하시겠습니까?\n\n" +
                     $"Entry: {waypoint.EntryTime}\n" +
                     $"Exit: {waypoint.ExitTime}\n\n" +
-                    $"⚠️ 주의: 해당 구간의 모든 박스가 삭제됩니다.",
-                    "Waypoint 삭제 확인",
+                    $"⚠️ 주의: 해당 구간의 모든 Person 박스가 삭제됩니다.",
+                    "Person Waypoint 삭제 확인",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
 
                 if (result != DialogResult.Yes)
                     return;
 
-                // ✅ 해당 웨이포인트의 Entry~Exit 프레임 범위 내 모든 박스 삭제
+                // Person 박스만 삭제
                 var boxesToDelete = boundingBoxes
                     .Where(b => 
+                        b.Label == "person" &&
                         b.FrameIndex >= waypoint.EntryFrame && 
                         b.FrameIndex <= waypoint.ExitFrame)
                     .ToList();
@@ -1221,7 +1261,7 @@ namespace WinFormsApp1
                     selectedBox = null;
 
                 waypointMarkers.Remove(waypoint);
-                listViewWaypoints.Items.Remove(selectedItem);
+                listViewPersonWaypoints.Items.Remove(selectedItem);
                 InvalidateBoxCache();
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
@@ -1229,7 +1269,123 @@ namespace WinFormsApp1
                 pictureBoxVideo.Invalidate();
 
                 MessageBox.Show(
-                    "✅ Waypoint가 삭제되었습니다.\n\n" +
+                    "✅ Person Waypoint가 삭제되었습니다.\n\n" +
+                    $"삭제된 박스: {boxesToDelete.Count}개",
+                    "삭제 완료",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+        }
+
+        private void btnDeleteVehicleWaypoint_Click(object sender, EventArgs e)
+        {
+            if (listViewVehicleWaypoints.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("삭제할 Vehicle Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var selectedItem = listViewVehicleWaypoints.SelectedItems[0];
+            var waypoint = selectedItem.Tag as WaypointMarker;
+
+            if (waypoint != null)
+            {
+                var result = MessageBox.Show(
+                    $"선택한 Vehicle Waypoint를 삭제하시겠습니까?\n\n" +
+                    $"프레임: {waypoint.EntryTime}\n\n" +
+                    $"⚠️ 주의: 해당 프레임의 Vehicle 박스가 삭제됩니다.",
+                    "Vehicle Waypoint 삭제 확인",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (result != DialogResult.Yes)
+                    return;
+
+                // Vehicle 박스만 삭제 (단일 프레임)
+                var boxesToDelete = boundingBoxes
+                    .Where(b => 
+                        b.Label == "vehicle" &&
+                        b.FrameIndex == waypoint.EntryFrame)
+                    .ToList();
+
+                foreach (var box in boxesToDelete)
+                {
+                    AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(box) });
+                    boundingBoxes.Remove(box);
+                }
+
+                if (selectedBox != null && boxesToDelete.Contains(selectedBox))
+                    selectedBox = null;
+
+                waypointMarkers.Remove(waypoint);
+                listViewVehicleWaypoints.Items.Remove(selectedItem);
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                UpdateBboxListDisplay();
+                panelTimeline.Invalidate();
+                pictureBoxVideo.Invalidate();
+
+                MessageBox.Show(
+                    "✅ Vehicle Waypoint가 삭제되었습니다.\n\n" +
+                    $"삭제된 박스: {boxesToDelete.Count}개",
+                    "삭제 완료",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+        }
+
+        private void btnDeleteEventWaypoint_Click(object sender, EventArgs e)
+        {
+            if (listViewEventWaypoints.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("삭제할 Event Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var selectedItem = listViewEventWaypoints.SelectedItems[0];
+            var waypoint = selectedItem.Tag as WaypointMarker;
+
+            if (waypoint != null)
+            {
+                var result = MessageBox.Show(
+                    $"선택한 Event Waypoint를 삭제하시겠습니까?\n\n" +
+                    $"Entry: {waypoint.EntryTime}\n" +
+                    $"Exit: {waypoint.ExitTime}\n\n" +
+                    $"⚠️ 주의: 해당 구간의 모든 Event 박스가 삭제됩니다.",
+                    "Event Waypoint 삭제 확인",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (result != DialogResult.Yes)
+                    return;
+
+                // Event 박스만 삭제
+                var boxesToDelete = boundingBoxes
+                    .Where(b => 
+                        b.Label == "event" &&
+                        b.FrameIndex >= waypoint.EntryFrame && 
+                        b.FrameIndex <= waypoint.ExitFrame)
+                    .ToList();
+
+                foreach (var box in boxesToDelete)
+                {
+                    AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(box) });
+                    boundingBoxes.Remove(box);
+                }
+
+                if (selectedBox != null && boxesToDelete.Contains(selectedBox))
+                    selectedBox = null;
+
+                waypointMarkers.Remove(waypoint);
+                listViewEventWaypoints.Items.Remove(selectedItem);
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                UpdateBboxListDisplay();
+                panelTimeline.Invalidate();
+                pictureBoxVideo.Invalidate();
+
+                MessageBox.Show(
+                    "✅ Event Waypoint가 삭제되었습니다.\n\n" +
                     $"삭제된 박스: {boxesToDelete.Count}개",
                     "삭제 완료",
                     MessageBoxButtons.OK,
@@ -1346,9 +1502,12 @@ namespace WinFormsApp1
                     UpdateBoxCount();
                     UpdateBboxListDisplay();
                     
-                    // Event 박스 자동 전파: Waypoint 내에 있으면 현재 프레임~Exit까지 자동 생성
-                    // Waypoint가 없으면 단일 프레임으로만 존재
-                    PropagateEventBoxIfNeeded(drawingBox);
+                    // Event bbox 생성 시 자동으로 Waypoint 추가 및 영상 끝까지 전파 (초록 색상)
+                    if (drawingBox.Label == "event")
+                    {
+                        CreateEventWaypoint(drawingBox);
+                        PropagateEventBoxToEnd(drawingBox); // 영상 끝까지 전파
+                    }
                 }
 
                 drawingBox = null;
@@ -1511,35 +1670,110 @@ namespace WinFormsApp1
 
         private void UpdateWaypointListView()
         {
-            listViewWaypoints.Items.Clear();
+            listViewPersonWaypoints.Items.Clear();
+            listViewVehicleWaypoints.Items.Clear();
+            listViewEventWaypoints.Items.Clear();
 
             foreach (var waypoint in waypointMarkers)
             {
                 var item = new ListViewItem(waypoint.EntryTime);
                 item.SubItems.Add(waypoint.ExitTime);
                 
-                // multi-object waypoint인 경우 해당 Waypoint 전체 구간의 고유 객체 개수 표시
-                if (waypoint.Label == "multi" && waypoint.ObjectId == 0)
+                // Label별로 category name 표시
+                if (waypoint.Label == "person")
                 {
-                    // ✅ Waypoint 전체 구간(Entry~Exit)에 있는 고유한 객체(label + ID 조합)의 개수 카운트
-                    var uniqueObjects = boundingBoxes
-                        .Where(b => b.FrameIndex >= waypoint.EntryFrame && b.FrameIndex <= waypoint.ExitFrame)
-                        .Select(b => new { b.Label, Id = GetBoxId(b) })
-                        .Distinct()
-                        .Count();
+                    // Person: Entry~Exit 구간의 Person 박스 category name 수집
+                    var personBoxes = boundingBoxes
+                        .Where(b => b.Label == "person" && 
+                                   b.FrameIndex >= waypoint.EntryFrame && 
+                                   b.FrameIndex <= waypoint.ExitFrame)
+                        .ToList();
                     
-                    item.SubItems.Add($"{uniqueObjects}개");
+                    if (personBoxes.Count > 0)
+                    {
+                        var firstBox = personBoxes.First();
+                        string categoryName = GetPersonCategoryName(firstBox.PersonId);
+                        item.SubItems.Add(categoryName);
+                    }
+                    else
+                    {
+                        item.SubItems.Add("person");
+                    }
+                    
+                    item.ForeColor = waypoint.MarkerColor;
+                    item.Tag = waypoint;
+                    listViewPersonWaypoints.Items.Add(item);
                 }
-                else
+                else if (waypoint.Label == "vehicle")
                 {
-                    // 기존 단일 객체 waypoint (하위 호환성)
-                    item.SubItems.Add($"1개");
+                    // Vehicle: 단일 프레임의 Vehicle category name 표시
+                    var vehicleBox = boundingBoxes
+                        .FirstOrDefault(b => b.Label == "vehicle" && b.FrameIndex == waypoint.EntryFrame);
+                    
+                    if (vehicleBox != null)
+                    {
+                        string categoryName = GetVehicleCategoryName(vehicleBox.VehicleId);
+                        item.SubItems.Add(categoryName);
+                    }
+                    else
+                    {
+                        item.SubItems.Add("vehicle");
+                    }
+                    
+                    item.ForeColor = waypoint.MarkerColor;
+                    item.Tag = waypoint;
+                    listViewVehicleWaypoints.Items.Add(item);
                 }
-                
-                item.ForeColor = waypoint.MarkerColor;
-                item.Tag = waypoint;
-                listViewWaypoints.Items.Add(item);
+                else if (waypoint.Label == "event")
+                {
+                    // Event: Entry~Exit 구간의 Event category name 표시
+                    var eventBox = boundingBoxes
+                        .FirstOrDefault(b => b.Label == "event" && 
+                                           b.FrameIndex >= waypoint.EntryFrame && 
+                                           b.FrameIndex <= waypoint.ExitFrame);
+                    
+                    if (eventBox != null)
+                    {
+                        string categoryName = GetEventCategoryName(eventBox.EventId);
+                        item.SubItems.Add(categoryName);
+                    }
+                    else
+                    {
+                        item.SubItems.Add("event");
+                    }
+                    
+                    item.ForeColor = waypoint.MarkerColor;
+                    item.Tag = waypoint;
+                    listViewEventWaypoints.Items.Add(item);
+                }
             }
+        }
+
+        private string GetPersonCategoryName(int personId)
+        {
+            string[] personTypes = { "person_standing", "person_sitting", "person_lying_down", "person_moving", 
+                                    "person_moving_slowly", "person_unspecified_position", "person_running", 
+                                    "person_squatting", "person_running_toward_camera", "person_etc_standing", 
+                                    "person_etc_lying", "person_etc_sitting", "person_etc_moving", "person_etc_posture" };
+            if (personId > 0 && personId <= personTypes.Length)
+                return personTypes[personId - 1];
+            return $"person_{personId:D2}";
+        }
+
+        private string GetVehicleCategoryName(int vehicleId)
+        {
+            string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+            if (vehicleId > 0 && vehicleId <= vehicleTypes.Length)
+                return vehicleTypes[vehicleId - 1];
+            return $"vehicle_{vehicleId}";
+        }
+
+        private string GetEventCategoryName(int eventId)
+        {
+            string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+            if (eventId > 0 && eventId <= eventTypes.Length)
+                return eventTypes[eventId - 1];
+            return $"event_{eventId}";
         }
 
         private void UpdateObjectInfo(BoundingBox box)
@@ -1747,6 +1981,12 @@ namespace WinFormsApp1
             {
                 string oldLabel = selectedBox.Label;
                 
+                // ✅ Event → Person 변경 시 전파된 Event 박스 삭제
+                if (oldLabel == "event")
+                {
+                    RemovePropagatedEventBoxes(selectedBox);
+                }
+                
                 selectedBox.Label = "person";
                 SetBoxId(selectedBox, "person", 1); // 기본값 person_01
                 
@@ -1773,6 +2013,12 @@ namespace WinFormsApp1
             if (selectedBox != null)
             {
                 string oldLabel = selectedBox.Label;
+                
+                // ✅ Event → Vehicle 변경 시 전파된 Event 박스 삭제
+                if (oldLabel == "event")
+                {
+                    RemovePropagatedEventBoxes(selectedBox);
+                }
                 
                 selectedBox.Label = "vehicle";
                 SetBoxId(selectedBox, "vehicle", 1); // 기본값 vehicle_car
@@ -1815,6 +2061,14 @@ namespace WinFormsApp1
                 pictureBoxVideo.Invalidate();
                 UpdateBboxListDisplay();
                 UpdateObjectInfo(selectedBox);
+                
+                // ✅ Event로 변경 시 자동 전파
+                if (oldLabel != "event")
+                {
+                    System.Diagnostics.Debug.WriteLine($"[라벨 변경] {oldLabel} → event, 전파 시작");
+                    CreateEventWaypoint(selectedBox);
+                    PropagateEventBoxToEnd(selectedBox);
+                }
             }
         }
 
@@ -2855,6 +3109,162 @@ namespace WinFormsApp1
         }
 
         /// <summary>
+        /// Vehicle bbox 생성 시 자동으로 Waypoint 추가 (단일 프레임)
+        /// </summary>
+        private void CreateVehicleWaypoint(BoundingBox box)
+        {
+            if (box.Label != "vehicle") return;
+
+            TimeSpan time = TimeSpan.FromSeconds(box.FrameIndex / fps);
+            string timeString = time.ToString(@"hh\:mm\:ss");
+
+            var waypoint = new WaypointMarker
+            {
+                EntryFrame = box.FrameIndex,
+                ExitFrame = box.FrameIndex, // 단일 프레임
+                MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255), // 파랑
+                EntryTime = timeString,
+                ExitTime = timeString,
+                ObjectId = 0,
+                Label = "vehicle"
+            };
+
+            waypointMarkers.Add(waypoint);
+            UpdateWaypointListView();
+            panelTimeline.Invalidate();
+        }
+
+        /// <summary>
+        /// Event bbox 생성 시 자동으로 Waypoint 추가 (현재 프레임 ~ 영상 끝 또는 Q키 종료 시점)
+        /// </summary>
+        private void CreateEventWaypoint(BoundingBox box)
+        {
+            if (box.Label != "event") return;
+
+            TimeSpan entryTime = TimeSpan.FromSeconds(box.FrameIndex / fps);
+            TimeSpan exitTime = TimeSpan.FromSeconds((totalFrames - 1) / fps); // 영상 끝
+
+            var waypoint = new WaypointMarker
+            {
+                EntryFrame = box.FrameIndex,
+                ExitFrame = totalFrames - 1, // 영상 끝 (Q키로 조기 종료 가능)
+                MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107), // 초록
+                EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
+                ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                ObjectId = 0,
+                Label = "event"
+            };
+
+            waypointMarkers.Add(waypoint);
+            UpdateWaypointListView();
+            panelTimeline.Invalidate();
+        }
+
+        /// <summary>
+        /// Event bbox를 현재 프레임부터 영상 끝까지 자동 전파
+        /// </summary>
+        private void PropagateEventBoxToEnd(BoundingBox box)
+        {
+            if (box.Label != "event") return;
+
+            int startFrame = box.FrameIndex + 1;
+            int endFrame = totalFrames - 1;
+
+            if (startFrame > endFrame) return;
+
+            System.Diagnostics.Debug.WriteLine($"[Event 전파 시작] 프레임 {box.FrameIndex}에서 생성된 Event를 {startFrame}~{endFrame}까지 전파 ({endFrame - startFrame + 1}개 프레임)");
+
+            for (int frame = startFrame; frame <= endFrame; frame++)
+            {
+                // 같은 EventId와 위치를 가진 박스가 이미 있는지 확인
+                bool exists = boundingBoxes.Any(b =>
+                    b.FrameIndex == frame &&
+                    b.Label == "event" &&
+                    b.EventId == box.EventId &&
+                    b.Rectangle.X == box.Rectangle.X &&
+                    b.Rectangle.Y == box.Rectangle.Y &&
+                    b.Rectangle.Width == box.Rectangle.Width &&
+                    b.Rectangle.Height == box.Rectangle.Height);
+
+                if (!exists)
+                {
+                    var copiedBox = new BoundingBox
+                    {
+                        FrameIndex = frame,
+                        Rectangle = new Rectangle(box.Rectangle.X, box.Rectangle.Y, box.Rectangle.Width, box.Rectangle.Height),
+                        Label = "event",
+                        PersonId = 0,
+                        VehicleId = 0,
+                        EventId = box.EventId,
+                        Action = box.Action,
+                        VehicleName = box.VehicleName,
+                        EventName = box.EventName
+                    };
+                    boundingBoxes.Add(copiedBox);
+                }
+            }
+
+            InvalidateBoxCache();
+            UpdateBoxCount();
+            UpdateBboxListDisplay();
+            System.Diagnostics.Debug.WriteLine($"[Event 전파 완료] {endFrame - startFrame + 1}개 프레임에 Event 박스 전파됨");
+        }
+
+        /// <summary>
+        /// Event → Person/Vehicle 변경 시 전파된 Event 박스 삭제
+        /// </summary>
+        private void RemovePropagatedEventBoxes(BoundingBox box)
+        {
+            if (box.Label != "event")
+            {
+                System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제 중단] Label이 event가 아님: {box.Label}");
+                return;
+            }
+
+            // 현재 프레임 이후의 같은 EventId, Rectangle을 가진 박스들 찾기
+            var boxesToRemove = boundingBoxes.Where(b =>
+                b.Label == "event" &&
+                b.EventId == box.EventId &&
+                b.Rectangle.X == box.Rectangle.X &&
+                b.Rectangle.Y == box.Rectangle.Y &&
+                b.Rectangle.Width == box.Rectangle.Width &&
+                b.Rectangle.Height == box.Rectangle.Height &&
+                b.FrameIndex > box.FrameIndex).ToList();
+
+            if (boxesToRemove.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제] {boxesToRemove.Count}개 박스 삭제 시작");
+                
+                foreach (var boxToRemove in boxesToRemove)
+                {
+                    boundingBoxes.Remove(boxToRemove);
+                }
+
+                // 관련된 Event Waypoint 삭제
+                var eventWaypoint = waypointMarkers.FirstOrDefault(w =>
+                    w.Label == "event" &&
+                    w.EntryFrame == box.FrameIndex);
+
+                if (eventWaypoint != null)
+                {
+                    waypointMarkers.Remove(eventWaypoint);
+                    System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제] Event Waypoint 삭제 완료");
+                }
+
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                UpdateBboxListDisplay();
+                UpdateWaypointListView();
+                panelTimeline.Invalidate();
+                System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제 완료] {boxesToRemove.Count}개 박스 삭제됨");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제] 삭제할 박스 없음");
+            }
+        }
+
+        /// <summary>
         /// Event 박스가 새로 생성되었을 때 현재 프레임부터 Waypoint Exit까지 전파
         /// (Waypoint 중간 프레임에서 생성된 Event도 자동으로 Exit까지 전파됨)
         /// </summary>
@@ -3338,40 +3748,55 @@ namespace WinFormsApp1
                     if (annotation.Id >= nextAnnotationId)
                         nextAnnotationId = annotation.Id + 1;
 
-                    // ✅ 웨이포인트 정보 복원 (Person/Vehicle만, Event는 제외)
-                    // Event 박스는 waypoint 생성에 사용되지 않음 (기존 waypoint 내에서만 존재)
+                    // ✅ 웨이포인트 정보 복원 (Label별로 분리)
                     if (annotation.TrackInfo != null && 
                         annotation.TrackInfo.Entry != null && 
-                        annotation.TrackInfo.Exit != null &&
-                        box.Label != "event") // Event는 waypoint 생성에서 제외
+                        annotation.TrackInfo.Exit != null)
                     {
                         int entryFrame = annotation.TrackInfo.Entry.Frame;
                         int exitFrame = annotation.TrackInfo.Exit.Frame;
 
-                        // 같은 entry/exit 프레임을 가진 웨이포인트가 있는지 확인 (multi-object)
+                        // 같은 Label, Entry, Exit를 가진 Waypoint가 이미 있는지 확인
                         bool waypointExists = waypointMarkers.Any(w => 
+                            w.Label == box.Label &&
                             w.EntryFrame == entryFrame && 
                             w.ExitFrame == exitFrame);
 
                         if (!waypointExists)
                         {
-                            // Entry 프레임에 Person/Vehicle이 몇 개 있는지 확인
-                            int objectCount = boundingBoxes.Count(b => 
-                                b.FrameIndex == entryFrame && 
-                                (b.Label == "person" || b.Label == "vehicle"));
+                            System.Drawing.Color waypointColor;
+                            
+                            // Label별로 색상 지정
+                            if (box.Label == "person")
+                            {
+                                waypointColor = System.Drawing.Color.FromArgb(255, 107, 107); // 빨강
+                            }
+                            else if (box.Label == "vehicle")
+                            {
+                                waypointColor = System.Drawing.Color.FromArgb(107, 158, 255); // 파랑
+                            }
+                            else if (box.Label == "event")
+                            {
+                                waypointColor = System.Drawing.Color.FromArgb(107, 255, 107); // 초록
+                            }
+                            else
+                            {
+                                waypointColor = markerColors[waypointMarkers.Count % markerColors.Length];
+                            }
                             
                             var waypoint = new WaypointMarker
                             {
-                                ObjectId = 0, // multi-object waypoint
-                                Label = "multi",
+                                ObjectId = 0,
+                                Label = box.Label, // Person/Vehicle/Event 라벨 유지
                                 EntryFrame = entryFrame,
                                 ExitFrame = exitFrame,
                                 EntryTime = FormatFrameTime(entryFrame),
                                 ExitTime = FormatFrameTime(exitFrame),
-                                MarkerColor = markerColors[waypointMarkers.Count % markerColors.Length]
+                                MarkerColor = waypointColor
                             };
 
                             waypointMarkers.Add(waypoint);
+                            System.Diagnostics.Debug.WriteLine($"[JSON 로드] {box.Label} Waypoint 복원: {entryFrame}~{exitFrame}");
                         }
                     }
                 }
@@ -3631,28 +4056,32 @@ namespace WinFormsApp1
                 targetEvent = eventBoxesAtFrame[0];
             }
             
-            // 현재 속한 Waypoint 찾기
-            var waypoint = waypointMarkers.FirstOrDefault(w =>
+            // 현재 Event의 Waypoint 찾기 (Event Label, EventId로 매칭)
+            var eventWaypoint = waypointMarkers.FirstOrDefault(w =>
+                w.Label == "event" &&
                 currentFrameIndex >= w.EntryFrame &&
                 currentFrameIndex <= w.ExitFrame);
             
-            if (waypoint == null)
+            if (eventWaypoint == null)
             {
                 MessageBox.Show(
-                    "Waypoint를 찾을 수 없습니다.",
+                    "Event Waypoint를 찾을 수 없습니다.",
                     "오류",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
             }
             
-            // 현재 프레임부터 Exit까지 삭제
+            // 현재 프레임부터 영상 끝까지 삭제 (Q키로 종료)
             var boxesToDelete = boundingBoxes
                 .Where(b => 
                     b.Label == "event" &&
                     b.EventId == targetEvent.EventId &&
-                    b.FrameIndex >= currentFrameIndex &&
-                    b.FrameIndex <= waypoint.ExitFrame)
+                    b.Rectangle.X == targetEvent.Rectangle.X &&
+                    b.Rectangle.Y == targetEvent.Rectangle.Y &&
+                    b.Rectangle.Width == targetEvent.Rectangle.Width &&
+                    b.Rectangle.Height == targetEvent.Rectangle.Height &&
+                    b.FrameIndex >= currentFrameIndex)
                 .ToList();
             
             if (boxesToDelete.Count == 0)
@@ -3672,8 +4101,8 @@ namespace WinFormsApp1
                 : targetEvent.EventId.ToString();
             
             var result = MessageBox.Show(
-                $"'{eventName}' Event를 현재 프레임({currentFrameIndex})부터 종료하시겠습니까?\n\n" +
-                $"삭제될 프레임: {currentFrameIndex} ~ {waypoint.ExitFrame} ({boxesToDelete.Count}개)",
+                $"'{eventName}' Event를 현재 프레임({currentFrameIndex})에서 종료하시겠습니까?\n\n" +
+                $"삭제될 프레임: {currentFrameIndex} ~ 영상 끝 ({boxesToDelete.Count}개)",
                 "Event 종료",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -3685,9 +4114,16 @@ namespace WinFormsApp1
                     boundingBoxes.Remove(box);
                 }
                 
+                // Event Waypoint의 ExitFrame을 현재 프레임 -1로 업데이트
+                eventWaypoint.ExitFrame = currentFrameIndex - 1;
+                TimeSpan exitTime = TimeSpan.FromSeconds((currentFrameIndex - 1) / fps);
+                eventWaypoint.ExitTime = exitTime.ToString(@"hh\:mm\:ss");
+                
                 InvalidateBoxCache();
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
+                UpdateWaypointListView(); // Waypoint ListView 업데이트
+                panelTimeline.Invalidate();
                 pictureBoxVideo.Invalidate();
                 
                 MessageBox.Show(
@@ -3737,6 +4173,29 @@ namespace WinFormsApp1
         
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
+            // F1/F2/F3: Person/Vehicle/Event 라벨 선택 (영상 로드 여부와 무관)
+            if (!e.Control && !e.Shift && !e.Alt)
+            {
+                if (e.KeyCode == Keys.F1)
+                {
+                    btnLabelPerson_Click(sender, e);
+                    e.Handled = true;
+                    return;
+                }
+                else if (e.KeyCode == Keys.F2)
+                {
+                    btnLabelVehicle_Click(sender, e);
+                    e.Handled = true;
+                    return;
+                }
+                else if (e.KeyCode == Keys.F3)
+                {
+                    btnLabelEvent_Click(sender, e);
+                    e.Handled = true;
+                    return;
+                }
+            }
+            
             // Ctrl+1~14: ID 수동 지정 (영상 로드 여부와 무관하게 동작)
             if (e.Control && !e.Shift && !e.Alt)
             {
