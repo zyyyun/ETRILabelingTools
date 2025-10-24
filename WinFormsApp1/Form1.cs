@@ -706,23 +706,58 @@ namespace WinFormsApp1
 
                     videoFileList.Sort();
 
-                    if (videoFileList.Count == 0)
-                    {
-                        MessageBox.Show("선택한 폴더에서 영상 파일을 찾을 수 없습니다.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        return;
-                    }
+                if (videoFileList.Count == 0)
+                {
+                    MessageBox.Show("선택한 폴더에서 영상 파일을 찾을 수 없습니다.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
 
+                // ✅ 폴더 선택 시: 데이터 백업 → 초기화 → 로드 (실패 시 복원)
+                var backupBoxes = new List<BoundingBox>(boundingBoxes);
+                var backupWaypoints = new List<WaypointMarker>(waypointMarkers);
+                var backupSelectedBox = selectedBox;
+                var backupUndoStack = new Stack<UndoAction>(undoStack.Reverse());
+                var backupRedoStack = new Stack<UndoAction>(redoStack.Reverse());
+                
+                boundingBoxes.Clear();
+                waypointMarkers.Clear();
+                selectedBox = null;
+                undoStack.Clear();
+                redoStack.Clear();
+                lastRenderedWaypoint = null;
+                
+                try
+                {
                     currentVideoIndex = 0;
                     await LoadVideoWithSubtitle(videoFileList[0]);
-                    boundingBoxes.Clear();
-                    waypointMarkers.Clear();
-                    selectedBox = null;
-                    // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
+                    
+                    // LoadVideoWithSubtitle 내부의 LoadLabelingData에서 새 데이터가 로드됨
                     UpdateBoxCount();
                     UpdateWaypointListView();
                     pictureBoxVideo.Invalidate();
 
                     MessageBox.Show($"총 {videoFileList.Count}개의 영상 파일을 불러왔습니다.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    // ❌ 로드 실패 시 이전 데이터 복원
+                    boundingBoxes.Clear();
+                    boundingBoxes.AddRange(backupBoxes);
+                    waypointMarkers.Clear();
+                    waypointMarkers.AddRange(backupWaypoints);
+                    selectedBox = backupSelectedBox;
+                    undoStack.Clear();
+                    foreach (var action in backupUndoStack) undoStack.Push(action);
+                    redoStack.Clear();
+                    foreach (var action in backupRedoStack) redoStack.Push(action);
+                    
+                    UpdateBoxCount();
+                    UpdateWaypointListView();
+                    pictureBoxVideo.Invalidate();
+                    
+                    MessageBox.Show($"영상 로드 실패:\n{ex.Message}\n\n이전 작업 내용이 복원되었습니다.", 
+                        "폴더 로드 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
                 }
             }
         }
@@ -1611,17 +1646,51 @@ namespace WinFormsApp1
 
             if (selectedIndex != currentVideoIndex)
             {
-                // 비디오 전환 시 자동 저장 제거 - 수동으로만 저장
-                currentVideoIndex = selectedIndex;
-                await LoadVideoWithSubtitle(videoFileList[currentVideoIndex]);
+                // ✅ 비디오 전환 시: 데이터 백업 → 초기화 → 로드 (실패 시 복원)
+                var backupBoxes = new List<BoundingBox>(boundingBoxes);
+                var backupWaypoints = new List<WaypointMarker>(waypointMarkers);
+                var backupSelectedBox = selectedBox;
+                var backupUndoStack = new Stack<UndoAction>(undoStack.Reverse());
+                var backupRedoStack = new Stack<UndoAction>(redoStack.Reverse());
+                
                 boundingBoxes.Clear();
                 waypointMarkers.Clear();
                 selectedBox = null;
-                // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
-                UpdateBoxCount();
-                UpdateWaypointListView();
-                pictureBoxVideo.Invalidate();
-                RefreshVideoListView();
+                undoStack.Clear();
+                redoStack.Clear();
+                lastRenderedWaypoint = null;
+                
+                try
+                {
+                    currentVideoIndex = selectedIndex;
+                    await LoadVideoWithSubtitle(videoFileList[currentVideoIndex]);
+                    
+                    // LoadVideoWithSubtitle 내부의 LoadLabelingData에서 새 데이터가 로드됨
+                    UpdateBoxCount();
+                    UpdateWaypointListView();
+                    pictureBoxVideo.Invalidate();
+                    RefreshVideoListView();
+                }
+                catch (Exception ex)
+                {
+                    // ❌ 로드 실패 시 이전 데이터 복원
+                    boundingBoxes.Clear();
+                    boundingBoxes.AddRange(backupBoxes);
+                    waypointMarkers.Clear();
+                    waypointMarkers.AddRange(backupWaypoints);
+                    selectedBox = backupSelectedBox;
+                    undoStack.Clear();
+                    foreach (var action in backupUndoStack) undoStack.Push(action);
+                    redoStack.Clear();
+                    foreach (var action in backupRedoStack) redoStack.Push(action);
+                    
+                    UpdateBoxCount();
+                    UpdateWaypointListView();
+                    pictureBoxVideo.Invalidate();
+                    
+                    MessageBox.Show($"영상 로드 실패:\n{ex.Message}\n\n이전 작업 내용이 복원되었습니다.", 
+                        "영상 전환 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
         }
 
@@ -3161,9 +3230,14 @@ namespace WinFormsApp1
                 if (labelingData == null || labelingData.Annotations == null)
                     return;
 
+                // ✅ JSON 로드 시 모든 기존 데이터 초기화
                 boundingBoxes.Clear();
+                waypointMarkers.Clear();
                 categoryMap.Clear();
                 selectedBox = null;
+                undoStack.Clear();
+                redoStack.Clear();
+                lastRenderedWaypoint = null;
                 nextAnnotationId = 1;
                 // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
 
@@ -3302,12 +3376,15 @@ namespace WinFormsApp1
                     }
                 }
 
-                // 웨이포인트 리스트뷰 갱신
+                // ✅ UI 전체 갱신: Waypoint, BboxList, BoxCount
                 UpdateWaypointListView();
+                UpdateBboxListDisplay(); // Labels 패널도 갱신
                 
                 InvalidateBoxCache();
                 UpdateBoxCount();
                 pictureBoxVideo.Invalidate();
+                
+                System.Diagnostics.Debug.WriteLine($"[JSON 로드 완료] 박스 {boundingBoxes.Count}개, Waypoint {waypointMarkers.Count}개 로드됨");
             }
             catch (Exception ex)
             {
