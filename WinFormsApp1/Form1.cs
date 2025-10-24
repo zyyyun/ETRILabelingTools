@@ -351,6 +351,11 @@ namespace WinFormsApp1
         // bbox 리스트 렌더링 최적화를 위한 변수
         private WaypointMarker? lastRenderedWaypoint = null;
         
+        // Labels 패널 접기/펼치기 상태
+        private bool isPersonExpanded = false;
+        private bool isVehicleExpanded = false;
+        private bool isEventExpanded = false;
+        
         // 성능 최적화: 프레임별 박스 캐시
         private Dictionary<int, List<BoundingBox>> frameBoxCache = new Dictionary<int, List<BoundingBox>>();
         private int lastCachedFrameForPaint = -1;
@@ -1341,13 +1346,17 @@ namespace WinFormsApp1
 
         private void panelVideoControls_Resize(object sender, EventArgs e)
         {
-            // panelVideoControls 크기가 변경될 때 panelTimeline을 가운데 정렬
-            if (panelTimeline != null && panelVideoControls != null)
+            // panelVideoControls 크기가 변경될 때 레이아웃 조정
+            if (panelVideoControls != null)
             {
-                panelTimeline.Location = new System.Drawing.Point(
-                    (panelVideoControls.Width - panelTimeline.Width) / 2,
-                    panelTimeline.Location.Y // Y 위치는 유지
-                );
+                // groupBoxObjectInfo: 오른쪽에 고정
+                if (groupBoxObjectInfo != null)
+                {
+                    groupBoxObjectInfo.Location = new System.Drawing.Point(
+                        panelVideoControls.Width - groupBoxObjectInfo.Width - 16, // 우측 여백 16px
+                        16 // 상단 여백
+                    );
+                }
             }
         }
 
@@ -1740,6 +1749,93 @@ namespace WinFormsApp1
             }
         }
 
+        // Labels 패널 접기/펼치기 토글 함수들
+        private void TogglePersonPanel(object sender, EventArgs e)
+        {
+            isPersonExpanded = !isPersonExpanded;
+            panelPersonList.Visible = isPersonExpanded;
+            labelPersonList.Text = isPersonExpanded ? "▽ person" : "> person";
+            
+            // 패널이 펼쳐질 때만 내용 업데이트
+            if (isPersonExpanded)
+            {
+                UpdatePersonListDisplay();
+            }
+            
+            // 레이아웃 재계산 (아래 요소들의 위치 조정)
+            UpdateLabelsLayoutAfterToggle();
+        }
+
+        private void ToggleVehiclePanel(object sender, EventArgs e)
+        {
+            isVehicleExpanded = !isVehicleExpanded;
+            panelVehicleList.Visible = isVehicleExpanded;
+            labelVehicleList.Text = isVehicleExpanded ? "▽ vehicle" : "> vehicle";
+            
+            // 패널이 펼쳐질 때만 내용 업데이트
+            if (isVehicleExpanded)
+            {
+                UpdateVehicleListDisplay();
+            }
+            
+            // 레이아웃 재계산 (아래 요소들의 위치 조정)
+            UpdateLabelsLayoutAfterToggle();
+        }
+
+        private void ToggleEventPanel(object sender, EventArgs e)
+        {
+            isEventExpanded = !isEventExpanded;
+            panelEventList.Visible = isEventExpanded;
+            labelEventList.Text = isEventExpanded ? "▽ event" : "> event";
+            
+            // 패널이 펼쳐질 때만 내용 업데이트
+            if (isEventExpanded)
+            {
+                UpdateEventListDisplay();
+            }
+            
+            // 레이아웃 재계산 (아래 요소들의 위치 조정)
+            UpdateLabelsLayoutAfterToggle();
+        }
+        
+        // Labels 패널 레이아웃 업데이트 (토글 시 요소들의 위치 동적 조정)
+        private void UpdateLabelsLayoutAfterToggle()
+        {
+            const int startY = 70;
+            const int toggleHeight = 30;
+            const int panelHeight = 100;
+            int currentY = startY;
+            
+            // Person 섹션
+            currentY += toggleHeight; // Person 토글 버튼 다음
+            if (isPersonExpanded)
+                currentY += panelHeight; // Person 패널이 펼쳐져 있으면 그 높이만큼 추가
+            
+            // Vehicle 섹션
+            labelVehicleList.Location = new System.Drawing.Point(8, currentY);
+            currentY += toggleHeight;
+            panelVehicleList.Location = new System.Drawing.Point(8, currentY);
+            if (isVehicleExpanded)
+                currentY += panelHeight;
+            
+            // Event 섹션
+            labelEventList.Location = new System.Drawing.Point(8, currentY);
+            currentY += toggleHeight;
+            panelEventList.Location = new System.Drawing.Point(8, currentY);
+            if (isEventExpanded)
+                currentY += panelHeight;
+            
+            // 하단 버튼들
+            currentY += 5; // 약간의 여백
+            btnDeleteLabel.Location = new System.Drawing.Point(8, currentY);
+            currentY += 42; // 삭제 버튼 높이 + 여백
+            btnExportJsonInLabels.Location = new System.Drawing.Point(8, currentY);
+            
+            // Labels 패널 전체 높이 조정
+            currentY += 50; // JSON 저장 버튼 높이 + 여백
+            groupBoxLabels.Height = Math.Max(260, currentY);
+        }
+
         // 성능 최적화: 박스 라벨 텍스트 생성 (재사용 가능한 배열 사용)
         private static readonly string[] VehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
         private static readonly string[] EventTypes = { "contact", "exchange", "board", "final_exchange" };
@@ -1814,9 +1910,13 @@ namespace WinFormsApp1
         // 3개 bbox 목록을 동적으로 생성하여 표시 (현재 프레임 기준)
         private void UpdateBboxListDisplay()
         {
-            UpdatePersonListDisplay();
-            UpdateVehicleListDisplay();
-            UpdateEventListDisplay();
+            // 펼쳐진 패널만 업데이트 (성능 최적화)
+            if (isPersonExpanded)
+                UpdatePersonListDisplay();
+            if (isVehicleExpanded)
+                UpdateVehicleListDisplay();
+            if (isEventExpanded)
+                UpdateEventListDisplay();
         }
         
         // Person 리스트 표시 (현재 프레임의 Person bbox)

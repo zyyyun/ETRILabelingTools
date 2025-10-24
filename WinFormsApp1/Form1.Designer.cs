@@ -260,6 +260,7 @@
             this.panelVideoControls.Height = 120;
             this.panelVideoControls.BackColor = System.Drawing.Color.White;
             this.panelVideoControls.Padding = new System.Windows.Forms.Padding(12);
+            this.panelVideoControls.Controls.Add(this.groupBoxObjectInfo);
             this.panelVideoControls.Controls.Add(this.btnPlay);
             this.panelVideoControls.Controls.Add(this.btnRewind);
             this.panelVideoControls.Controls.Add(this.btnForward);
@@ -344,11 +345,11 @@
             this.trackBarVolume.TickStyle = System.Windows.Forms.TickStyle.None;
 
             // 
-            // panelTimeline (Progress bar with markers)
+            // panelTimeline (Progress bar with markers - 좌측에 고정)
             // 
-            this.panelTimeline.Location = new System.Drawing.Point(16, 70);
+            this.panelTimeline.Location = new System.Drawing.Point(70, 70);
             this.panelTimeline.Size = new System.Drawing.Size(1000, 30);
-            this.panelTimeline.Anchor = System.Windows.Forms.AnchorStyles.Top;
+            this.panelTimeline.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left;
             this.panelTimeline.BackColor = System.Drawing.Color.FromArgb(229, 231, 235);
             this.panelTimeline.Paint += new System.Windows.Forms.PaintEventHandler(this.panelTimeline_Paint);
             this.panelTimeline.MouseDown += new System.Windows.Forms.MouseEventHandler(this.panelTimeline_MouseDown);
@@ -369,41 +370,44 @@
             int rightY = 16;
 
             // 
-            // groupBoxObjectInfo
+            // groupBoxObjectInfo (하단 플레이바 - 우측에 고정 배치)
             // 
             this.groupBoxObjectInfo.Text = "Object Info";
-            this.groupBoxObjectInfo.Location = new System.Drawing.Point(16, rightY);
-            this.groupBoxObjectInfo.Size = new System.Drawing.Size(280, 120);
-            this.groupBoxObjectInfo.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.groupBoxObjectInfo.Size = new System.Drawing.Size(280, 84);
+            this.groupBoxObjectInfo.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold);
+            this.groupBoxObjectInfo.BackColor = System.Drawing.Color.White;
+            this.groupBoxObjectInfo.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
             this.groupBoxObjectInfo.TabStop = false;
             this.groupBoxObjectInfo.Controls.Add(this.labelObjectLabel);
             this.groupBoxObjectInfo.Controls.Add(this.labelPrevWaypoint);
             this.groupBoxObjectInfo.Controls.Add(this.labelNextWaypoint);
 
             this.labelObjectLabel.Text = "Label: person_01";
-            this.labelObjectLabel.Location = new System.Drawing.Point(12, 25);
-            this.labelObjectLabel.Size = new System.Drawing.Size(250, 20);
-            this.labelObjectLabel.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.labelObjectLabel.Location = new System.Drawing.Point(8, 18);
+            this.labelObjectLabel.Size = new System.Drawing.Size(264, 18);
+            this.labelObjectLabel.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold);
+            this.labelObjectLabel.ForeColor = System.Drawing.Color.FromArgb(55, 65, 81);
+            this.labelObjectLabel.AutoSize = false;
 
             this.labelPrevWaypoint.Text = "Previous Waypoint: C0001.mp4, 00:10:32 - 00:11:05";
-            this.labelPrevWaypoint.Location = new System.Drawing.Point(12, 50);
-            this.labelPrevWaypoint.Size = new System.Drawing.Size(260, 30);
-            this.labelPrevWaypoint.Font = new System.Drawing.Font("Segoe UI", 8F);
+            this.labelPrevWaypoint.Location = new System.Drawing.Point(8, 38);
+            this.labelPrevWaypoint.Size = new System.Drawing.Size(264, 20);
+            this.labelPrevWaypoint.Font = new System.Drawing.Font("Segoe UI", 7F);
             this.labelPrevWaypoint.ForeColor = System.Drawing.Color.Gray;
+            this.labelPrevWaypoint.AutoSize = false;
 
             this.labelNextWaypoint.Text = "Next Waypoint: C0003.mp4, 00:15:21 - 00:16:01";
-            this.labelNextWaypoint.Location = new System.Drawing.Point(12, 85);
-            this.labelNextWaypoint.Size = new System.Drawing.Size(260, 30);
-            this.labelNextWaypoint.Font = new System.Drawing.Font("Segoe UI", 8F);
+            this.labelNextWaypoint.Location = new System.Drawing.Point(8, 58);
+            this.labelNextWaypoint.Size = new System.Drawing.Size(264, 20);
+            this.labelNextWaypoint.Font = new System.Drawing.Font("Segoe UI", 7F);
             this.labelNextWaypoint.ForeColor = System.Drawing.Color.Gray;
-
-            rightY += 140;
+            this.labelNextWaypoint.AutoSize = false;
 
             // 
-            // groupBoxWaypoint
+            // groupBoxWaypoint (우측 사이드바 상단에 배치, Object Info는 하단으로 이동됨)
             // 
             this.groupBoxWaypoint.Text = "Waypoint";
-            this.groupBoxWaypoint.Location = new System.Drawing.Point(16, rightY);
+            this.groupBoxWaypoint.Location = new System.Drawing.Point(16, 16);
             this.groupBoxWaypoint.Size = new System.Drawing.Size(280, 150);
             this.groupBoxWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.groupBoxWaypoint.TabStop = false;
@@ -438,7 +442,7 @@
             // 
             this.groupBoxLabels.Text = "Labels";
             this.groupBoxLabels.Location = new System.Drawing.Point(16, rightY);
-            this.groupBoxLabels.Size = new System.Drawing.Size(288, 605);
+            this.groupBoxLabels.Size = new System.Drawing.Size(288, 260);
             this.groupBoxLabels.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.groupBoxLabels.TabStop = false;
 
@@ -479,60 +483,87 @@
             this.btnLabelEvent.TabStop = false;
             this.btnLabelEvent.Click += new System.EventHandler(this.btnLabelEvent_Click);
 
-            // Person 리스트 레이블
+            // Person 리스트 토글 버튼 (레이블 대체)
             this.labelPersonList = new System.Windows.Forms.Label();
-            this.labelPersonList.Text = "📌 Person";
+            this.labelPersonList.Text = "> person";
             this.labelPersonList.Location = new System.Drawing.Point(8, 70);
-            this.labelPersonList.Size = new System.Drawing.Size(270, 20);
-            this.labelPersonList.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.labelPersonList.Size = new System.Drawing.Size(270, 30);
+            this.labelPersonList.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.labelPersonList.BackColor = System.Drawing.Color.FromArgb(252, 231, 243);
+            this.labelPersonList.ForeColor = System.Drawing.Color.FromArgb(157, 23, 77);
+            this.labelPersonList.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.labelPersonList.Padding = new System.Windows.Forms.Padding(10, 0, 0, 0);
+            this.labelPersonList.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.labelPersonList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.labelPersonList.Click += new System.EventHandler(this.TogglePersonPanel);
 
             // Person 리스트 패널
             this.panelPersonList = new System.Windows.Forms.Panel();
-            this.panelPersonList.Location = new System.Drawing.Point(8, 92);
-            this.panelPersonList.Size = new System.Drawing.Size(270, 120);
+            this.panelPersonList.Location = new System.Drawing.Point(8, 100);
+            this.panelPersonList.Size = new System.Drawing.Size(270, 100);
             this.panelPersonList.BackColor = System.Drawing.Color.White;
             this.panelPersonList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panelPersonList.AutoScroll = true;
+            this.panelPersonList.MaximumSize = new System.Drawing.Size(270, 100);
             this.panelPersonList.TabStop = false;
+            this.panelPersonList.Visible = false; // 초기: 접힌 상태
 
-            // Vehicle 리스트 레이블
+            // Vehicle 리스트 토글 버튼 (레이블 대체)
             this.labelVehicleList = new System.Windows.Forms.Label();
-            this.labelVehicleList.Text = "🚗 Vehicle";
-            this.labelVehicleList.Location = new System.Drawing.Point(8, 218);
-            this.labelVehicleList.Size = new System.Drawing.Size(270, 20);
-            this.labelVehicleList.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.labelVehicleList.Text = "> vehicle";
+            this.labelVehicleList.Location = new System.Drawing.Point(8, 100);
+            this.labelVehicleList.Size = new System.Drawing.Size(270, 30);
+            this.labelVehicleList.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.labelVehicleList.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
+            this.labelVehicleList.ForeColor = System.Drawing.Color.FromArgb(30, 64, 175);
+            this.labelVehicleList.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.labelVehicleList.Padding = new System.Windows.Forms.Padding(10, 0, 0, 0);
+            this.labelVehicleList.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.labelVehicleList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.labelVehicleList.Click += new System.EventHandler(this.ToggleVehiclePanel);
 
             // Vehicle 리스트 패널
             this.panelVehicleList = new System.Windows.Forms.Panel();
-            this.panelVehicleList.Location = new System.Drawing.Point(8, 240);
-            this.panelVehicleList.Size = new System.Drawing.Size(270, 120);
+            this.panelVehicleList.Location = new System.Drawing.Point(8, 130);
+            this.panelVehicleList.Size = new System.Drawing.Size(270, 100);
             this.panelVehicleList.BackColor = System.Drawing.Color.White;
             this.panelVehicleList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panelVehicleList.AutoScroll = true;
+            this.panelVehicleList.MaximumSize = new System.Drawing.Size(270, 100);
             this.panelVehicleList.TabStop = false;
+            this.panelVehicleList.Visible = false; // 초기: 접힌 상태
 
-            // Event 리스트 레이블
+            // Event 리스트 토글 버튼 (레이블 대체)
             this.labelEventList = new System.Windows.Forms.Label();
-            this.labelEventList.Text = "📍 Event";
-            this.labelEventList.Location = new System.Drawing.Point(8, 366);
-            this.labelEventList.Size = new System.Drawing.Size(270, 20);
-            this.labelEventList.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.labelEventList.Text = "> event";
+            this.labelEventList.Location = new System.Drawing.Point(8, 130);
+            this.labelEventList.Size = new System.Drawing.Size(270, 30);
+            this.labelEventList.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.labelEventList.BackColor = System.Drawing.Color.FromArgb(220, 252, 231);
+            this.labelEventList.ForeColor = System.Drawing.Color.FromArgb(20, 83, 45);
+            this.labelEventList.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.labelEventList.Padding = new System.Windows.Forms.Padding(10, 0, 0, 0);
+            this.labelEventList.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.labelEventList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.labelEventList.Click += new System.EventHandler(this.ToggleEventPanel);
 
             // Event 리스트 패널
             this.panelEventList = new System.Windows.Forms.Panel();
-            this.panelEventList.Location = new System.Drawing.Point(8, 388);
-            this.panelEventList.Size = new System.Drawing.Size(270, 120);
+            this.panelEventList.Location = new System.Drawing.Point(8, 160);
+            this.panelEventList.Size = new System.Drawing.Size(270, 100);
             this.panelEventList.BackColor = System.Drawing.Color.White;
             this.panelEventList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panelEventList.AutoScroll = true;
+            this.panelEventList.MaximumSize = new System.Drawing.Size(270, 100);
             this.panelEventList.TabStop = false;
+            this.panelEventList.Visible = false; // 초기: 접힌 상태
 
             // 기존 panelBboxList는 호환성을 위해 panelPersonList를 참조
             this.panelBboxList = this.panelPersonList;
 
             // 삭제 버튼
             this.btnDeleteLabel.Text = "선택한 Bbox 삭제";
-            this.btnDeleteLabel.Location = new System.Drawing.Point(8, 515);
+            this.btnDeleteLabel.Location = new System.Drawing.Point(8, 165);
             this.btnDeleteLabel.Size = new System.Drawing.Size(270, 35);
             this.btnDeleteLabel.BackColor = System.Drawing.Color.FromArgb(220, 38, 38);
             this.btnDeleteLabel.ForeColor = System.Drawing.Color.White;
@@ -543,7 +574,7 @@
 
             // JSON 저장 버튼 (하단)
             this.btnExportJsonInLabels.Text = "JSON 저장";
-            this.btnExportJsonInLabels.Location = new System.Drawing.Point(8, 557);
+            this.btnExportJsonInLabels.Location = new System.Drawing.Point(8, 207);
             this.btnExportJsonInLabels.Size = new System.Drawing.Size(270, 35);
             this.btnExportJsonInLabels.BackColor = System.Drawing.Color.FromArgb(34, 197, 94);
             this.btnExportJsonInLabels.ForeColor = System.Drawing.Color.White;
@@ -564,9 +595,8 @@
             this.groupBoxLabels.Controls.Add(this.btnDeleteLabel);
             this.groupBoxLabels.Controls.Add(this.btnExportJsonInLabels);
 
-            rightY += 620;
+            rightY += 275;
 
-            this.panelRightSidebar.Controls.Add(this.groupBoxObjectInfo);
             this.panelRightSidebar.Controls.Add(this.groupBoxWaypoint);
             this.panelRightSidebar.Controls.Add(this.groupBoxLabels);
 
