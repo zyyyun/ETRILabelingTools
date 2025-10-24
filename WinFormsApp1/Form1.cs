@@ -587,15 +587,42 @@ namespace WinFormsApp1
 
             try
             {
+                // ✅ 저장 전 모든 웨이포인트의 Event 박스 자동 전파
+                System.Diagnostics.Debug.WriteLine("[JSON 저장] Event 박스 전파 시작");
+                int totalPropagated = 0;
+                
+                foreach (var waypoint in waypointMarkers)
+                {
+                    // Entry 프레임에 Event 박스가 있는지 확인
+                    var eventBoxesAtEntry = boundingBoxes
+                        .Where(b => b.FrameIndex == waypoint.EntryFrame && b.Label == "event")
+                        .ToList();
+                    
+                    if (eventBoxesAtEntry.Count > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[JSON 저장] Waypoint ({waypoint.EntryFrame}~{waypoint.ExitFrame}): {eventBoxesAtEntry.Count}개 Event 박스 전파");
+                        PropagateAllEventBoxesInRange(waypoint.EntryFrame, waypoint.ExitFrame);
+                        totalPropagated += eventBoxesAtEntry.Count;
+                    }
+                }
+                
+                if (totalPropagated > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[JSON 저장] Event 박스 전파 완료: 총 {totalPropagated}개 전파됨");
+                    InvalidateBoxCache();
+                    UpdateBoxCount();
+                }
+                
                 // 비동기로 저장 작업 수행
                 await Task.Run(() => SaveCurrentLabelingData());
                 
                 loadingForm.Close();
 
                 // ✅ JSON 저장 후 자동 재로드
-                string videoFileName = Path.GetFileNameWithoutExtension(currentVideoFile);
                 string videoDir = Path.GetDirectoryName(currentVideoFile);
-                string jsonFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"{videoFileName}.json");
+                string labelsDir = Path.Combine(videoDir, "labels");
+                string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                string jsonFilePath = Path.Combine(labelsDir, fileName);
                 
                 if (File.Exists(jsonFilePath))
                 {
@@ -603,8 +630,10 @@ namespace WinFormsApp1
                     LoadLabelingData(currentVideoFile); // JSON 재로드
                     System.Diagnostics.Debug.WriteLine("[JSON 재로드 완료]");
                 }
-                
-                string labelsDir = Path.Combine(videoDir, "labels");
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[JSON 재로드 실패] 파일을 찾을 수 없음: {jsonFilePath}");
+                }
                 
                 MessageBox.Show(
                     $"JSON 파일이 저장되었습니다.\n\n" +
@@ -2842,6 +2871,14 @@ namespace WinFormsApp1
 
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
+
+                // ✅ Event 박스 전파 (추적 완료 후)
+                if (eventBoxes.Count > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[추적 완료] {eventBoxes.Count}개 Event 박스를 Entry~Exit 프레임으로 전파 시작");
+                    PropagateAllEventBoxesInRange(waypoint.EntryFrame, waypoint.ExitFrame);
+                    System.Diagnostics.Debug.WriteLine("[추적 완료] Event 박스 전파 완료");
+                }
 
                 // ✅ YOLO 추적 완료 후 자동 JSON 저장 및 재로드
                 System.Diagnostics.Debug.WriteLine("[추적 완료] JSON 저장 시작");
