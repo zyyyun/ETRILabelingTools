@@ -438,7 +438,7 @@
             // 
             this.groupBoxLabels.Text = "Labels";
             this.groupBoxLabels.Location = new System.Drawing.Point(16, rightY);
-            this.groupBoxLabels.Size = new System.Drawing.Size(280, 425);
+            this.groupBoxLabels.Size = new System.Drawing.Size(288, 605);
             this.groupBoxLabels.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.groupBoxLabels.TabStop = false;
 
@@ -479,18 +479,61 @@
             this.btnLabelEvent.TabStop = false;
             this.btnLabelEvent.Click += new System.EventHandler(this.btnLabelEvent_Click);
 
-            // Bbox 목록 표시 영역 (스크롤 가능한 패널)
-            this.panelBboxList.Location = new System.Drawing.Point(12, 70);
-            this.panelBboxList.Size = new System.Drawing.Size(256, 200);
-            this.panelBboxList.BackColor = System.Drawing.Color.White;
-            this.panelBboxList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.panelBboxList.AutoScroll = true;
-            this.panelBboxList.TabStop = false;
+            // Person 리스트 레이블
+            this.labelPersonList = new System.Windows.Forms.Label();
+            this.labelPersonList.Text = "📌 Person";
+            this.labelPersonList.Location = new System.Drawing.Point(8, 70);
+            this.labelPersonList.Size = new System.Drawing.Size(270, 20);
+            this.labelPersonList.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+
+            // Person 리스트 패널
+            this.panelPersonList = new System.Windows.Forms.Panel();
+            this.panelPersonList.Location = new System.Drawing.Point(8, 92);
+            this.panelPersonList.Size = new System.Drawing.Size(270, 120);
+            this.panelPersonList.BackColor = System.Drawing.Color.White;
+            this.panelPersonList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.panelPersonList.AutoScroll = true;
+            this.panelPersonList.TabStop = false;
+
+            // Vehicle 리스트 레이블
+            this.labelVehicleList = new System.Windows.Forms.Label();
+            this.labelVehicleList.Text = "🚗 Vehicle";
+            this.labelVehicleList.Location = new System.Drawing.Point(8, 218);
+            this.labelVehicleList.Size = new System.Drawing.Size(270, 20);
+            this.labelVehicleList.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+
+            // Vehicle 리스트 패널
+            this.panelVehicleList = new System.Windows.Forms.Panel();
+            this.panelVehicleList.Location = new System.Drawing.Point(8, 240);
+            this.panelVehicleList.Size = new System.Drawing.Size(270, 120);
+            this.panelVehicleList.BackColor = System.Drawing.Color.White;
+            this.panelVehicleList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.panelVehicleList.AutoScroll = true;
+            this.panelVehicleList.TabStop = false;
+
+            // Event 리스트 레이블
+            this.labelEventList = new System.Windows.Forms.Label();
+            this.labelEventList.Text = "📍 Event";
+            this.labelEventList.Location = new System.Drawing.Point(8, 366);
+            this.labelEventList.Size = new System.Drawing.Size(270, 20);
+            this.labelEventList.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+
+            // Event 리스트 패널
+            this.panelEventList = new System.Windows.Forms.Panel();
+            this.panelEventList.Location = new System.Drawing.Point(8, 388);
+            this.panelEventList.Size = new System.Drawing.Size(270, 120);
+            this.panelEventList.BackColor = System.Drawing.Color.White;
+            this.panelEventList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.panelEventList.AutoScroll = true;
+            this.panelEventList.TabStop = false;
+
+            // 기존 panelBboxList는 호환성을 위해 panelPersonList를 참조
+            this.panelBboxList = this.panelPersonList;
 
             // 삭제 버튼
             this.btnDeleteLabel.Text = "선택한 Bbox 삭제";
-            this.btnDeleteLabel.Location = new System.Drawing.Point(12, 278);
-            this.btnDeleteLabel.Size = new System.Drawing.Size(256, 35);
+            this.btnDeleteLabel.Location = new System.Drawing.Point(8, 515);
+            this.btnDeleteLabel.Size = new System.Drawing.Size(270, 35);
             this.btnDeleteLabel.BackColor = System.Drawing.Color.FromArgb(220, 38, 38);
             this.btnDeleteLabel.ForeColor = System.Drawing.Color.White;
             this.btnDeleteLabel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -500,8 +543,8 @@
 
             // JSON 저장 버튼 (하단)
             this.btnExportJsonInLabels.Text = "JSON 저장";
-            this.btnExportJsonInLabels.Location = new System.Drawing.Point(12, 320);
-            this.btnExportJsonInLabels.Size = new System.Drawing.Size(256, 35);
+            this.btnExportJsonInLabels.Location = new System.Drawing.Point(8, 557);
+            this.btnExportJsonInLabels.Size = new System.Drawing.Size(270, 35);
             this.btnExportJsonInLabels.BackColor = System.Drawing.Color.FromArgb(34, 197, 94);
             this.btnExportJsonInLabels.ForeColor = System.Drawing.Color.White;
             this.btnExportJsonInLabels.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -512,11 +555,16 @@
             this.groupBoxLabels.Controls.Add(this.btnLabelPerson);
             this.groupBoxLabels.Controls.Add(this.btnLabelVehicle);
             this.groupBoxLabels.Controls.Add(this.btnLabelEvent);
-            this.groupBoxLabels.Controls.Add(this.panelBboxList);
+            this.groupBoxLabels.Controls.Add(this.labelPersonList);
+            this.groupBoxLabels.Controls.Add(this.panelPersonList);
+            this.groupBoxLabels.Controls.Add(this.labelVehicleList);
+            this.groupBoxLabels.Controls.Add(this.panelVehicleList);
+            this.groupBoxLabels.Controls.Add(this.labelEventList);
+            this.groupBoxLabels.Controls.Add(this.panelEventList);
             this.groupBoxLabels.Controls.Add(this.btnDeleteLabel);
             this.groupBoxLabels.Controls.Add(this.btnExportJsonInLabels);
 
-            rightY += 445;
+            rightY += 620;
 
             this.panelRightSidebar.Controls.Add(this.groupBoxObjectInfo);
             this.panelRightSidebar.Controls.Add(this.groupBoxWaypoint);
@@ -602,6 +650,12 @@
         private System.Windows.Forms.Button btnLabelPerson;
         private System.Windows.Forms.Button btnLabelVehicle;
         private System.Windows.Forms.Button btnLabelEvent;
+        private System.Windows.Forms.Label labelPersonList;
+        private System.Windows.Forms.Panel panelPersonList;
+        private System.Windows.Forms.Label labelVehicleList;
+        private System.Windows.Forms.Panel panelVehicleList;
+        private System.Windows.Forms.Label labelEventList;
+        private System.Windows.Forms.Panel panelEventList;
         private System.Windows.Forms.Panel panelBboxList;
         private System.Windows.Forms.Button btnDeleteLabel;
         private System.Windows.Forms.Button btnExportJsonInLabels;

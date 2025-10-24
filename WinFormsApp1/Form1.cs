@@ -168,8 +168,6 @@ namespace WinFormsApp1
             int endFrame,
             double fps)
         {
-            System.Diagnostics.Debug.WriteLine($"[YOLO] TrackObjects 호출 - Label: {startBox.Label}, PersonId: {startBox.PersonId}, VehicleId: {startBox.VehicleId}, EventId: {startBox.EventId}");
-            System.Diagnostics.Debug.WriteLine($"[YOLO] Frame 범위: {startFrame} ~ {endFrame}");
             
             var trackedBoxes = new List<BoundingBox>();
             videoCapture.Set(VideoCaptureProperties.PosFrames, startFrame);
@@ -182,8 +180,6 @@ namespace WinFormsApp1
             int fixedIdVehicle = startBox.VehicleId;
             int fixedIdEvent = startBox.EventId;
 
-            System.Diagnostics.Debug.WriteLine($"[YOLO] 추적 시작 박스: {previousRect}, Label: {fixedLabel}, PersonId: {fixedIdPerson}, VehicleId: {fixedIdVehicle}, EventId: {fixedIdEvent}");
-
             for (int i = startFrame; i <= endFrame; i++)
             {
                 if (!videoCapture.Read(frame) || frame.Empty())
@@ -195,7 +191,6 @@ namespace WinFormsApp1
                     Cv2.ImWrite(_tempImagePath, frame);
 
                     var detections = _predictor.Detect(_tempImagePath);
-                    System.Diagnostics.Debug.WriteLine($"[YOLO] Frame {i}: {detections.Count}개 검출");
 
                     // 이전 박스와 IoU가 가장 큰 검출만 채택 (사용자 박스 기반 추적)
                     double bestIou = 0.0;
@@ -215,8 +210,6 @@ namespace WinFormsApp1
                             best = rect;
                         }
                     }
-                    
-                    System.Diagnostics.Debug.WriteLine($"[YOLO] Frame {i}: BestIoU = {bestIou:F3}, Best = {best?.ToString() ?? "null"}");
 
                     // 매칭이 없으면 이전 박스를 그대로 유지해 연속성 보장
                     var nextRect = previousRect;
@@ -241,7 +234,6 @@ namespace WinFormsApp1
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"프레임 {i} 추론 오류: {ex.Message}");
                     continue;
                 }
             }
@@ -357,7 +349,7 @@ namespace WinFormsApp1
         private string currentSelectedLabel = "person";
         
         // bbox 리스트 렌더링 최적화를 위한 변수
-        private int lastRenderedBoxCount = -1;
+        private WaypointMarker? lastRenderedWaypoint = null;
         
         // 성능 최적화: 프레임별 박스 캐시
         private Dictionary<int, List<BoundingBox>> frameBoxCache = new Dictionary<int, List<BoundingBox>>();
@@ -588,9 +580,6 @@ namespace WinFormsApp1
             try
             {
                 // ✅ 저장 전 모든 웨이포인트의 Event 박스 자동 전파
-                System.Diagnostics.Debug.WriteLine("[JSON 저장] Event 박스 전파 시작");
-                int totalPropagated = 0;
-                
                 foreach (var waypoint in waypointMarkers)
                 {
                     // Entry 프레임에 Event 박스가 있는지 확인
@@ -600,18 +589,13 @@ namespace WinFormsApp1
                     
                     if (eventBoxesAtEntry.Count > 0)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[JSON 저장] Waypoint ({waypoint.EntryFrame}~{waypoint.ExitFrame}): {eventBoxesAtEntry.Count}개 Event 박스 전파");
                         PropagateAllEventBoxesInRange(waypoint.EntryFrame, waypoint.ExitFrame);
-                        totalPropagated += eventBoxesAtEntry.Count;
                     }
                 }
                 
-                if (totalPropagated > 0)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[JSON 저장] Event 박스 전파 완료: 총 {totalPropagated}개 전파됨");
-                    InvalidateBoxCache();
-                    UpdateBoxCount();
-                }
+                InvalidateBoxCache();
+                UpdateBoxCount();
+
                 
                 // 비동기로 저장 작업 수행
                 await Task.Run(() => SaveCurrentLabelingData());
@@ -626,13 +610,7 @@ namespace WinFormsApp1
                 
                 if (File.Exists(jsonFilePath))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[JSON 저장 완료] 재로드 시작: {jsonFilePath}");
                     LoadLabelingData(currentVideoFile); // JSON 재로드
-                    System.Diagnostics.Debug.WriteLine("[JSON 재로드 완료]");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"[JSON 재로드 실패] 파일을 찾을 수 없음: {jsonFilePath}");
                 }
                 
                 MessageBox.Show(
@@ -1093,8 +1071,6 @@ namespace WinFormsApp1
 
             btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
 
-            System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Entry 프레임 {entryFrameIndex.Value}에 {entryBoxes.Count}개의 박스 발견");
-
             // Entry 프레임의 Event 박스들을 Exit까지 자동 전파
             PropagateAllEventBoxesInRange(entryFrameIndex.Value, exitFrameIndex.Value);
 
@@ -1109,8 +1085,6 @@ namespace WinFormsApp1
                 ObjectId = 0, // 여러 객체를 포함하는 waypoint이므로 0으로 설정
                 Label = "multi" // 여러 객체 타입
             };
-
-            System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Multi-object waypoint: {entryBoxes.Count}개 객체 ({waypoint.EntryTime} ~ {waypoint.ExitTime})");
 
             waypointMarkers.Add(waypoint);
             currentColorIndex++;
@@ -1182,7 +1156,7 @@ namespace WinFormsApp1
                     $"선택한 Waypoint를 삭제하시겠습니까?\n\n" +
                     $"Entry: {waypoint.EntryTime}\n" +
                     $"Exit: {waypoint.ExitTime}\n\n" +
-                    $"⚠️ 주의: 관련된 JSON 파일도 함께 삭제됩니다.",
+                    $"⚠️ 주의: 해당 구간의 모든 박스가 삭제됩니다.",
                     "Waypoint 삭제 확인",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
@@ -1214,13 +1188,9 @@ namespace WinFormsApp1
                 panelTimeline.Invalidate();
                 pictureBoxVideo.Invalidate();
 
-                // JSON 파일 삭제
-                DeleteJsonFileForCurrentVideo();
-
                 MessageBox.Show(
                     "✅ Waypoint가 삭제되었습니다.\n\n" +
-                    $"삭제된 박스: {boxesToDelete.Count}개\n" +
-                    "JSON 파일도 삭제되었습니다.",
+                    $"삭제된 박스: {boxesToDelete.Count}개",
                     "삭제 완료",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -1336,7 +1306,8 @@ namespace WinFormsApp1
                     UpdateBoxCount();
                     UpdateBboxListDisplay();
                     
-                    // Event 박스 자동 전파: Entry~Exit 프레임까지 자동 생성
+                    // Event 박스 자동 전파: Waypoint 내에 있으면 현재 프레임~Exit까지 자동 생성
+                    // Waypoint가 없으면 단일 프레임으로만 존재
                     PropagateEventBoxIfNeeded(drawingBox);
                 }
 
@@ -1806,261 +1777,144 @@ namespace WinFormsApp1
         // bbox 리스트 업데이트가 필요한지 확인 (리소스 최적화)
         private bool ShouldUpdateBboxList(int frameIndex)
         {
-            // 1. Waypoint entry 프레임인 경우
-            foreach (var waypoint in waypointMarkers)
+            // 현재 프레임이 속한 waypoint 찾기
+            var currentWaypoint = waypointMarkers.FirstOrDefault(w =>
+                frameIndex >= w.EntryFrame &&
+                frameIndex <= w.ExitFrame);
+            
+            // Waypoint가 변경되었는지 확인
+            bool waypointChanged = false;
+            
+            if (currentWaypoint == null && lastRenderedWaypoint == null)
             {
-                if (waypoint.EntryFrame == frameIndex)
-                    return true;
+                // 둘 다 null이면 변경 없음
+                waypointChanged = false;
+            }
+            else if (currentWaypoint == null || lastRenderedWaypoint == null)
+            {
+                // 하나만 null이면 변경됨
+                waypointChanged = true;
+            }
+            else
+            {
+                // 둘 다 null이 아니면 EntryFrame과 ExitFrame으로 비교
+                waypointChanged = (currentWaypoint.EntryFrame != lastRenderedWaypoint.EntryFrame ||
+                                  currentWaypoint.ExitFrame != lastRenderedWaypoint.ExitFrame);
             }
             
-            // 2. 현재 프레임의 bbox 개수가 변경된 경우
-            int currentBoxCount = boundingBoxes.Count(b => b.FrameIndex == frameIndex);
-            if (currentBoxCount != lastRenderedBoxCount)
+            if (waypointChanged)
             {
-                lastRenderedBoxCount = currentBoxCount;
+                lastRenderedWaypoint = currentWaypoint;
                 return true;
             }
             
             return false;
         }
         
-        // 현재 프레임의 bbox 목록을 동적으로 생성하여 표시
+        // 3개 bbox 목록을 동적으로 생성하여 표시 (현재 프레임 기준)
         private void UpdateBboxListDisplay()
         {
-            panelBboxList.Controls.Clear();
+            UpdatePersonListDisplay();
+            UpdateVehicleListDisplay();
+            UpdateEventListDisplay();
+        }
+        
+        // Person 리스트 표시 (현재 프레임의 Person bbox)
+        private void UpdatePersonListDisplay()
+        {
+            panelPersonList.Controls.Clear();
             
-            var currentBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex).ToList();
+            var currentBoxes = boundingBoxes
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "person")
+                .ToList();
             
             if (currentBoxes.Count == 0)
             {
                 Label emptyLabel = new Label
                 {
-                    Text = "현재 프레임에 bbox가 없습니다.",
-                    Font = new System.Drawing.Font("Segoe UI", 9F),
+                    Text = "현재 프레임에 Person 없음",
+                    Font = new System.Drawing.Font("Segoe UI", 8F),
                     ForeColor = System.Drawing.Color.Gray,
-                    Location = new System.Drawing.Point(10, 10),
-                    Size = new System.Drawing.Size(230, 20),
+                    Location = new System.Drawing.Point(5, 5),
                     AutoSize = true
                 };
-                panelBboxList.Controls.Add(emptyLabel);
+                panelPersonList.Controls.Add(emptyLabel);
                 return;
             }
             
             int yPos = 5;
             foreach (var box in currentBoxes)
             {
-                // 클로저 캡처 문제 해결: 로컬 변수로 복사
                 var currentBox = box;
                 
-                string displayText = "";
-                System.Drawing.Color bgColor = System.Drawing.Color.White;
-                System.Drawing.Color fgColor = System.Drawing.Color.Black;
-                
-                if (currentBox.Label == "person")
-                {
-                    displayText = $"person_{currentBox.PersonId:D2}";
-                    bgColor = System.Drawing.Color.FromArgb(252, 231, 243);
-                    fgColor = System.Drawing.Color.FromArgb(157, 23, 77);
-                }
-                else if (currentBox.Label == "vehicle")
-                {
-                    string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
-                    if (currentBox.VehicleId > 0 && currentBox.VehicleId <= vehicleTypes.Length)
-                        displayText = $"vehicle_{vehicleTypes[currentBox.VehicleId - 1]}";
-                    else
-                        displayText = $"vehicle_{currentBox.VehicleId}";
-                    bgColor = System.Drawing.Color.FromArgb(219, 234, 254);
-                    fgColor = System.Drawing.Color.FromArgb(30, 64, 175);
-                }
-                else if (currentBox.Label == "event")
-                {
-                    string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
-                    if (currentBox.EventId > 0 && currentBox.EventId <= eventTypes.Length)
-                        displayText = $"event_{eventTypes[currentBox.EventId - 1]}";
-                    else
-                        displayText = $"event_{currentBox.EventId}";
-                    bgColor = System.Drawing.Color.FromArgb(220, 252, 231);
-                    fgColor = System.Drawing.Color.FromArgb(20, 83, 45);
-                }
-                
-                // 각 bbox 항목 패널 (높이 증가 - 드롭다운 공간)
                 Panel itemPanel = new Panel
                 {
                     Location = new System.Drawing.Point(5, yPos),
-                    Size = new System.Drawing.Size(256, 65),
-                    BackColor = bgColor,
+                    Size = new System.Drawing.Size(260, 65),
                     BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
-                    Tag = currentBox
+                    BackColor = System.Drawing.Color.FromArgb(252, 231, 243),
+                    Cursor = Cursors.Hand
                 };
                 
                 Label itemLabel = new Label
                 {
-                    Text = displayText,
+                    Text = $"person_{currentBox.PersonId:D2}",
+                    Location = new System.Drawing.Point(8, 8),
+                    Size = new System.Drawing.Size(244, 20),
                     Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold),
-                    ForeColor = fgColor,
-                    Location = new System.Drawing.Point(8, 5),
-                    Size = new System.Drawing.Size(200, 20),
-                    AutoSize = true
+                    ForeColor = System.Drawing.Color.FromArgb(157, 23, 77),
+                    BackColor = System.Drawing.Color.Transparent
                 };
                 
-                // 드롭다운 생성 (라벨 타입에 따라)
                 ComboBox comboBox = new ComboBox
                 {
-                    Location = new System.Drawing.Point(8, 30),
-                    Size = new System.Drawing.Size(240, 25),
-                    DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList,
-                    Font = new System.Drawing.Font("Segoe UI", 8F),
-                    Tag = currentBox
+                    Location = new System.Drawing.Point(8, 32),
+                    Size = new System.Drawing.Size(244, 25),
+                    DropDownStyle = ComboBoxStyle.DropDownList,
+                    Font = new System.Drawing.Font("Segoe UI", 8F)
                 };
                 
-                // ✅ 마우스 휠 스크롤 무시 (클릭 시에만 동작)
-                comboBox.MouseWheel += (s, e) =>
-                {
-                    ((System.Windows.Forms.HandledMouseEventArgs)e).Handled = true;
-                };
+                // ComboBox 호버 시 스크롤 방지
+                comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
                 
-                // 라벨 타입에 따라 아이템 추가
-                if (currentBox.Label == "person")
+                for (int i = 1; i <= 14; i++)
                 {
-                    for (int i = 1; i <= 19; i++)
-                    {
-                        comboBox.Items.Add($"person_{i:D2}");
-                    }
-                    comboBox.SelectedIndex = currentBox.PersonId - 1;
+                    comboBox.Items.Add($"person_{i:D2}");
                 }
-                else if (currentBox.Label == "vehicle")
-                {
-                    comboBox.Items.Add("vehicle_car");
-                    comboBox.Items.Add("vehicle_motorcycle");
-                    comboBox.Items.Add("vehicle_bicycle");
-                    comboBox.Items.Add("vehicle_e_scooter");
-                    if (currentBox.VehicleId >= 1 && currentBox.VehicleId <= 4)
-                        comboBox.SelectedIndex = currentBox.VehicleId - 1;
-                }
-                else if (currentBox.Label == "event")
-                {
-                    comboBox.Items.Add("event_contact");
-                    comboBox.Items.Add("event_exchange");
-                    comboBox.Items.Add("event_board");
-                    comboBox.Items.Add("event_final_exchange");
-                    if (currentBox.EventId >= 1 && currentBox.EventId <= 4)
-                        comboBox.SelectedIndex = currentBox.EventId - 1;
-                }
+                comboBox.SelectedItem = $"person_{currentBox.PersonId:D2}";
                 
-                // 드롭다운 변경 이벤트
                 comboBox.SelectedIndexChanged += (s, e) =>
                 {
-                    ComboBox cb = (ComboBox)s;
-                    BoundingBox targetBox = (BoundingBox)cb.Tag;
-                    string selected = cb.SelectedItem?.ToString() ?? "";
-                    
-                    if (string.IsNullOrEmpty(selected))
-                        return;
-                    
-                    string oldLabel = targetBox.Label;
-                    int oldId = GetBoxId(targetBox);
-                    Rectangle oldRect = targetBox.Rectangle;
-                    
-                    // 라벨 업데이트
-                    if (selected.StartsWith("person_"))
+                    if (comboBox.SelectedItem != null)
                     {
-                        string[] parts = selected.Split('_');
-                        if (parts.Length == 2 && int.TryParse(parts[1], out int personId))
+                        string selected = comboBox.SelectedItem.ToString();
+                        if (selected.StartsWith("person_"))
                         {
-                            targetBox.Label = "person";
-                            SetBoxId(targetBox, "person", personId);
+                            int newId = int.Parse(selected.Substring(7));
+                            SetBoxId(currentBox, "person", newId);
+                            UpdateObjectInfo(currentBox);
+                            UpdateBboxListDisplay();
+                            pictureBoxVideo.Invalidate();
                         }
                     }
-                    else if (selected.StartsWith("vehicle_"))
-                    {
-                        string[] parts = selected.Split('_');
-                        if (parts.Length == 2)
-                        {
-                            string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
-                            int vehicleId = Array.IndexOf(vehicleTypes, parts[1]) + 1;
-                            if (vehicleId > 0)
-                            {
-                                targetBox.Label = "vehicle";
-                                SetBoxId(targetBox, "vehicle", vehicleId);
-                            }
-                        }
-                    }
-                    else if (selected.StartsWith("event_"))
-                    {
-                        string eventType = selected.Substring(6); // "event_" 이후의 문자열
-                        string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
-                        int eventId = Array.IndexOf(eventTypes, eventType) + 1;
-                        if (eventId > 0)
-                        {
-                            int oldEventId = targetBox.EventId;
-                            targetBox.Label = "event";
-                            SetBoxId(targetBox, "event", eventId);
-                            
-                            // ✅ Event 타입 변경 시 동일한 EventId를 가진 모든 박스 업데이트
-                            if (oldEventId != eventId)
-                            {
-                                var waypoint = waypointMarkers.FirstOrDefault(w =>
-                                    targetBox.FrameIndex >= w.EntryFrame &&
-                                    targetBox.FrameIndex <= w.ExitFrame);
-                                
-                                if (waypoint != null)
-                                {
-                                    // 해당 Waypoint 내의 동일한 oldEventId를 가진 모든 Event 박스 업데이트
-                                    var relatedBoxes = boundingBoxes.Where(b =>
-                                        b.Label == "event" &&
-                                        b.EventId == oldEventId &&
-                                        b.FrameIndex >= waypoint.EntryFrame &&
-                                        b.FrameIndex <= waypoint.ExitFrame).ToList();
-                                    
-                                    foreach (var relatedBox in relatedBoxes)
-                                    {
-                                        SetBoxId(relatedBox, "event", eventId);
-                                    }
-                                    
-                                    System.Diagnostics.Debug.WriteLine($"[Event 타입 변경] {relatedBoxes.Count}개 박스의 EventId를 {oldEventId}→{eventId}로 업데이트");
-                                }
-                            }
-                        }
-                    }
-                    
-                    AddUndoAction(new UndoAction
-                    {
-                        Type = UndoActionType.ModifyBox,
-                        Box = CloneBoundingBox(targetBox),
-                        OriginalLabel = oldLabel,
-                        OriginalObjectId = oldId,
-                        OriginalRectangle = oldRect
-                    });
-                    
-                    if (selectedBox == targetBox)
-                    {
-                        UpdateObjectInfo(selectedBox);
-                    }
-                    
-                    InvalidateBoxCache();
-                    UpdateBboxListDisplay();
-                    pictureBoxVideo.Invalidate();
                 };
                 
                 itemPanel.Controls.Add(itemLabel);
                 itemPanel.Controls.Add(comboBox);
                 
-                // 클릭 이벤트 - 박스 선택 (currentBox 사용)
                 EventHandler clickHandler = (s, e) =>
                 {
                     selectedBox = currentBox;
                     UpdateObjectInfo(selectedBox);
                     pictureBoxVideo.Invalidate();
                     
-                    // 선택된 항목 강조 표시
-                    foreach (Control ctrl in panelBboxList.Controls)
+                    foreach (Control ctrl in panelPersonList.Controls)
                     {
                         if (ctrl is Panel p)
                         {
-                            if (p == itemPanel)
-                                p.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
-                            else
-                                p.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+                            p.BorderStyle = (p == itemPanel) 
+                                ? System.Windows.Forms.BorderStyle.Fixed3D 
+                                : System.Windows.Forms.BorderStyle.FixedSingle;
                         }
                     }
                 };
@@ -2068,7 +1922,258 @@ namespace WinFormsApp1
                 itemPanel.Click += clickHandler;
                 itemLabel.Click += clickHandler;
                 
-                panelBboxList.Controls.Add(itemPanel);
+                panelPersonList.Controls.Add(itemPanel);
+                yPos += 70;
+            }
+        }
+        
+        // Vehicle 리스트 표시 (현재 프레임의 Vehicle bbox)
+        private void UpdateVehicleListDisplay()
+        {
+            panelVehicleList.Controls.Clear();
+            
+            var currentBoxes = boundingBoxes
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "vehicle")
+                .ToList();
+            
+            if (currentBoxes.Count == 0)
+            {
+                Label emptyLabel = new Label
+                {
+                    Text = "현재 프레임에 Vehicle 없음",
+                    Font = new System.Drawing.Font("Segoe UI", 8F),
+                    ForeColor = System.Drawing.Color.Gray,
+                    Location = new System.Drawing.Point(5, 5),
+                    AutoSize = true
+                };
+                panelVehicleList.Controls.Add(emptyLabel);
+                return;
+            }
+            
+            int yPos = 5;
+            foreach (var box in currentBoxes)
+            {
+                var currentBox = box;
+                string[] vehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
+                string vehicleName = currentBox.VehicleId > 0 && currentBox.VehicleId <= vehicleTypes.Length 
+                    ? vehicleTypes[currentBox.VehicleId - 1] 
+                    : currentBox.VehicleId.ToString();
+                
+                Panel itemPanel = new Panel
+                {
+                    Location = new System.Drawing.Point(5, yPos),
+                    Size = new System.Drawing.Size(260, 65),
+                    BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
+                    BackColor = System.Drawing.Color.FromArgb(219, 234, 254),
+                    Cursor = Cursors.Hand
+                };
+                
+                Label itemLabel = new Label
+                {
+                    Text = $"vehicle_{vehicleName}",
+                    Location = new System.Drawing.Point(8, 8),
+                    Size = new System.Drawing.Size(244, 20),
+                    Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold),
+                    ForeColor = System.Drawing.Color.FromArgb(30, 64, 175),
+                    BackColor = System.Drawing.Color.Transparent
+                };
+                
+                ComboBox comboBox = new ComboBox
+                {
+                    Location = new System.Drawing.Point(8, 32),
+                    Size = new System.Drawing.Size(244, 25),
+                    DropDownStyle = ComboBoxStyle.DropDownList,
+                    Font = new System.Drawing.Font("Segoe UI", 8F)
+                };
+                
+                // ComboBox 호버 시 스크롤 방지
+                comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
+                
+                comboBox.Items.AddRange(new object[] { "vehicle_car", "vehicle_motorcycle", "vehicle_e_scooter", "vehicle_bicycle" });
+                comboBox.SelectedItem = $"vehicle_{vehicleName}";
+                
+                comboBox.SelectedIndexChanged += (s, e) =>
+                {
+                    if (comboBox.SelectedItem != null)
+                    {
+                        string selected = comboBox.SelectedItem.ToString();
+                        if (selected.StartsWith("vehicle_"))
+                        {
+                            string vType = selected.Substring(8);
+                            int vehicleId = Array.IndexOf(vehicleTypes, vType) + 1;
+                            if (vehicleId > 0)
+                            {
+                                SetBoxId(currentBox, "vehicle", vehicleId);
+                                UpdateObjectInfo(currentBox);
+                                UpdateBboxListDisplay();
+                                pictureBoxVideo.Invalidate();
+                            }
+                        }
+                    }
+                };
+                
+                itemPanel.Controls.Add(itemLabel);
+                itemPanel.Controls.Add(comboBox);
+                
+                EventHandler clickHandler = (s, e) =>
+                {
+                    selectedBox = currentBox;
+                    UpdateObjectInfo(selectedBox);
+                    pictureBoxVideo.Invalidate();
+                    
+                    foreach (Control ctrl in panelVehicleList.Controls)
+                    {
+                        if (ctrl is Panel p)
+                        {
+                            p.BorderStyle = (p == itemPanel) 
+                                ? System.Windows.Forms.BorderStyle.Fixed3D 
+                                : System.Windows.Forms.BorderStyle.FixedSingle;
+                        }
+                    }
+                };
+                
+                itemPanel.Click += clickHandler;
+                itemLabel.Click += clickHandler;
+                
+                panelVehicleList.Controls.Add(itemPanel);
+                yPos += 70;
+            }
+        }
+        
+        // Event 리스트 표시 (현재 프레임의 Event bbox)
+        private void UpdateEventListDisplay()
+        {
+            panelEventList.Controls.Clear();
+            
+            var currentBoxes = boundingBoxes
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "event")
+                .ToList();
+            
+            if (currentBoxes.Count == 0)
+            {
+                Label emptyLabel = new Label
+                {
+                    Text = "현재 프레임에 Event 없음",
+                    Font = new System.Drawing.Font("Segoe UI", 8F),
+                    ForeColor = System.Drawing.Color.Gray,
+                    Location = new System.Drawing.Point(5, 5),
+                    AutoSize = true
+                };
+                panelEventList.Controls.Add(emptyLabel);
+                return;
+            }
+            
+            int yPos = 5;
+            foreach (var box in currentBoxes)
+            {
+                var currentBox = box;
+                string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                string eventName = currentBox.EventId > 0 && currentBox.EventId <= eventTypes.Length 
+                    ? eventTypes[currentBox.EventId - 1] 
+                    : currentBox.EventId.ToString();
+                
+                Panel itemPanel = new Panel
+                {
+                    Location = new System.Drawing.Point(5, yPos),
+                    Size = new System.Drawing.Size(260, 65),
+                    BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
+                    BackColor = System.Drawing.Color.FromArgb(220, 252, 231),
+                    Cursor = Cursors.Hand
+                };
+                
+                Label itemLabel = new Label
+                {
+                    Text = $"event_{eventName}",
+                    Location = new System.Drawing.Point(8, 8),
+                    Size = new System.Drawing.Size(244, 20),
+                    Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold),
+                    ForeColor = System.Drawing.Color.FromArgb(20, 83, 45),
+                    BackColor = System.Drawing.Color.Transparent
+                };
+                
+                ComboBox comboBox = new ComboBox
+                {
+                    Location = new System.Drawing.Point(8, 32),
+                    Size = new System.Drawing.Size(244, 25),
+                    DropDownStyle = ComboBoxStyle.DropDownList,
+                    Font = new System.Drawing.Font("Segoe UI", 8F)
+                };
+                
+                // ComboBox 호버 시 스크롤 방지
+                comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
+                
+                comboBox.Items.AddRange(new object[] { "event_contact", "event_exchange", "event_board", "event_final_exchange" });
+                comboBox.SelectedItem = $"event_{eventName}";
+                
+                comboBox.SelectedIndexChanged += (s, e) =>
+                {
+                    if (comboBox.SelectedItem != null)
+                    {
+                        string selected = comboBox.SelectedItem.ToString();
+                        if (selected.StartsWith("event_"))
+                        {
+                            string eType = selected.Substring(6);
+                            int eventId = Array.IndexOf(eventTypes, eType) + 1;
+                            if (eventId > 0)
+                            {
+                                int oldEventId = currentBox.EventId;
+                                SetBoxId(currentBox, "event", eventId);
+                                
+                                // Event 타입 변경 시 동일한 EventId와 Rectangle을 가진 박스만 업데이트
+                                var waypoint = waypointMarkers.FirstOrDefault(w =>
+                                    currentBox.FrameIndex >= w.EntryFrame &&
+                                    currentBox.FrameIndex <= w.ExitFrame);
+                                
+                                if (waypoint != null)
+                                {
+                                    var relatedBoxes = boundingBoxes.Where(b =>
+                                        b.Label == "event" &&
+                                        b.EventId == oldEventId &&
+                                        b.Rectangle.X == currentBox.Rectangle.X &&
+                                        b.Rectangle.Y == currentBox.Rectangle.Y &&
+                                        b.Rectangle.Width == currentBox.Rectangle.Width &&
+                                        b.Rectangle.Height == currentBox.Rectangle.Height &&
+                                        b.FrameIndex >= waypoint.EntryFrame &&
+                                        b.FrameIndex <= waypoint.ExitFrame).ToList();
+                                    
+                                    foreach (var relatedBox in relatedBoxes)
+                                    {
+                                        SetBoxId(relatedBox, "event", eventId);
+                                    }
+                                }
+                                
+                                UpdateObjectInfo(currentBox);
+                                UpdateBboxListDisplay();
+                                pictureBoxVideo.Invalidate();
+                            }
+                        }
+                    }
+                };
+                
+                itemPanel.Controls.Add(itemLabel);
+                itemPanel.Controls.Add(comboBox);
+                
+                EventHandler clickHandler = (s, e) =>
+                {
+                    selectedBox = currentBox;
+                    UpdateObjectInfo(selectedBox);
+                    pictureBoxVideo.Invalidate();
+                    
+                    foreach (Control ctrl in panelEventList.Controls)
+                    {
+                        if (ctrl is Panel p)
+                        {
+                            p.BorderStyle = (p == itemPanel) 
+                                ? System.Windows.Forms.BorderStyle.Fixed3D 
+                                : System.Windows.Forms.BorderStyle.FixedSingle;
+                        }
+                    }
+                };
+                
+                itemPanel.Click += clickHandler;
+                itemLabel.Click += clickHandler;
+                
+                panelEventList.Controls.Add(itemPanel);
                 yPos += 70;
             }
         }
@@ -2577,9 +2682,6 @@ namespace WinFormsApp1
             if (totalPropagated > 0)
             {
                 InvalidateBoxCache();
-                System.Diagnostics.Debug.WriteLine(
-                    $"[Event 전파] {eventBoxesAtEntry.Count}개의 Event 박스를 " +
-                    $"프레임 {entryFrame + 1}~{exitFrame}까지 전파 완료 (총 {totalPropagated}개 생성)");
             }
         }
 
@@ -2589,9 +2691,21 @@ namespace WinFormsApp1
         /// </summary>
         private void PropagateEventBoxIfNeeded(BoundingBox box)
         {
+            System.Diagnostics.Debug.WriteLine($"[Event 전파 시작] FrameIndex={box.FrameIndex}, Label={box.Label}, EventId={box.EventId}");
+            
             // Event 라벨이 아니면 전파하지 않음
             if (box.Label != "event")
+            {
+                System.Diagnostics.Debug.WriteLine($"[Event 전파 중단] Event 라벨이 아님: {box.Label}");
                 return;
+            }
+
+            // 현재 Waypoint 목록 확인
+            System.Diagnostics.Debug.WriteLine($"[Event 전파] 현재 Waypoint 개수: {waypointMarkers.Count}");
+            foreach (var wm in waypointMarkers)
+            {
+                System.Diagnostics.Debug.WriteLine($"  - Waypoint: Entry={wm.EntryFrame}, Exit={wm.ExitFrame}");
+            }
 
             // 현재 박스가 속한 Waypoint 찾기
             var waypoint = waypointMarkers.FirstOrDefault(w =>
@@ -2601,9 +2715,11 @@ namespace WinFormsApp1
             if (waypoint == null)
             {
                 // Waypoint가 없으면 전파 불가 (Entry/Exit 마커가 아직 설정되지 않음)
-                System.Diagnostics.Debug.WriteLine($"[Event 생성] 프레임 {box.FrameIndex}에 Waypoint가 없어 전파하지 않음");
+                System.Diagnostics.Debug.WriteLine($"[Event 전파 중단] 프레임 {box.FrameIndex}에 해당하는 Waypoint가 없어 전파하지 않음");
                 return;
             }
+
+            System.Diagnostics.Debug.WriteLine($"[Event 전파] Waypoint 발견: Entry={waypoint.EntryFrame}, Exit={waypoint.ExitFrame}");
 
             int startFrame = box.FrameIndex + 1; // 다음 프레임부터
             int endFrame = waypoint.ExitFrame;
@@ -2611,20 +2727,24 @@ namespace WinFormsApp1
             // 현재 프레임이 Exit 프레임이면 전파할 필요 없음
             if (box.FrameIndex >= endFrame)
             {
-                System.Diagnostics.Debug.WriteLine($"[Event 생성] 프레임 {box.FrameIndex}가 Exit 프레임이므로 전파 불필요");
+                System.Diagnostics.Debug.WriteLine($"[Event 전파 중단] 프레임 {box.FrameIndex}가 Exit 프레임({endFrame})이므로 전파 불필요");
                 return;
             }
 
-            System.Diagnostics.Debug.WriteLine($"[Event 생성 전파] 프레임 {box.FrameIndex}에서 생성된 Event를 {startFrame}~{endFrame}까지 전파 시작");
+            System.Diagnostics.Debug.WriteLine($"[Event 전파 시작] 프레임 {box.FrameIndex}에서 생성된 Event를 {startFrame}~{endFrame}까지 전파 ({endFrame - startFrame + 1}개 프레임)");
 
             int createdCount = 0;
             for (int frame = startFrame; frame <= endFrame; frame++)
             {
-                // 이미 동일한 EventId를 가진 박스가 존재하는지 확인
+                // 이미 동일한 EventId와 Rectangle을 가진 박스가 존재하는지 확인
                 bool exists = boundingBoxes.Any(b =>
                     b.FrameIndex == frame &&
                     b.Label == "event" &&
-                    b.EventId == box.EventId);
+                    b.EventId == box.EventId &&
+                    b.Rectangle.X == box.Rectangle.X &&
+                    b.Rectangle.Y == box.Rectangle.Y &&
+                    b.Rectangle.Width == box.Rectangle.Width &&
+                    b.Rectangle.Height == box.Rectangle.Height);
 
                 if (!exists)
                 {
@@ -2781,14 +2901,6 @@ namespace WinFormsApp1
                     }
                 }
 
-                // 디버깅: 찾은 박스 정보 확인
-                System.Diagnostics.Debug.WriteLine($"[추적 시작] {startBoxes.Count}개의 객체 추적");
-                foreach (var box in startBoxes)
-                {
-                    System.Diagnostics.Debug.WriteLine($"  - {box.Label}_{GetBoxId(box):D2}");
-                }
-                System.Diagnostics.Debug.WriteLine($"[추적 모드] useYolo: {useYolo}, isYoloAvailable: {isYoloAvailable}");
-
                 // 추적 중 로딩 폼 생성
                 Form loadingForm = new Form
                 {
@@ -2818,12 +2930,10 @@ namespace WinFormsApp1
 
                 if (useYolo && isYoloAvailable)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[추적] {startBoxes.Count}개 객체에 대해 YOLO 추적 시작");
                     
                     // 각 startBox에 대해 개별적으로 YOLO 추적 수행
                     foreach (var startBox in startBoxes)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[추적] {startBox.Label}_{GetBoxId(startBox):D2} 추적 중...");
                         
                         var trackedBoxes = await Task.Run(() => trackingEngine.TrackObjects(
                             videoCapture,
@@ -2833,12 +2943,10 @@ namespace WinFormsApp1
                             fps));
                         
                         allTrackedBoxes.AddRange(trackedBoxes);
-                        System.Diagnostics.Debug.WriteLine($"[추적] {startBox.Label}_{GetBoxId(startBox):D2}: {trackedBoxes.Count}개 프레임 추적 완료");
                     }
                 }
                 else 
                 {
-                    System.Diagnostics.Debug.WriteLine($"[추적] YOLO 사용 불가 - useYolo: {useYolo}, isYoloAvailable: {isYoloAvailable}");
                     loadingForm.Close();
                     MessageBox.Show(
                         "YOLO 모델을 사용할 수 없습니다.\n" +
@@ -2862,14 +2970,11 @@ namespace WinFormsApp1
                 // 추적이 성공적으로 완료되면 Entry 프레임의 사용자가 지정한 초기 박스 삭제
                 if (allTrackedBoxes.Count > 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[추적 완료] Entry 프레임의 초기 박스 {startBoxes.Count}개 삭제 중...");
-                    
                     foreach (var startBox in startBoxes)
                     {
                         if (boundingBoxes.Contains(startBox))
                         {
                             boundingBoxes.Remove(startBox);
-                            System.Diagnostics.Debug.WriteLine($"  - 삭제: {startBox.Label}_{GetBoxId(startBox):D2} (Frame: {startBox.FrameIndex})");
                         }
                     }
                     
@@ -2883,13 +2988,10 @@ namespace WinFormsApp1
                 // ✅ Event 박스 전파 (추적 완료 후)
                 if (eventBoxes.Count > 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[추적 완료] {eventBoxes.Count}개 Event 박스를 Entry~Exit 프레임으로 전파 시작");
                     PropagateAllEventBoxesInRange(waypoint.EntryFrame, waypoint.ExitFrame);
-                    System.Diagnostics.Debug.WriteLine("[추적 완료] Event 박스 전파 완료");
                 }
 
                 // ✅ YOLO 추적 완료 후 자동 JSON 저장 및 재로드
-                System.Diagnostics.Debug.WriteLine("[추적 완료] JSON 저장 시작");
                 
                 string videoDir = Path.GetDirectoryName(currentVideoFile);
                 string saveDir = Path.Combine(videoDir, "labels");
@@ -2904,13 +3006,11 @@ namespace WinFormsApp1
                 
                 // JSON 저장
                 await Task.Run(() => ExportToJsonExtended(jsonFilePath));
-                System.Diagnostics.Debug.WriteLine($"[추적 완료] JSON 저장 완료: {jsonFilePath}");
                 
                 // JSON 재로드하여 추적 데이터 기반으로 표시
                 if (File.Exists(jsonFilePath))
                 {
                     LoadLabelingData(jsonFilePath);
-                    System.Diagnostics.Debug.WriteLine("[추적 완료] JSON 재로드 완료 - 이제 JSON 기반 박스로 표시됩니다.");
                 }
 
                 MessageBox.Show(
@@ -3064,10 +3164,12 @@ namespace WinFormsApp1
                     if (annotation.Id >= nextAnnotationId)
                         nextAnnotationId = annotation.Id + 1;
 
-                    // 웨이포인트 정보 복원 (multi-object waypoint 지원)
+                    // ✅ 웨이포인트 정보 복원 (Person/Vehicle만, Event는 제외)
+                    // Event 박스는 waypoint 생성에 사용되지 않음 (기존 waypoint 내에서만 존재)
                     if (annotation.TrackInfo != null && 
                         annotation.TrackInfo.Entry != null && 
-                        annotation.TrackInfo.Exit != null)
+                        annotation.TrackInfo.Exit != null &&
+                        box.Label != "event") // Event는 waypoint 생성에서 제외
                     {
                         int entryFrame = annotation.TrackInfo.Entry.Frame;
                         int exitFrame = annotation.TrackInfo.Exit.Frame;
@@ -3079,8 +3181,10 @@ namespace WinFormsApp1
 
                         if (!waypointExists)
                         {
-                            // Entry 프레임에 몇 개의 객체가 있는지 확인
-                            int objectCount = boundingBoxes.Count(b => b.FrameIndex == entryFrame);
+                            // Entry 프레임에 Person/Vehicle이 몇 개 있는지 확인
+                            int objectCount = boundingBoxes.Count(b => 
+                                b.FrameIndex == entryFrame && 
+                                (b.Label == "person" || b.Label == "vehicle"));
                             
                             var waypoint = new WaypointMarker
                             {
@@ -3176,7 +3280,6 @@ namespace WinFormsApp1
                 if (File.Exists(jsonPath))
                 {
                     File.Delete(jsonPath);
-                    System.Diagnostics.Debug.WriteLine($"[JSON 삭제] {jsonPath}");
                 }
             }
             catch (Exception ex)
@@ -3306,6 +3409,116 @@ namespace WinFormsApp1
             catch (Exception ex)
             {
                 MessageBox.Show($"JSON 내보내기 오류: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        /// <summary>
+        /// Q키: Event 종료 - 현재 프레임부터 Exit까지 Event 박스 삭제
+        /// </summary>
+        private void TerminateEventFromCurrentFrame()
+        {
+            // 현재 프레임에 Event 박스가 있는지 확인
+            var eventBoxesAtFrame = boundingBoxes
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "event")
+                .ToList();
+            
+            if (eventBoxesAtFrame.Count == 0)
+            {
+                MessageBox.Show(
+                    "현재 프레임에 Event 박스가 없습니다.\n\n" +
+                    "Event 박스가 있는 프레임으로 이동 후 Q키를 눌러주세요.",
+                    "Event 없음",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+            
+            // 여러 Event가 있을 경우 선택 다이얼로그
+            BoundingBox targetEvent = null;
+            if (eventBoxesAtFrame.Count == 1)
+            {
+                targetEvent = eventBoxesAtFrame[0];
+            }
+            else
+            {
+                // 여러 Event 중 선택
+                string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                var eventNames = eventBoxesAtFrame.Select(b => 
+                {
+                    string name = b.EventId > 0 && b.EventId <= eventTypes.Length 
+                        ? eventTypes[b.EventId - 1] 
+                        : b.EventId.ToString();
+                    return $"{name}_{b.EventId:D2}";
+                }).ToArray();
+                
+                // 간단하게 첫 번째 것 선택 (나중에 다이얼로그로 변경 가능)
+                targetEvent = eventBoxesAtFrame[0];
+            }
+            
+            // 현재 속한 Waypoint 찾기
+            var waypoint = waypointMarkers.FirstOrDefault(w =>
+                currentFrameIndex >= w.EntryFrame &&
+                currentFrameIndex <= w.ExitFrame);
+            
+            if (waypoint == null)
+            {
+                MessageBox.Show(
+                    "Waypoint를 찾을 수 없습니다.",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
+            }
+            
+            // 현재 프레임부터 Exit까지 삭제
+            var boxesToDelete = boundingBoxes
+                .Where(b => 
+                    b.Label == "event" &&
+                    b.EventId == targetEvent.EventId &&
+                    b.FrameIndex >= currentFrameIndex &&
+                    b.FrameIndex <= waypoint.ExitFrame)
+                .ToList();
+            
+            if (boxesToDelete.Count == 0)
+            {
+                MessageBox.Show(
+                    "삭제할 Event 박스가 없습니다.",
+                    "알림",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+            
+            // 삭제 확인
+            string[] eventTypes2 = { "contact", "exchange", "board", "final_exchange" };
+            string eventName = targetEvent.EventId > 0 && targetEvent.EventId <= eventTypes2.Length 
+                ? eventTypes2[targetEvent.EventId - 1] 
+                : targetEvent.EventId.ToString();
+            
+            var result = MessageBox.Show(
+                $"'{eventName}' Event를 현재 프레임({currentFrameIndex})부터 종료하시겠습니까?\n\n" +
+                $"삭제될 프레임: {currentFrameIndex} ~ {waypoint.ExitFrame} ({boxesToDelete.Count}개)",
+                "Event 종료",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            
+            if (result == DialogResult.Yes)
+            {
+                foreach (var box in boxesToDelete)
+                {
+                    boundingBoxes.Remove(box);
+                }
+                
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                UpdateBboxListDisplay();
+                pictureBoxVideo.Invalidate();
+                
+                MessageBox.Show(
+                    $"'{eventName}' Event가 프레임 {currentFrameIndex}에서 종료되었습니다.\n\n" +
+                    $"삭제된 박스: {boxesToDelete.Count}개",
+                    "완료",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
         }
         #endregion
@@ -3507,6 +3720,12 @@ namespace WinFormsApp1
                 SetExitMarkerAndCreateWaypoint();
                 e.Handled = true;
             }
+            else if (e.KeyCode == Keys.Q && !e.Control && !e.Alt)
+            {
+                // Q키: Event 종료 (현재 프레임부터 Exit까지 삭제)
+                TerminateEventFromCurrentFrame();
+                e.Handled = true;
+            }
             else if (e.Control && e.KeyCode == Keys.T)
             {
                 if (waypointMarkers.Count > 0)
@@ -3673,7 +3892,6 @@ namespace WinFormsApp1
             catch (Exception ex)
             {
                 // 자막이 없거나 추출 실패 시 조용히 실패
-                System.Diagnostics.Debug.WriteLine($"자막 추출 실패: {ex.Message}");
                 return false;
             }
         }
