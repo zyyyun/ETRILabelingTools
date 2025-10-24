@@ -1124,8 +1124,16 @@ namespace WinFormsApp1
 
             entryFrameIndex = null;
             exitFrameIndex = null;
-            btnEntry.Text = "Entry: 00:00:00";
-            btnExit.Text = "Exit: 00:00:00";
+            if (waypoint != null)
+            {
+                btnEntry.Text = $"Entry: {waypoint.EntryTime}";
+                btnExit.Text = $"Exit: {waypoint.ExitTime}";
+            }
+            else
+            {
+                btnEntry.Text = "Entry";
+                btnExit.Text = "Exit";
+            }
 
             panelTimeline.Invalidate();
 
@@ -3303,6 +3311,40 @@ namespace WinFormsApp1
         #endregion
 
         #region Keyboard Shortcuts
+        
+        /// <summary>
+        /// 방향키 등 특수 키를 Form 레벨에서 먼저 처리하여 패널 포커스 문제 해결
+        /// </summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // 영상이 로드되지 않은 경우에도 Ctrl 조합은 처리
+            bool isVideoLoaded = videoCapture != null && videoCapture.IsOpened();
+            
+            // 방향키: 영상 로드된 경우만 처리
+            if (isVideoLoaded)
+            {
+                if (keyData == Keys.Left)
+                {
+                    // 5초씩 뒤로 이동
+                    int framesToMove = (int)(fps * 5);
+                    int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
+                    LoadFrame(newFrame);
+                    return true; // 이벤트 처리 완료
+                }
+                else if (keyData == Keys.Right)
+                {
+                    // 5초씩 앞으로 이동
+                    int framesToMove = (int)(fps * 5);
+                    int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
+                    LoadFrame(newFrame);
+                    return true; // 이벤트 처리 완료
+                }
+            }
+            
+            // 처리하지 못한 키는 기본 동작 수행
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+        
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
             // Ctrl+1~14: ID 수동 지정 (영상 로드 여부와 무관하게 동작)
@@ -3355,26 +3397,11 @@ namespace WinFormsApp1
             if (videoCapture == null || !videoCapture.IsOpened())
                 return;
 
-            // 모든 버튼이 TabStop = false이므로 포커스 문제 없음
+            // 방향키는 ProcessCmdKey에서 처리하므로 여기서는 제외
+            // Space bar - 재생/일시정지
             if (e.KeyCode == Keys.Space)
             {
                 btnPlay_Click(sender, e);
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Left && !e.Shift && !e.Control && !e.Alt)
-            {
-                // 5초씩 뒤로 이동 (fps * 5 프레임)
-                int framesToMove = (int)(fps * 5);
-                int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
-                LoadFrame(newFrame);
-                e.Handled = true;
-            }
-            else if (e.KeyCode == Keys.Right && !e.Shift && !e.Control && !e.Alt)
-            {
-                // 5초씩 앞으로 이동 (fps * 5 프레임)
-                int framesToMove = (int)(fps * 5);
-                int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
-                LoadFrame(newFrame);
                 e.Handled = true;
             }
             else if (e.Shift && e.KeyCode == Keys.OemPeriod) // Shift + > (> 키)

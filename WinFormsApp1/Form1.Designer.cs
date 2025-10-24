@@ -364,6 +364,7 @@
             this.panelRightSidebar.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panelRightSidebar.Padding = new System.Windows.Forms.Padding(16);
             this.panelRightSidebar.AutoScroll = true;
+            this.panelRightSidebar.TabStop = false;
 
             int rightY = 16;
 
@@ -374,6 +375,7 @@
             this.groupBoxObjectInfo.Location = new System.Drawing.Point(16, rightY);
             this.groupBoxObjectInfo.Size = new System.Drawing.Size(280, 120);
             this.groupBoxObjectInfo.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.groupBoxObjectInfo.TabStop = false;
             this.groupBoxObjectInfo.Controls.Add(this.labelObjectLabel);
             this.groupBoxObjectInfo.Controls.Add(this.labelPrevWaypoint);
             this.groupBoxObjectInfo.Controls.Add(this.labelNextWaypoint);
@@ -404,6 +406,7 @@
             this.groupBoxWaypoint.Location = new System.Drawing.Point(16, rightY);
             this.groupBoxWaypoint.Size = new System.Drawing.Size(280, 150);
             this.groupBoxWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.groupBoxWaypoint.TabStop = false;
 
             // ListView for waypoints
             this.listViewWaypoints = new System.Windows.Forms.ListView();
@@ -411,6 +414,7 @@
             this.listViewWaypoints.Size = new System.Drawing.Size(260, 80);
             this.listViewWaypoints.View = System.Windows.Forms.View.Details;
             this.listViewWaypoints.FullRowSelect = true;
+            this.listViewWaypoints.TabStop = false;
             this.listViewWaypoints.Columns.Add("Entry", 80);
             this.listViewWaypoints.Columns.Add("Exit", 80);
             this.listViewWaypoints.Columns.Add("객체", 60);
@@ -421,6 +425,7 @@
             this.btnDeleteWaypoint.Text = "선택 삭제";
             this.btnDeleteWaypoint.Location = new System.Drawing.Point(12, 110);
             this.btnDeleteWaypoint.Size = new System.Drawing.Size(100, 30);
+            this.btnDeleteWaypoint.TabStop = false;
             this.btnDeleteWaypoint.Click += new System.EventHandler(this.btnDeleteWaypoint_Click);
 
             this.groupBoxWaypoint.Controls.Add(this.listViewWaypoints);
@@ -435,6 +440,7 @@
             this.groupBoxLabels.Location = new System.Drawing.Point(16, rightY);
             this.groupBoxLabels.Size = new System.Drawing.Size(280, 425);
             this.groupBoxLabels.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
+            this.groupBoxLabels.TabStop = false;
 
             // Label type selection buttons (상단 가로 배열)
             this.btnLabelPerson.Text = "person";
@@ -479,6 +485,7 @@
             this.panelBboxList.BackColor = System.Drawing.Color.White;
             this.panelBboxList.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.panelBboxList.AutoScroll = true;
+            this.panelBboxList.TabStop = false;
 
             // 삭제 버튼
             this.btnDeleteLabel.Text = "선택한 Bbox 삭제";
