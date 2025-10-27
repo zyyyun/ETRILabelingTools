@@ -23,6 +23,7 @@
             this.panelHeader = new System.Windows.Forms.Panel();
             this.labelTitle = new System.Windows.Forms.Label();
             this.btnSelectFolder = new System.Windows.Forms.Button();
+            this.btnDeleteJson = new System.Windows.Forms.Button();
             this.labelBoxCount = new System.Windows.Forms.Label();
             this.btnMinimize = new System.Windows.Forms.Button();
             this.btnMaximize = new System.Windows.Forms.Button();
@@ -93,6 +94,7 @@
             this.panelHeader.Controls.Add(this.labelTitle);
             this.panelHeader.Controls.Add(this.btnSelectFolder);
             this.panelHeader.Controls.Add(this.btnExportJson);
+            this.panelHeader.Controls.Add(this.btnDeleteJson);
             this.panelHeader.Controls.Add(this.labelBoxCount);
             this.panelHeader.Controls.Add(this.btnMinimize);
             this.panelHeader.Controls.Add(this.btnMaximize);
@@ -132,9 +134,19 @@
             this.btnExportJson.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
             this.btnExportJson.Click += new System.EventHandler(this.btnExportJson_Click);
 
+            // Delete JSON Button
+            this.btnDeleteJson.Text = "JSON 삭제";
+            this.btnDeleteJson.Location = new System.Drawing.Point(465, 10);
+            this.btnDeleteJson.Size = new System.Drawing.Size(90, 30);
+            this.btnDeleteJson.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnDeleteJson.BackColor = System.Drawing.Color.FromArgb(239, 68, 68);
+            this.btnDeleteJson.ForeColor = System.Drawing.Color.White;
+            this.btnDeleteJson.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold);
+            this.btnDeleteJson.Click += new System.EventHandler(this.btnDeleteJson_Click);
+
             // Box Count Label
             this.labelBoxCount.Text = "박스 개수:";
-            this.labelBoxCount.Location = new System.Drawing.Point(470, 15);
+            this.labelBoxCount.Location = new System.Drawing.Point(560, 15);
             this.labelBoxCount.Size = new System.Drawing.Size(80, 25);
 
             // Window Control Buttons (Right side)
@@ -707,6 +719,7 @@
         private System.Windows.Forms.Button btnSelectFolder;
         private System.Windows.Forms.Button btnSelectFolderPath;
         private System.Windows.Forms.Button btnExportJson;
+        private System.Windows.Forms.Button btnDeleteJson;
         private System.Windows.Forms.Label labelBoxCount;
         private System.Windows.Forms.Button btnMinimize;
         private System.Windows.Forms.Button btnMaximize;

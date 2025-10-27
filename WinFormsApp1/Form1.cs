@@ -4499,35 +4499,78 @@ namespace WinFormsApp1
         }
 
         /// <summary>
-        /// 현재 비디오에 대한 JSON 파일 삭제
+        /// 현재 비디오에 대한 JSON 파일 삭제 및 UI 초기화
         /// </summary>
         private void DeleteJsonFileForCurrentVideo()
         {
             try
             {
                 if (string.IsNullOrEmpty(currentVideoFile))
+                {
+                    MessageBox.Show("현재 열려있는 영상이 없습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
+                }
 
                 string videoDir = Path.GetDirectoryName(currentVideoFile);
                 if (string.IsNullOrEmpty(videoDir) || !Directory.Exists(videoDir))
                     return;
 
                 string saveDir = Path.Combine(videoDir, "labels");
-                if (!Directory.Exists(saveDir))
-                    return;
-
                 string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
                 string jsonPath = Path.Combine(saveDir, fileName);
 
-                if (File.Exists(jsonPath))
+                if (!File.Exists(jsonPath))
+                {
+                    MessageBox.Show("삭제할 JSON 파일이 존재하지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // 삭제 확인
+                DialogResult result = MessageBox.Show(
+                    $"현재 영상의 라벨링 데이터를 삭제하시겠습니까?\n\n파일: {fileName}\n\n이 작업은 되돌릴 수 없습니다.",
+                    "JSON 삭제 확인",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (result == DialogResult.Yes)
                 {
                     File.Delete(jsonPath);
+                    
+                    // UI 초기화: 메모리의 모든 라벨링 데이터 삭제
+                    boundingBoxes.Clear();
+                    waypointMarkers.Clear();
+                    selectedBox = null;
+                    selectedWaypoint = null;
+                    entryFrameIndex = null;
+                    undoStack.Clear();
+                    redoStack.Clear();
+                    
+                    // UI 업데이트
+                    UpdateWaypointListView();
+                    UpdateBboxListDisplay();
+                    UpdateBoxCount();
+                    pictureBoxVideo.Invalidate();
+                    panelTimeline.Invalidate();
+                    
+                    MessageBox.Show(
+                        $"✅ JSON 파일과 현재 작업 데이터가 모두 삭제되었습니다.\n\n파일: {fileName}",
+                        "삭제 완료",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"JSON 파일 삭제 중 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        /// <summary>
+        /// JSON 삭제 버튼 클릭 이벤트
+        /// </summary>
+        private void btnDeleteJson_Click(object sender, EventArgs e)
+        {
+            DeleteJsonFileForCurrentVideo();
         }
 
         private void ExportToJsonExtended(string filePath)
