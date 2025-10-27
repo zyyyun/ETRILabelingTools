@@ -299,6 +299,7 @@ namespace WinFormsApp1
         private int? exitFrameIndex = null;
 
         private List<WaypointMarker> waypointMarkers = new List<WaypointMarker>();
+        private WaypointMarker selectedWaypoint = null; // ✅ 선택된 Waypoint 추적
         private Color[] markerColors = new Color[]
         {
             Color.FromArgb(59, 130, 246),
@@ -1054,34 +1055,8 @@ namespace WinFormsApp1
         #region Entry/Exit Markers
         private void btnEntry_Click(object sender, EventArgs e)
         {
-            // 선택된 Person 웨이포인트가 있는지 확인
-            if (listViewPersonWaypoints.SelectedItems.Count > 0)
-            {
-                var selectedItem = listViewPersonWaypoints.SelectedItems[0];
-                var waypoint = selectedItem.Tag as WaypointMarker;
-
-                if (waypoint != null)
-                {
-                    // 선택된 웨이포인트의 Entry 프레임으로 이동
-                    LoadFrame(waypoint.EntryFrame);
-                    MessageBox.Show(
-                        $"Entry 프레임으로 이동했습니다.\n\n" +
-                        $"프레임: {waypoint.EntryFrame}\n" +
-                        $"시간: {waypoint.EntryTime}",
-                        "Entry 이동",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    return;
-                }
-            }
-
-            // 웨이포인트가 선택되지 않았으면 안내 메시지
-            MessageBox.Show(
-                "웨이포인트를 선택하면 Entry 프레임으로 이동합니다.\n\n" +
-                "웨이포인트가 없거나 선택되지 않았습니다.",
-                "안내",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            // E키와 동일한 기능: Entry 마커 설정
+            SetEntryMarker();
         }
 
         private void btnToggleSubtitle_Click(object sender, EventArgs e)
@@ -1104,34 +1079,8 @@ namespace WinFormsApp1
 
         private void btnExit_Click(object sender, EventArgs e)
         {
-            // 선택된 Person 웨이포인트가 있는지 확인
-            if (listViewPersonWaypoints.SelectedItems.Count > 0)
-            {
-                var selectedItem = listViewPersonWaypoints.SelectedItems[0];
-                var waypoint = selectedItem.Tag as WaypointMarker;
-
-                if (waypoint != null)
-                {
-                    // 선택된 웨이포인트의 Exit 프레임으로 이동
-                    LoadFrame(waypoint.ExitFrame);
-                    MessageBox.Show(
-                        $"Exit 프레임으로 이동했습니다.\n\n" +
-                        $"프레임: {waypoint.ExitFrame}\n" +
-                        $"시간: {waypoint.ExitTime}",
-                        "Exit 이동",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
-                    return;
-                }
-            }
-
-            // 웨이포인트가 선택되지 않았으면 안내 메시지
-            MessageBox.Show(
-                "웨이포인트를 선택하면 Exit 프레임으로 이동합니다.\n\n" +
-                "웨이포인트가 없거나 선택되지 않았습니다.",
-                "안내",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            // X키와 동일한 기능: Exit 마커 설정 및 Waypoint 생성
+            SetExitMarkerAndCreateWaypoint();
         }
 
         // E키로 Entry 마커 설정 (원래 기능)
@@ -1152,6 +1101,23 @@ namespace WinFormsApp1
                 return;
             }
 
+            // ✅ Exit 프레임이 Entry 프레임보다 앞에 있으면 막기
+            if (currentFrameIndex <= entryFrameIndex.Value)
+            {
+                TimeSpan currentTimeCheck = TimeSpan.FromSeconds(currentFrameIndex / fps);
+                TimeSpan entryTimeCheck = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
+                
+                MessageBox.Show(
+                    $"Exit 프레임은 Entry 프레임보다 뒤에 있어야 합니다.\n\n" +
+                    $"Entry: {entryTimeCheck:hh\\:mm\\:ss} (프레임 {entryFrameIndex.Value})\n" +
+                    $"현재: {currentTimeCheck:hh\\:mm\\:ss} (프레임 {currentFrameIndex})\n\n" +
+                    $"Entry 프레임 이후로 이동한 후 Exit를 설정해주세요.",
+                    "Warning",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
             // Entry 프레임의 Person 또는 Vehicle 박스 찾기
             var entryPersonBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "person").ToList();
             var entryVehicleBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "vehicle").ToList();
@@ -1168,15 +1134,15 @@ namespace WinFormsApp1
 
             btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
 
-            // Person과 Vehicle을 구분하여 각각의 Waypoint 생성
-            WaypointMarker waypoint = null;
-            string waypointType = "";
+            // ✅ 생성된 Waypoint 리스트
+            List<WaypointMarker> createdWaypoints = new List<WaypointMarker>();
 
-            if (entryPersonBoxes.Count > 0)
+            // ✅ 1. Person 박스들에 대해 각각 개별 Waypoint 생성
+            foreach (var personBox in entryPersonBoxes)
             {
-                // ✅ Person Waypoint 생성 (빨강 색상, PersonId 저장)
-                int personId = entryPersonBoxes.First().PersonId;
-                waypoint = new WaypointMarker
+                int personId = personBox.PersonId;
+                
+                var waypoint = new WaypointMarker
                 {
                     EntryFrame = entryFrameIndex.Value,
                     ExitFrame = exitFrameIndex.Value,
@@ -1186,13 +1152,18 @@ namespace WinFormsApp1
                     ObjectId = personId,
                     Label = "person"
                 };
-                waypointType = "Person";
+                
+                waypointMarkers.Add(waypoint);
+                createdWaypoints.Add(waypoint);
+                System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Person ID={personId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
             }
-            else if (entryVehicleBoxes.Count > 0)
+
+            // ✅ 2. Vehicle 박스들에 대해 각각 개별 Waypoint 생성
+            foreach (var vehicleBox in entryVehicleBoxes)
             {
-                // ✅ Vehicle Waypoint 생성 (파랑 색상, VehicleId 저장)
-                int vehicleId = entryVehicleBoxes.First().VehicleId;
-                waypoint = new WaypointMarker
+                int vehicleId = vehicleBox.VehicleId;
+                
+                var waypoint = new WaypointMarker
                 {
                     EntryFrame = entryFrameIndex.Value,
                     ExitFrame = exitFrameIndex.Value,
@@ -1202,30 +1173,38 @@ namespace WinFormsApp1
                     ObjectId = vehicleId,
                     Label = "vehicle"
                 };
-                waypointType = "Vehicle";
+                
+                waypointMarkers.Add(waypoint);
+                createdWaypoints.Add(waypoint);
+                System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Vehicle ID={vehicleId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
             }
 
-            if (waypoint != null)
+            // ✅ 3. UI 업데이트 및 Entry/Exit 초기화
+            UpdateWaypointListView();
+            
+            entryFrameIndex = null;
+            exitFrameIndex = null;
+            btnEntry.Text = "Entry";
+            btnExit.Text = "Exit";
+            
+            panelTimeline.Invalidate();
+
+            // ✅ 4. 자동 추적 확인 (생성된 Waypoint가 있을 때만)
+            if (createdWaypoints.Count > 0)
             {
-                waypointMarkers.Add(waypoint);
-                UpdateWaypointListView();
-
-                entryFrameIndex = null;
-                exitFrameIndex = null;
-                btnEntry.Text = "Entry";
-                btnExit.Text = "Exit";
-
-                panelTimeline.Invalidate();
-
+                string summary = $"{createdWaypoints.Count}개의 Waypoint가 생성되었습니다.\n" +
+                                $"(Person: {entryPersonBoxes.Count}개, Vehicle: {entryVehicleBoxes.Count}개)";
+                
                 var result = MessageBox.Show(
-                    $"{waypointType} Waypoint가 생성되었습니다.\n자동 추적을 수행하시겠습니까?",
-                    $"{waypointType} Waypoint",
+                    $"{summary}\n\n자동 추적을 수행하시겠습니까?",
+                    "Waypoint 생성 완료",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question);
 
                 if (result == DialogResult.Yes)
                 {
-                    PerformTrackingForWaypoint(waypoint, true);
+                    // ✅ 순차적으로 추적 실행 (동시 실행으로 인한 충돌 방지)
+                    PerformSequentialTracking(createdWaypoints);
                 }
             }
         }
@@ -1240,8 +1219,15 @@ namespace WinFormsApp1
 
                 if (waypoint != null)
                 {
+                    selectedWaypoint = waypoint; // ✅ 선택된 waypoint 저장
+                    panelTimeline.Invalidate(); // ✅ Timeline 다시 그리기
                     LoadFrame(waypoint.EntryFrame);
                 }
+            }
+            else
+            {
+                selectedWaypoint = null; // ✅ 선택 해제
+                panelTimeline.Invalidate();
             }
         }
 
@@ -1255,8 +1241,15 @@ namespace WinFormsApp1
 
                 if (waypoint != null)
                 {
+                    selectedWaypoint = waypoint; // ✅ 선택된 waypoint 저장
+                    panelTimeline.Invalidate(); // ✅ Timeline 다시 그리기
                     LoadFrame(waypoint.EntryFrame); // Entry = Exit (단일 프레임)
                 }
+            }
+            else
+            {
+                selectedWaypoint = null; // ✅ 선택 해제
+                panelTimeline.Invalidate();
             }
         }
 
@@ -1270,8 +1263,15 @@ namespace WinFormsApp1
 
                 if (waypoint != null)
                 {
+                    selectedWaypoint = waypoint; // ✅ 선택된 waypoint 저장
+                    panelTimeline.Invalidate(); // ✅ Timeline 다시 그리기
                     LoadFrame(waypoint.EntryFrame);
                 }
+            }
+            else
+            {
+                selectedWaypoint = null; // ✅ 선택 해제
+                panelTimeline.Invalidate();
             }
         }
 
@@ -2927,15 +2927,16 @@ namespace WinFormsApp1
 
             if (totalFrames > 0)
             {
-                // ✅ Waypoint 구간별 색상 표시
+                // ✅ Waypoint 구간별 색상 표시 (항상 원래 색상 유지)
                 foreach (var waypoint in waypointMarkers)
                 {
                     int startX = (int)(width * ((float)waypoint.EntryFrame / totalFrames));
                     int endX = (int)(width * ((float)waypoint.ExitFrame / totalFrames));
                     int segmentWidth = endX - startX;
 
-                    // 반투명 색상으로 구간 표시
+                    // 반투명 원래 색상으로 구간 표시
                     Color segmentColor = Color.FromArgb(180, waypoint.MarkerColor);
+                    
                     using (SolidBrush markerBrush = new SolidBrush(segmentColor))
                     {
                         g.FillRectangle(markerBrush, startX, 0, segmentWidth, height);
@@ -2949,30 +2950,40 @@ namespace WinFormsApp1
                     int exitX = (int)(width * ((float)waypoint.ExitFrame / totalFrames));
                     
                     int markerSize = 8; // 마커 크기
-                    int markerY = 0; // 상단 정렬
+                    int entryMarkerY = 0; // Entry 마커: 상단 정렬
+                    int exitMarkerY = height - markerSize; // Exit 마커: 하단 정렬
 
-                    // Entry 마커 (진한 색상)
-                    using (SolidBrush entryBrush = new SolidBrush(waypoint.MarkerColor))
+                    // ✅ 선택된 waypoint인 경우 진한 빨간색으로 표시
+                    bool isSelected = (selectedWaypoint != null && 
+                                      waypoint.Label == selectedWaypoint.Label && 
+                                      waypoint.ObjectId == selectedWaypoint.ObjectId &&
+                                      waypoint.EntryFrame == selectedWaypoint.EntryFrame &&
+                                      waypoint.ExitFrame == selectedWaypoint.ExitFrame);
+                    
+                    Color markerColor = isSelected ? Color.FromArgb(220, 38, 38) : waypoint.MarkerColor;
+
+                    // Entry 마커 (진한 색상, 상단)
+                    using (SolidBrush entryBrush = new SolidBrush(markerColor))
                     {
-                        g.FillRectangle(entryBrush, entryX - markerSize / 2, markerY, markerSize, markerSize);
+                        g.FillRectangle(entryBrush, entryX - markerSize / 2, entryMarkerY, markerSize, markerSize);
                     }
                     
                     // Entry 마커 테두리
                     using (Pen entryPen = new Pen(Color.White, 2))
                     {
-                        g.DrawRectangle(entryPen, entryX - markerSize / 2, markerY, markerSize, markerSize);
+                        g.DrawRectangle(entryPen, entryX - markerSize / 2, entryMarkerY, markerSize, markerSize);
                     }
 
-                    // Exit 마커 (진한 색상)
-                    using (SolidBrush exitBrush = new SolidBrush(waypoint.MarkerColor))
+                    // Exit 마커 (진한 색상, 하단)
+                    using (SolidBrush exitBrush = new SolidBrush(markerColor))
                     {
-                        g.FillRectangle(exitBrush, exitX - markerSize / 2, markerY, markerSize, markerSize);
+                        g.FillRectangle(exitBrush, exitX - markerSize / 2, exitMarkerY, markerSize, markerSize);
                     }
                     
                     // Exit 마커 테두리
                     using (Pen exitPen = new Pen(Color.White, 2))
                     {
-                        g.DrawRectangle(exitPen, exitX - markerSize / 2, markerY, markerSize, markerSize);
+                        g.DrawRectangle(exitPen, exitX - markerSize / 2, exitMarkerY, markerSize, markerSize);
                     }
                 }
             }
@@ -3021,33 +3032,38 @@ namespace WinFormsApp1
             if (totalFrames == 0) return false;
 
             int width = panelTimeline.Width;
+            int height = panelTimeline.Height;
             int markerSize = 8;
             int clickTolerance = 6; // 클릭 허용 범위 (마커보다 약간 넓게)
 
             foreach (var waypoint in waypointMarkers)
             {
-                // Entry 마커 위치 계산
+                // Entry 마커 위치 계산 (상단)
                 int entryX = (int)(width * ((float)waypoint.EntryFrame / totalFrames));
                 int entryLeft = entryX - markerSize / 2;
                 int entryRight = entryX + markerSize / 2;
+                int entryTop = 0;
+                int entryBottom = markerSize;
 
-                // Exit 마커 위치 계산
+                // Exit 마커 위치 계산 (하단)
                 int exitX = (int)(width * ((float)waypoint.ExitFrame / totalFrames));
                 int exitLeft = exitX - markerSize / 2;
                 int exitRight = exitX + markerSize / 2;
+                int exitTop = height - markerSize;
+                int exitBottom = height;
 
-                // Entry 마커 클릭 확인
+                // Entry 마커 클릭 확인 (상단)
                 if (mouseX >= entryLeft - clickTolerance && mouseX <= entryRight + clickTolerance &&
-                    mouseY >= 0 && mouseY <= markerSize + clickTolerance)
+                    mouseY >= entryTop - clickTolerance && mouseY <= entryBottom + clickTolerance)
                 {
                     LoadFrame(waypoint.EntryFrame);
                     System.Diagnostics.Debug.WriteLine($"[Timeline] Entry 마커 클릭: {waypoint.Label}, Frame {waypoint.EntryFrame}");
                     return true;
                 }
 
-                // Exit 마커 클릭 확인
+                // Exit 마커 클릭 확인 (하단)
                 if (mouseX >= exitLeft - clickTolerance && mouseX <= exitRight + clickTolerance &&
-                    mouseY >= 0 && mouseY <= markerSize + clickTolerance)
+                    mouseY >= exitTop - clickTolerance && mouseY <= exitBottom + clickTolerance)
                 {
                     LoadFrame(waypoint.ExitFrame);
                     System.Diagnostics.Debug.WriteLine($"[Timeline] Exit 마커 클릭: {waypoint.Label}, Frame {waypoint.ExitFrame}");
@@ -3595,43 +3611,129 @@ namespace WinFormsApp1
         #endregion
 
         #region Tracking Algorithm
-        private async void PerformTrackingForWaypoint(WaypointMarker waypoint, bool useYolo = false)
+        
+        // ✅ 여러 Waypoint를 순차적으로 추적 (동시 실행 방지)
+        private async void PerformSequentialTracking(List<WaypointMarker> waypoints)
         {
             try
             {
-                // Entry 프레임의 모든 박스를 찾기 (multi-object waypoint)
-                var startBoxes = boundingBoxes.Where(b => b.FrameIndex == waypoint.EntryFrame).ToList();
+                int totalCount = waypoints.Count;
+                int currentIndex = 0;
+                int totalBoxesAdded = 0;
+
+                foreach (var waypoint in waypoints)
+                {
+                    currentIndex++;
+                    System.Diagnostics.Debug.WriteLine($"[순차 추적] {currentIndex}/{totalCount} - {waypoint.Label} ID={waypoint.ObjectId}");
+                    
+                    int beforeCount = boundingBoxes.Count;
+                    
+                    // ✅ 각 Waypoint를 순차적으로 추적 (await으로 대기)
+                    await PerformTrackingForWaypointAsync(waypoint, true);
+                    
+                    int afterCount = boundingBoxes.Count;
+                    totalBoxesAdded += (afterCount - beforeCount);
+                }
+
+                // ✅ 모든 추적 완료 후 JSON 저장 및 재로드 (한 번만)
+                if (!string.IsNullOrEmpty(currentVideoFile))
+                {
+                    string videoDir = Path.GetDirectoryName(currentVideoFile);
+                    string saveDir = Path.Combine(videoDir, "labels");
+                    
+                    if (!Directory.Exists(saveDir))
+                    {
+                        Directory.CreateDirectory(saveDir);
+                    }
+                    
+                    string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                    string jsonFilePath = Path.Combine(saveDir, fileName);
+                    
+                    // JSON 저장
+                    await Task.Run(() => ExportToJsonExtended(jsonFilePath));
+                    System.Diagnostics.Debug.WriteLine($"[JSON 저장] {jsonFilePath}");
+                    
+                    // JSON 재로드하여 추적 데이터 기반으로 표시
+                    if (File.Exists(jsonFilePath))
+                    {
+                        LoadLabelingData(jsonFilePath);
+                        System.Diagnostics.Debug.WriteLine($"[JSON 재로드] 완료");
+                    }
+
+                    MessageBox.Show(
+                        $"✅ {totalCount}개 Waypoint 추적 완료!\n\n" +
+                        $"총 {totalBoxesAdded}개 BBox 추가됨\n" +
+                        $"💾 JSON 저장 및 재로드 완료\n\n" +
+                        $"저장 위치: {jsonFilePath}",
+                        "추적 완료",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show(
+                        $"✅ {totalCount}개 Waypoint 추적 완료!\n\n" +
+                        $"총 {totalBoxesAdded}개 BBox 추가됨",
+                        "추적 완료",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"순차 추적 중 오류 발생:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private async Task PerformTrackingForWaypointAsync(WaypointMarker waypoint, bool useYolo = false)
+        {
+            try
+            {
+                // ✅ Entry 프레임에서 waypoint의 ObjectId와 Label에 해당하는 박스만 찾기
+                List<BoundingBox> startBoxes = new List<BoundingBox>();
+                
+                if (waypoint.Label == "person")
+                {
+                    startBoxes = boundingBoxes
+                        .Where(b => b.FrameIndex == waypoint.EntryFrame && 
+                                   b.Label == "person" && 
+                                   b.PersonId == waypoint.ObjectId)
+                        .ToList();
+                }
+                else if (waypoint.Label == "vehicle")
+                {
+                    startBoxes = boundingBoxes
+                        .Where(b => b.FrameIndex == waypoint.EntryFrame && 
+                                   b.Label == "vehicle" && 
+                                   b.VehicleId == waypoint.ObjectId)
+                        .ToList();
+                }
+                else if (waypoint.Label == "event")
+                {
+                    startBoxes = boundingBoxes
+                        .Where(b => b.FrameIndex == waypoint.EntryFrame && 
+                                   b.Label == "event" && 
+                                   b.EventId == waypoint.ObjectId)
+                        .ToList();
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[추적 시작] {waypoint.Label} ID={waypoint.ObjectId}, startBoxes={startBoxes.Count}");
 
                 if (startBoxes.Count == 0)
                 {
-                    MessageBox.Show(
-                        $"Entry 프레임에 BBox를 찾을 수 없습니다.\n\n" +
-                        "추적하려면:\n" +
-                        "1. Entry 프레임으로 이동\n" +
-                        "2. BBox 그리기\n" +
-                        "3. 다시 Ctrl+T 시도",
-                        "오류",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    System.Diagnostics.Debug.WriteLine($"[추적 스킵] {waypoint.Label} ID={waypoint.ObjectId} - Entry 프레임에 박스 없음");
                     return;
                 }
 
-                // Event 라벨 체크 - 자동 추적에서 제외
-                var eventBoxes = startBoxes.Where(b => b.Label == "event").ToList();
-                if (eventBoxes.Count > 0)
+                // ✅ Event는 자동 추적 안함 (전파 기능만 사용)
+                if (waypoint.Label == "event")
                 {
-                    var nonEventBoxes = startBoxes.Where(b => b.Label != "event").ToList();
-                    
-                    if (nonEventBoxes.Count == 0)
-                    {
-                        // 모든 박스가 Event인 경우 - 추적 안함
-                        return;
-                    }
-                    else
-                    {
-                        // 일부만 Event인 경우 - Event 제외하고 계속 진행
-                        startBoxes = nonEventBoxes;
-                    }
+                    System.Diagnostics.Debug.WriteLine($"[추적 스킵] Event는 자동 추적 안함");
+                    return;
                 }
 
                 // 추적 중 로딩 폼 생성
@@ -3717,54 +3819,22 @@ namespace WinFormsApp1
 
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
-
-                // ✅ Event 박스 전파 (추적 완료 후)
-                if (eventBoxes.Count > 0)
-                {
-                    PropagateAllEventBoxesInRange(waypoint.EntryFrame, waypoint.ExitFrame);
-                }
-
-                // ✅ YOLO 추적 완료 후 자동 JSON 저장 및 재로드
                 
-                string videoDir = Path.GetDirectoryName(currentVideoFile);
-                string saveDir = Path.Combine(videoDir, "labels");
-                
-                if (!Directory.Exists(saveDir))
-                {
-                    Directory.CreateDirectory(saveDir);
-                }
-                
-                string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
-                string jsonFilePath = Path.Combine(saveDir, fileName);
-                
-                // JSON 저장
-                await Task.Run(() => ExportToJsonExtended(jsonFilePath));
-                
-                // JSON 재로드하여 추적 데이터 기반으로 표시
-                if (File.Exists(jsonFilePath))
-                {
-                    LoadLabelingData(jsonFilePath);
-                }
-
-                MessageBox.Show(
-                    $"추적 완료!\n\n" +
-                    $"✅ {startBoxes.Count}개 객체, 총 {allTrackedBoxes.Count}개 BBox 추가\n" +
-                    $"✅ JSON 저장 및 재로드 완료\n\n" +
-                    $"💾 저장 위치: {jsonFilePath}",
-                    "성공",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                    
-                // 추적 완료 후 Entry 프레임으로 이동
-                LoadFrame(waypoint.EntryFrame);
+                // ✅ 개별 waypoint 추적 완료 로그
+                System.Diagnostics.Debug.WriteLine($"[추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, BBox 추가={allTrackedBoxes.Count}개");
             }
             catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[추적 오류] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show(
-                    $"추적 중 오류 발생: {ex.Message}",
+                    $"추적 중 오류 발생:\n\n" +
+                    $"Waypoint: {waypoint.Label} ID={waypoint.ObjectId}\n" +
+                    $"Error: {ex.Message}\n\n" +
+                    $"StackTrace:\n{ex.StackTrace}",
                     "오류",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
+                throw; // 예외를 상위로 전파하여 순차 추적이 중단되도록
             }
         }
         #endregion
@@ -4102,13 +4172,38 @@ namespace WinFormsApp1
                             };
                         }
 
-                        // Entry와 Exit 프레임 계산 (같은 라벨과 ID를 가진 박스들)
-                        int entryFrame = boundingBoxes
-                            .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
-                            .Min(b => b.FrameIndex);
-                        int exitFrame = boundingBoxes
-                            .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
-                            .Max(b => b.FrameIndex);
+                        // ✅ 수정: 현재 박스가 속한 특정 Waypoint를 찾아서 그 Entry/Exit 사용
+                        int entryFrame = box.FrameIndex;
+                        int exitFrame = box.FrameIndex;
+                        
+                        // 현재 박스가 속한 Waypoint 찾기
+                        var matchingWaypoint = waypointMarkers.FirstOrDefault(w => 
+                            w.Label == box.Label &&
+                            w.ObjectId == boxId &&
+                            box.FrameIndex >= w.EntryFrame &&
+                            box.FrameIndex <= w.ExitFrame);
+                        
+                        if (matchingWaypoint != null)
+                        {
+                            // Waypoint가 있으면 그 Entry/Exit 사용
+                            entryFrame = matchingWaypoint.EntryFrame;
+                            exitFrame = matchingWaypoint.ExitFrame;
+                            System.Diagnostics.Debug.WriteLine($"[JSON 저장] {box.Label} ID={boxId}, Frame={box.FrameIndex} → Waypoint {entryFrame}~{exitFrame}");
+                        }
+                        else
+                        {
+                            // Waypoint가 없으면 같은 ObjectId의 모든 박스 범위 사용
+                            var sameObjectBoxes = boundingBoxes
+                                .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
+                                .ToList();
+                            
+                            if (sameObjectBoxes.Any())
+                            {
+                                entryFrame = sameObjectBoxes.Min(b => b.FrameIndex);
+                                exitFrame = sameObjectBoxes.Max(b => b.FrameIndex);
+                            }
+                            System.Diagnostics.Debug.WriteLine($"[JSON 저장] {box.Label} ID={boxId}, Frame={box.FrameIndex} → Waypoint 없음, 범위: {entryFrame}~{exitFrame}");
+                        }
 
                         // 자막에서 타임스탬프 추출 시도
                         string entryTimestamp = GetSubtitleTimestampForFrame(entryFrame);
@@ -4546,7 +4641,19 @@ namespace WinFormsApp1
                         useYolo = (result == DialogResult.Yes);
                     }
 
-                    PerformTrackingForWaypoint(lastWaypoint, useYolo);
+                    // ✅ 단일 waypoint도 순차 추적 함수 사용
+                    if (useYolo)
+                    {
+                        PerformSequentialTracking(new List<WaypointMarker> { lastWaypoint });
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            "현재는 YOLO 추적만 지원합니다.",
+                            "정보",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information);
+                    }
                 }
                 else
                 {
