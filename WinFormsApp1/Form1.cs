@@ -393,6 +393,21 @@ namespace WinFormsApp1
             {
                 labelSubtitleTimestamp.Visible = false;
             }
+
+            // ✅ Timeline 패널에 더블 버퍼링 활성화 (깜빡임 방지)
+            EnableDoubleBuffering(panelTimeline);
+        }
+
+        /// <summary>
+        /// Panel에 더블 버퍼링을 활성화하는 헬퍼 메서드
+        /// </summary>
+        private void EnableDoubleBuffering(Control control)
+        {
+            typeof(Control).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.SetProperty |
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.NonPublic,
+                null, control, new object[] { true });
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -1119,7 +1134,8 @@ namespace WinFormsApp1
 
             if (entryPersonBoxes.Count > 0)
             {
-                // Person Waypoint 생성 (빨강 색상)
+                // ✅ Person Waypoint 생성 (빨강 색상, PersonId 저장)
+                int personId = entryPersonBoxes.First().PersonId;
                 waypoint = new WaypointMarker
                 {
                     EntryFrame = entryFrameIndex.Value,
@@ -1127,14 +1143,15 @@ namespace WinFormsApp1
                     MarkerColor = System.Drawing.Color.FromArgb(255, 107, 107), // 빨강
                     EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                     ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                    ObjectId = 0,
+                    ObjectId = personId,
                     Label = "person"
                 };
                 waypointType = "Person";
             }
             else if (entryVehicleBoxes.Count > 0)
             {
-                // Vehicle Waypoint 생성 (파랑 색상)
+                // ✅ Vehicle Waypoint 생성 (파랑 색상, VehicleId 저장)
+                int vehicleId = entryVehicleBoxes.First().VehicleId;
                 waypoint = new WaypointMarker
                 {
                     EntryFrame = entryFrameIndex.Value,
@@ -1142,7 +1159,7 @@ namespace WinFormsApp1
                     MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255), // 파랑
                     EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                     ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                    ObjectId = 0,
+                    ObjectId = vehicleId,
                     Label = "vehicle"
                 };
                 waypointType = "Vehicle";
@@ -1235,7 +1252,7 @@ namespace WinFormsApp1
                     $"선택한 Person Waypoint를 삭제하시겠습니까?\n\n" +
                     $"Entry: {waypoint.EntryTime}\n" +
                     $"Exit: {waypoint.ExitTime}\n\n" +
-                    $"⚠️ 주의: 해당 구간의 모든 Person 박스가 삭제됩니다.",
+                    $"⚠️ 주의: 해당 구간의 Person 박스가 삭제됩니다.",
                     "Person Waypoint 삭제 확인",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
@@ -1243,10 +1260,11 @@ namespace WinFormsApp1
                 if (result != DialogResult.Yes)
                     return;
 
-                // Person 박스만 삭제
+                // ✅ Person 박스만 삭제 (ObjectId로 정확히 필터링)
                 var boxesToDelete = boundingBoxes
                     .Where(b => 
                         b.Label == "person" &&
+                        b.PersonId == waypoint.ObjectId &&
                         b.FrameIndex >= waypoint.EntryFrame && 
                         b.FrameIndex <= waypoint.ExitFrame)
                     .ToList();
@@ -1301,10 +1319,11 @@ namespace WinFormsApp1
                 if (result != DialogResult.Yes)
                     return;
 
-                // Vehicle 박스만 삭제 (단일 프레임)
+                // ✅ Vehicle 박스만 삭제 (ObjectId로 정확히 필터링)
                 var boxesToDelete = boundingBoxes
                     .Where(b => 
                         b.Label == "vehicle" &&
+                        b.VehicleId == waypoint.ObjectId &&
                         b.FrameIndex == waypoint.EntryFrame)
                     .ToList();
 
@@ -1351,7 +1370,7 @@ namespace WinFormsApp1
                     $"선택한 Event Waypoint를 삭제하시겠습니까?\n\n" +
                     $"Entry: {waypoint.EntryTime}\n" +
                     $"Exit: {waypoint.ExitTime}\n\n" +
-                    $"⚠️ 주의: 해당 구간의 모든 Event 박스가 삭제됩니다.",
+                    $"⚠️ 주의: 해당 구간의 Event 박스가 삭제됩니다.",
                     "Event Waypoint 삭제 확인",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
@@ -1359,10 +1378,11 @@ namespace WinFormsApp1
                 if (result != DialogResult.Yes)
                     return;
 
-                // Event 박스만 삭제
+                // ✅ Event 박스만 삭제 (ObjectId로 정확히 필터링)
                 var boxesToDelete = boundingBoxes
                     .Where(b => 
                         b.Label == "event" &&
+                        b.EventId == waypoint.ObjectId &&
                         b.FrameIndex >= waypoint.EntryFrame && 
                         b.FrameIndex <= waypoint.ExitFrame)
                     .ToList();
@@ -2855,9 +2875,11 @@ namespace WinFormsApp1
         private void panelTimeline_Paint(object sender, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             int width = panelTimeline.Width;
             int height = panelTimeline.Height;
 
+            // 배경색 (노란색)
             using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(250, 204, 21)))
             {
                 g.FillRectangle(bgBrush, 0, 0, width, height);
@@ -2865,19 +2887,57 @@ namespace WinFormsApp1
 
             if (totalFrames > 0)
             {
+                // ✅ Waypoint 구간별 색상 표시
                 foreach (var waypoint in waypointMarkers)
                 {
                     int startX = (int)(width * ((float)waypoint.EntryFrame / totalFrames));
                     int endX = (int)(width * ((float)waypoint.ExitFrame / totalFrames));
                     int segmentWidth = endX - startX;
 
-                    using (SolidBrush markerBrush = new SolidBrush(waypoint.MarkerColor))
+                    // 반투명 색상으로 구간 표시
+                    Color segmentColor = Color.FromArgb(180, waypoint.MarkerColor);
+                    using (SolidBrush markerBrush = new SolidBrush(segmentColor))
                     {
                         g.FillRectangle(markerBrush, startX, 0, segmentWidth, height);
                     }
                 }
+
+                // ✅ Entry/Exit 마커 표시 (작은 사각형)
+                foreach (var waypoint in waypointMarkers)
+                {
+                    int entryX = (int)(width * ((float)waypoint.EntryFrame / totalFrames));
+                    int exitX = (int)(width * ((float)waypoint.ExitFrame / totalFrames));
+                    
+                    int markerSize = 8; // 마커 크기
+                    int markerY = 0; // 상단 정렬
+
+                    // Entry 마커 (진한 색상)
+                    using (SolidBrush entryBrush = new SolidBrush(waypoint.MarkerColor))
+                    {
+                        g.FillRectangle(entryBrush, entryX - markerSize / 2, markerY, markerSize, markerSize);
+                    }
+                    
+                    // Entry 마커 테두리
+                    using (Pen entryPen = new Pen(Color.White, 2))
+                    {
+                        g.DrawRectangle(entryPen, entryX - markerSize / 2, markerY, markerSize, markerSize);
+                    }
+
+                    // Exit 마커 (진한 색상)
+                    using (SolidBrush exitBrush = new SolidBrush(waypoint.MarkerColor))
+                    {
+                        g.FillRectangle(exitBrush, exitX - markerSize / 2, markerY, markerSize, markerSize);
+                    }
+                    
+                    // Exit 마커 테두리
+                    using (Pen exitPen = new Pen(Color.White, 2))
+                    {
+                        g.DrawRectangle(exitPen, exitX - markerSize / 2, markerY, markerSize, markerSize);
+                    }
+                }
             }
 
+            // ✅ Entry 설정 중일 때 빨간 선 표시
             if (entryFrameIndex.HasValue && !exitFrameIndex.HasValue && totalFrames > 0)
             {
                 int entryX = (int)(width * ((float)entryFrameIndex.Value / totalFrames));
@@ -2887,10 +2947,11 @@ namespace WinFormsApp1
                 }
             }
 
+            // ✅ 현재 재생 위치 표시 (흰색 선)
             if (totalFrames > 0)
             {
                 int currentX = (int)(width * timelineProgress);
-                using (Pen pen = new Pen(Color.White, 2))
+                using (Pen pen = new Pen(Color.White, 3))
                 {
                     g.DrawLine(pen, currentX, 0, currentX, height);
                 }
@@ -2901,8 +2962,60 @@ namespace WinFormsApp1
         {
             if (totalFrames == 0) return;
 
+            // ✅ 먼저 마커 클릭 여부 확인 (Entry/Exit 프레임으로 이동)
+            if (TryNavigateToMarker(e.X, e.Y))
+            {
+                return; // 마커를 클릭했으면 드래그 시작하지 않음
+            }
+
+            // 마커가 아니면 기존 타임라인 드래그 시작
             isTimelineDragging = true;
             UpdateFrameFromMousePosition(e.X);
+        }
+
+        /// <summary>
+        /// 클릭 위치가 마커 영역인지 확인하고, 맞으면 해당 프레임으로 이동
+        /// </summary>
+        private bool TryNavigateToMarker(int mouseX, int mouseY)
+        {
+            if (totalFrames == 0) return false;
+
+            int width = panelTimeline.Width;
+            int markerSize = 8;
+            int clickTolerance = 6; // 클릭 허용 범위 (마커보다 약간 넓게)
+
+            foreach (var waypoint in waypointMarkers)
+            {
+                // Entry 마커 위치 계산
+                int entryX = (int)(width * ((float)waypoint.EntryFrame / totalFrames));
+                int entryLeft = entryX - markerSize / 2;
+                int entryRight = entryX + markerSize / 2;
+
+                // Exit 마커 위치 계산
+                int exitX = (int)(width * ((float)waypoint.ExitFrame / totalFrames));
+                int exitLeft = exitX - markerSize / 2;
+                int exitRight = exitX + markerSize / 2;
+
+                // Entry 마커 클릭 확인
+                if (mouseX >= entryLeft - clickTolerance && mouseX <= entryRight + clickTolerance &&
+                    mouseY >= 0 && mouseY <= markerSize + clickTolerance)
+                {
+                    LoadFrame(waypoint.EntryFrame);
+                    System.Diagnostics.Debug.WriteLine($"[Timeline] Entry 마커 클릭: {waypoint.Label}, Frame {waypoint.EntryFrame}");
+                    return true;
+                }
+
+                // Exit 마커 클릭 확인
+                if (mouseX >= exitLeft - clickTolerance && mouseX <= exitRight + clickTolerance &&
+                    mouseY >= 0 && mouseY <= markerSize + clickTolerance)
+                {
+                    LoadFrame(waypoint.ExitFrame);
+                    System.Diagnostics.Debug.WriteLine($"[Timeline] Exit 마커 클릭: {waypoint.Label}, Frame {waypoint.ExitFrame}");
+                    return true;
+                }
+            }
+
+            return false; // 마커가 아님
         }
 
         private void panelTimeline_MouseMove(object sender, MouseEventArgs e)
@@ -3144,6 +3257,7 @@ namespace WinFormsApp1
             TimeSpan entryTime = TimeSpan.FromSeconds(box.FrameIndex / fps);
             TimeSpan exitTime = TimeSpan.FromSeconds((totalFrames - 1) / fps); // 영상 끝
 
+            // ✅ Event Waypoint 생성 (초록 색상, EventId 저장)
             var waypoint = new WaypointMarker
             {
                 EntryFrame = box.FrameIndex,
@@ -3151,7 +3265,7 @@ namespace WinFormsApp1
                 MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107), // 초록
                 EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                 ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                ObjectId = 0,
+                ObjectId = box.EventId,
                 Label = "event"
             };
 
@@ -3748,7 +3862,7 @@ namespace WinFormsApp1
                     if (annotation.Id >= nextAnnotationId)
                         nextAnnotationId = annotation.Id + 1;
 
-                    // ✅ 웨이포인트 정보 복원 (Label별로 분리)
+                    // ✅ 웨이포인트 정보 복원 (Label + ObjectId별로 분리)
                     if (annotation.TrackInfo != null && 
                         annotation.TrackInfo.Entry != null && 
                         annotation.TrackInfo.Exit != null)
@@ -3756,9 +3870,17 @@ namespace WinFormsApp1
                         int entryFrame = annotation.TrackInfo.Entry.Frame;
                         int exitFrame = annotation.TrackInfo.Exit.Frame;
 
-                        // 같은 Label, Entry, Exit를 가진 Waypoint가 이미 있는지 확인
+                        // ObjectId 결정 (Label에 따라)
+                        int objectId = 0;
+                        if (box.Label == "person") objectId = box.PersonId;
+                        else if (box.Label == "vehicle") objectId = box.VehicleId;
+                        else if (box.Label == "event") objectId = box.EventId;
+
+                        // ✅ 같은 Label, ObjectId, Entry, Exit를 가진 Waypoint가 이미 있는지 확인
+                        // → 이렇게 해야 같은 객체(예: person_01)의 여러 Waypoint가 통합되지 않음
                         bool waypointExists = waypointMarkers.Any(w => 
                             w.Label == box.Label &&
+                            w.ObjectId == objectId &&
                             w.EntryFrame == entryFrame && 
                             w.ExitFrame == exitFrame);
 
@@ -3786,7 +3908,7 @@ namespace WinFormsApp1
                             
                             var waypoint = new WaypointMarker
                             {
-                                ObjectId = 0,
+                                ObjectId = objectId, // ✅ PersonId/VehicleId/EventId 저장
                                 Label = box.Label, // Person/Vehicle/Event 라벨 유지
                                 EntryFrame = entryFrame,
                                 ExitFrame = exitFrame,
@@ -3796,7 +3918,7 @@ namespace WinFormsApp1
                             };
 
                             waypointMarkers.Add(waypoint);
-                            System.Diagnostics.Debug.WriteLine($"[JSON 로드] {box.Label} Waypoint 복원: {entryFrame}~{exitFrame}");
+                            System.Diagnostics.Debug.WriteLine($"[JSON 로드] {box.Label} Waypoint 복원: ID={objectId}, {entryFrame}~{exitFrame}");
                         }
                     }
                 }
