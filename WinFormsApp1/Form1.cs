@@ -40,6 +40,16 @@ namespace WinFormsApp1
         public string Label { get; set; }
     }
 
+    // ✅ BBox 크기 조정 핸들 (4개 모서리만)
+    public enum ResizeHandle
+    {
+        None,
+        TopLeft,      // 좌상단 모서리
+        TopRight,     // 우상단 모서리
+        BottomLeft,   // 좌하단 모서리
+        BottomRight   // 우하단 모서리
+    }
+
     public class CustomLabel
     {
         public string Name { get; set; }
@@ -192,11 +202,40 @@ namespace WinFormsApp1
 
                     var detections = _predictor.Detect(_tempImagePath);
 
-                    // 이전 박스와 IoU가 가장 큰 검출만 채택 (사용자 박스 기반 추적)
+                    // ✅ 이전 박스와 IoU가 가장 큰 검출만 채택 (Label 필터링 적용)
                     double bestIou = 0.0;
                     OpenCvSharp.Rect? best = null;
+                    const double MIN_IOU_THRESHOLD = 0.3; // IoU 최소 임계값
+                    
                     foreach (var d in detections)
                     {
+                        // ✅ 1. Label 필터링: 같은 Label만 고려 (person, vehicle, event 혼동 방지)
+                        // YoloSharp 6.0.0 API: Detection 객체에서 라벨명 추출
+                        string detectionLabel = "";
+                        
+                        // YoloSharp의 API 버전에 따라 다를 수 있으므로 여러 방법 시도
+                        try
+                        {
+                            // 시도 1: Label.Name (일부 버전)
+                            detectionLabel = ((dynamic)d).Label?.Name?.ToString()?.ToLower() ?? "";
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                // 시도 2: ClassName (일반적)
+                                detectionLabel = ((dynamic)d).ClassName?.ToString()?.ToLower() ?? "";
+                            }
+                            catch
+                            {
+                                // 시도 3: Class (인덱스인 경우, 우선 필터링 스킵)
+                                detectionLabel = fixedLabel.ToLower(); // 임시로 통과
+                            }
+                        }
+                        
+                        if (string.IsNullOrEmpty(detectionLabel) || detectionLabel != fixedLabel.ToLower())
+                            continue; // ❌ 다른 Label은 무시
+
                         var rect = new OpenCvSharp.Rect(
                             (int)d.Bounds.Left,
                             (int)d.Bounds.Top,
@@ -204,18 +243,81 @@ namespace WinFormsApp1
                             (int)d.Bounds.Height);
 
                         double iou = ComputeIoU(previousRect, new Rectangle(rect.X, rect.Y, rect.Width, rect.Height));
-                        if (iou > bestIou)
+                        
+                        // ✅ 2. IoU Threshold: 0.3 이상인 것만 고려 (너무 먼 객체는 무시)
+                        if (iou > bestIou && iou >= MIN_IOU_THRESHOLD)
                         {
                             bestIou = iou;
                             best = rect;
                         }
                     }
 
-                    // 매칭이 없으면 이전 박스를 그대로 유지해 연속성 보장
+                    // ✅ 3. Detection 실패 시 탐색 범위 확대 (이전 박스 주변 탐색)
                     var nextRect = previousRect;
                     if (best.HasValue)
                     {
                         nextRect = new Rectangle(best.Value.X, best.Value.Y, best.Value.Width, best.Value.Height);
+                    }
+                    else
+                    {
+                        // Detection 실패 시 이전 박스 주변을 확장하여 재탐색
+                        // 약간의 움직임을 예측하여 박스 확장 (±20% 크기)
+                        int expandMargin = Math.Max(previousRect.Width, previousRect.Height) / 5; // 20% 확장
+                        Rectangle searchArea = new Rectangle(
+                            Math.Max(0, previousRect.X - expandMargin),
+                            Math.Max(0, previousRect.Y - expandMargin),
+                            previousRect.Width + expandMargin * 2,
+                            previousRect.Height + expandMargin * 2);
+
+                        // 확장된 영역 내에서 같은 Label의 detection 재탐색
+                        foreach (var d in detections)
+                        {
+                            // YoloSharp API: Detection 객체에서 라벨명 추출
+                            string detectionLabel = "";
+                            try
+                            {
+                                detectionLabel = ((dynamic)d).Label?.Name?.ToString()?.ToLower() ?? "";
+                            }
+                            catch
+                            {
+                                try
+                                {
+                                    detectionLabel = ((dynamic)d).ClassName?.ToString()?.ToLower() ?? "";
+                                }
+                                catch
+                                {
+                                    detectionLabel = fixedLabel.ToLower();
+                                }
+                            }
+                            
+                            if (string.IsNullOrEmpty(detectionLabel) || detectionLabel != fixedLabel.ToLower())
+                                continue;
+
+                            var rect = new OpenCvSharp.Rect(
+                                (int)d.Bounds.Left,
+                                (int)d.Bounds.Top,
+                                (int)d.Bounds.Width,
+                                (int)d.Bounds.Height);
+
+                            // 확장된 영역과 겹치는지 확인
+                            Rectangle detRect = new Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
+                            if (searchArea.IntersectsWith(detRect))
+                            {
+                                double iou = ComputeIoU(previousRect, detRect);
+                                if (iou > bestIou) // threshold 없이 가장 가까운 것 선택
+                                {
+                                    bestIou = iou;
+                                    best = rect;
+                                }
+                            }
+                        }
+
+                        // 확장 탐색에서도 찾으면 업데이트
+                        if (best.HasValue)
+                        {
+                            nextRect = new Rectangle(best.Value.X, best.Value.Y, best.Value.Width, best.Value.Height);
+                        }
+                        // 그래도 없으면 이전 박스 유지 (마지막 수단)
                     }
 
                     var trackedBox = new BoundingBox
@@ -294,6 +396,14 @@ namespace WinFormsApp1
         private bool isDrawing = false;
         private bool isDragging = false;
         private System.Drawing.Point dragOffset;
+
+        // ✅ BBox 크기 조정 관련 변수
+        private bool isResizing = false;
+        private ResizeHandle currentResizeHandle = ResizeHandle.None;
+        private System.Drawing.Point resizeStartPoint;
+        private Rectangle originalResizeRect;
+        private const int MIN_BBOX_SIZE = 10; // 최소 bbox 크기
+        private const int HANDLE_SIZE = 8; // 핸들 크기
 
         private int? entryFrameIndex = null;
         private int? exitFrameIndex = null;
@@ -1497,6 +1607,26 @@ namespace WinFormsApp1
             }
             else if (currentMode == DrawMode.Select)
             {
+                // ✅ 먼저 선택된 박스의 크기 조정 핸들을 체크
+                if (selectedBox != null)
+                {
+                    var viewRect = ImageToView(new RectangleF(selectedBox.Rectangle.X, selectedBox.Rectangle.Y, 
+                        selectedBox.Rectangle.Width, selectedBox.Rectangle.Height));
+                    
+                    ResizeHandle handle = GetResizeHandleAtPoint(e.Location, viewRect);
+                    
+                    if (handle != ResizeHandle.None)
+                    {
+                        // 크기 조정 시작
+                        isResizing = true;
+                        currentResizeHandle = handle;
+                        resizeStartPoint = e.Location;
+                        originalResizeRect = selectedBox.Rectangle;
+                        return;
+                    }
+                }
+                
+                // 핸들이 아니면 박스 선택 또는 드래그
                 selectedBox = GetBoundingBoxAt(e.Location);
 
                 if (selectedBox != null)
@@ -1530,6 +1660,12 @@ namespace WinFormsApp1
 
                 pictureBoxVideo.Invalidate();
             }
+            else if (isResizing && selectedBox != null)
+            {
+                // ✅ 크기 조정 중
+                PerformResize(e.Location);
+                pictureBoxVideo.Invalidate();
+            }
             else if (isDragging && selectedBox != null)
             {
                 // 뷰 좌표에서 이미지 좌표로 변환
@@ -1544,6 +1680,20 @@ namespace WinFormsApp1
                 );
 
                 pictureBoxVideo.Invalidate();
+            }
+            else if (currentMode == DrawMode.Select && selectedBox != null)
+            {
+                // ✅ 크기 조정이 아닐 때 커서 변경
+                var viewRect = ImageToView(new RectangleF(selectedBox.Rectangle.X, selectedBox.Rectangle.Y, 
+                    selectedBox.Rectangle.Width, selectedBox.Rectangle.Height));
+                
+                ResizeHandle handle = GetResizeHandleAtPoint(e.Location, viewRect);
+                UpdateCursorForHandle(handle);
+            }
+            else
+            {
+                // 기본 커서
+                pictureBoxVideo.Cursor = Cursors.Default;
             }
         }
 
@@ -1572,6 +1722,30 @@ namespace WinFormsApp1
 
                 drawingBox = null;
                 isDrawing = false;
+                pictureBoxVideo.Invalidate();
+            }
+            else if (isResizing)
+            {
+                // ✅ 크기 조정 완료
+                isResizing = false;
+                currentResizeHandle = ResizeHandle.None;
+                
+                // Undo 스택에 추가 (원본 Rectangle 저장)
+                var undoBox = CloneBoundingBox(selectedBox);
+                undoBox.Rectangle = originalResizeRect;
+                AddUndoAction(new UndoAction { Type = UndoActionType.ModifyBox, Box = undoBox });
+                
+                InvalidateBoxCache();
+                UpdateObjectInfo(selectedBox);
+                UpdateBboxListDisplay();
+                
+                // Event 박스 전파
+                if (selectedBox != null && selectedBox.Label == "event")
+                {
+                    PropagateEventBoxFromCurrentFrame(selectedBox);
+                }
+                
+                pictureBoxVideo.Cursor = Cursors.Default;
                 pictureBoxVideo.Invalidate();
             }
             else if (isDragging)
@@ -1663,6 +1837,12 @@ namespace WinFormsApp1
 
                 using (SolidBrush textBrush = new SolidBrush(Color.White))
                     g.DrawString(labelText, labelFont, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
+                
+                // ✅ 선택된 박스에 크기 조정 핸들 표시 (4개 엣지만)
+                if (box == selectedBox)
+                {
+                    DrawResizeHandles(g, viewRect);
+                }
             }
 
             if (isDrawing && drawingBox != null)
@@ -1704,6 +1884,234 @@ namespace WinFormsApp1
                     return box;
             }
             return null;
+        }
+
+        // ✅ 크기 조정 핸들 그리기 (4개 모서리만)
+        private void DrawResizeHandles(Graphics g, RectangleF rect)
+        {
+            Color handleColor = Color.White;
+            Color borderColor = Color.Black;
+            
+            // 4개 모서리 좌표 계산
+            PointF topLeft = new PointF(rect.X, rect.Y);
+            PointF topRight = new PointF(rect.X + rect.Width, rect.Y);
+            PointF bottomLeft = new PointF(rect.X, rect.Y + rect.Height);
+            PointF bottomRight = new PointF(rect.X + rect.Width, rect.Y + rect.Height);
+            
+            // 핸들 그리기
+            DrawHandle(g, topLeft, handleColor, borderColor);
+            DrawHandle(g, topRight, handleColor, borderColor);
+            DrawHandle(g, bottomLeft, handleColor, borderColor);
+            DrawHandle(g, bottomRight, handleColor, borderColor);
+        }
+        
+        private void DrawHandle(Graphics g, PointF center, Color fillColor, Color borderColor)
+        {
+            float halfSize = HANDLE_SIZE / 2f;
+            RectangleF handleRect = new RectangleF(
+                center.X - halfSize,
+                center.Y - halfSize,
+                HANDLE_SIZE,
+                HANDLE_SIZE
+            );
+            
+            using (SolidBrush brush = new SolidBrush(fillColor))
+                g.FillRectangle(brush, handleRect);
+            
+            using (Pen pen = new Pen(borderColor, 2))
+                g.DrawRectangle(pen, handleRect.X, handleRect.Y, handleRect.Width, handleRect.Height);
+        }
+        
+        // ✅ 마우스 위치에서 크기 조정 핸들 감지 (4개 모서리만)
+        private ResizeHandle GetResizeHandleAtPoint(System.Drawing.Point viewPoint, RectangleF viewRect)
+        {
+            float tolerance = HANDLE_SIZE / 2f + 2; // 클릭 허용 범위
+            
+            // 좌상단 모서리
+            PointF topLeft = new PointF(viewRect.X, viewRect.Y);
+            if (Distance(viewPoint, topLeft) <= tolerance)
+                return ResizeHandle.TopLeft;
+            
+            // 우상단 모서리
+            PointF topRight = new PointF(viewRect.X + viewRect.Width, viewRect.Y);
+            if (Distance(viewPoint, topRight) <= tolerance)
+                return ResizeHandle.TopRight;
+            
+            // 좌하단 모서리
+            PointF bottomLeft = new PointF(viewRect.X, viewRect.Y + viewRect.Height);
+            if (Distance(viewPoint, bottomLeft) <= tolerance)
+                return ResizeHandle.BottomLeft;
+            
+            // 우하단 모서리
+            PointF bottomRight = new PointF(viewRect.X + viewRect.Width, viewRect.Y + viewRect.Height);
+            if (Distance(viewPoint, bottomRight) <= tolerance)
+                return ResizeHandle.BottomRight;
+            
+            return ResizeHandle.None;
+        }
+        
+        // 두 점 사이의 거리 계산
+        private float Distance(PointF p1, PointF p2)
+        {
+            float dx = p1.X - p2.X;
+            float dy = p1.Y - p2.Y;
+            return (float)Math.Sqrt(dx * dx + dy * dy);
+        }
+        
+        // ✅ 크기 조정 수행 (10x10 최소 크기 적용, 모서리로 너비+높이 동시 조절)
+        private void PerformResize(System.Drawing.Point currentViewPoint)
+        {
+            if (selectedBox == null || currentResizeHandle == ResizeHandle.None)
+                return;
+            
+            // 뷰 좌표 차이 계산
+            int deltaX = currentViewPoint.X - resizeStartPoint.X;
+            int deltaY = currentViewPoint.Y - resizeStartPoint.Y;
+            
+            // 뷰 좌표 차이를 이미지 좌표 차이로 변환
+            var viewDelta = new PointF(deltaX, deltaY);
+            var imageDelta = ViewToImageDistance(viewDelta);
+            
+            // 원본 Rectangle로 시작
+            Rectangle newRect = originalResizeRect;
+            
+            switch (currentResizeHandle)
+            {
+                case ResizeHandle.TopLeft:
+                    // 좌상단 모서리: X, Y, Width, Height 모두 변경
+                    int newLeft = originalResizeRect.X + (int)imageDelta.X;
+                    int newTop = originalResizeRect.Y + (int)imageDelta.Y;
+                    int newWidth = originalResizeRect.Right - newLeft;
+                    int newHeight = originalResizeRect.Bottom - newTop;
+                    
+                    if (newWidth >= MIN_BBOX_SIZE && newHeight >= MIN_BBOX_SIZE)
+                    {
+                        newRect.X = newLeft;
+                        newRect.Y = newTop;
+                        newRect.Width = newWidth;
+                        newRect.Height = newHeight;
+                    }
+                    else
+                    {
+                        // 최소 크기 유지
+                        if (newWidth < MIN_BBOX_SIZE)
+                        {
+                            newRect.X = originalResizeRect.Right - MIN_BBOX_SIZE;
+                            newRect.Width = MIN_BBOX_SIZE;
+                        }
+                        else
+                        {
+                            newRect.X = newLeft;
+                            newRect.Width = newWidth;
+                        }
+                        
+                        if (newHeight < MIN_BBOX_SIZE)
+                        {
+                            newRect.Y = originalResizeRect.Bottom - MIN_BBOX_SIZE;
+                            newRect.Height = MIN_BBOX_SIZE;
+                        }
+                        else
+                        {
+                            newRect.Y = newTop;
+                            newRect.Height = newHeight;
+                        }
+                    }
+                    break;
+                    
+                case ResizeHandle.TopRight:
+                    // 우상단 모서리: Y, Width, Height 변경
+                    newTop = originalResizeRect.Y + (int)imageDelta.Y;
+                    newWidth = originalResizeRect.Width + (int)imageDelta.X;
+                    newHeight = originalResizeRect.Bottom - newTop;
+                    
+                    if (newWidth >= MIN_BBOX_SIZE && newHeight >= MIN_BBOX_SIZE)
+                    {
+                        newRect.Y = newTop;
+                        newRect.Width = newWidth;
+                        newRect.Height = newHeight;
+                    }
+                    else
+                    {
+                        newRect.Width = Math.Max(newWidth, MIN_BBOX_SIZE);
+                        
+                        if (newHeight < MIN_BBOX_SIZE)
+                        {
+                            newRect.Y = originalResizeRect.Bottom - MIN_BBOX_SIZE;
+                            newRect.Height = MIN_BBOX_SIZE;
+                        }
+                        else
+                        {
+                            newRect.Y = newTop;
+                            newRect.Height = newHeight;
+                        }
+                    }
+                    break;
+                    
+                case ResizeHandle.BottomLeft:
+                    // 좌하단 모서리: X, Width, Height 변경
+                    newLeft = originalResizeRect.X + (int)imageDelta.X;
+                    newWidth = originalResizeRect.Right - newLeft;
+                    newHeight = originalResizeRect.Height + (int)imageDelta.Y;
+                    
+                    if (newWidth >= MIN_BBOX_SIZE && newHeight >= MIN_BBOX_SIZE)
+                    {
+                        newRect.X = newLeft;
+                        newRect.Width = newWidth;
+                        newRect.Height = newHeight;
+                    }
+                    else
+                    {
+                        if (newWidth < MIN_BBOX_SIZE)
+                        {
+                            newRect.X = originalResizeRect.Right - MIN_BBOX_SIZE;
+                            newRect.Width = MIN_BBOX_SIZE;
+                        }
+                        else
+                        {
+                            newRect.X = newLeft;
+                            newRect.Width = newWidth;
+                        }
+                        
+                        newRect.Height = Math.Max(newHeight, MIN_BBOX_SIZE);
+                    }
+                    break;
+                    
+                case ResizeHandle.BottomRight:
+                    // 우하단 모서리: Width, Height만 변경
+                    newWidth = originalResizeRect.Width + (int)imageDelta.X;
+                    newHeight = originalResizeRect.Height + (int)imageDelta.Y;
+                    
+                    newRect.Width = Math.Max(newWidth, MIN_BBOX_SIZE);
+                    newRect.Height = Math.Max(newHeight, MIN_BBOX_SIZE);
+                    break;
+            }
+            
+            selectedBox.Rectangle = newRect;
+        }
+        
+        // ✅ 뷰 좌표 거리를 이미지 좌표 거리로 변환
+        private PointF ViewToImageDistance(PointF viewDistance)
+        {
+            if (pictureBoxVideo.Image == null)
+                return viewDistance;
+            
+            float scaleX = (float)pictureBoxVideo.Image.Width / pictureBoxVideo.ClientSize.Width;
+            float scaleY = (float)pictureBoxVideo.Image.Height / pictureBoxVideo.ClientSize.Height;
+            
+            return new PointF(viewDistance.X * scaleX, viewDistance.Y * scaleY);
+        }
+        
+        // ✅ 핸들에 따라 커서 변경 (모서리용 대각선 커서)
+        private void UpdateCursorForHandle(ResizeHandle handle)
+        {
+            pictureBoxVideo.Cursor = handle switch
+            {
+                ResizeHandle.TopLeft => Cursors.SizeNWSE,      // ↖↘ 좌상-우하 대각선
+                ResizeHandle.BottomRight => Cursors.SizeNWSE,  // ↖↘ 좌상-우하 대각선
+                ResizeHandle.TopRight => Cursors.SizeNESW,     // ↗↙ 우상-좌하 대각선
+                ResizeHandle.BottomLeft => Cursors.SizeNESW,   // ↗↙ 우상-좌하 대각선
+                _ => Cursors.Default
+            };
         }
 
         private Color GetColorForLabel(string label)
