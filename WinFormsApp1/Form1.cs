@@ -72,6 +72,7 @@ namespace WinFormsApp1
         public string Action { get; set; }
         public string VehicleName { get; set; }
         public string EventName { get; set; }
+        public bool IsDeleted { get; set; } // ✅ 삭제된 박스 표시 (흔적 유지)
     }
 
     public class SubtitleEntry
@@ -1788,35 +1789,49 @@ namespace WinFormsApp1
                     box.Rectangle.Width, box.Rectangle.Height));
 
                 Color boxColor = GetColorForLabel(box.Label);
-                using (Pen pen = new Pen(boxColor, 3))
+                
+                // ✅ 삭제된 박스는 얇고 옅게 표시
+                if (box.IsDeleted)
                 {
-                    if (box == selectedBox)
-                        pen.Width = 5;
-                    g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
+                    Color fadedColor = Color.FromArgb(150, boxColor.R, boxColor.G, boxColor.B);
+                    using (Pen pen = new Pen(fadedColor, 2))
+                    {
+                        g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
+                    }
                 }
-
-                // 라벨 텍스트 생성 (성능 최적화: 캐싱된 배열 사용)
-                string labelText = GetBoxLabelText(box);
-                
-                // 성능 최적화: 재사용 가능한 Font 사용
-                SizeF textSize = g.MeasureString(labelText, labelFont);
-                RectangleF labelBg = new RectangleF(
-                    viewRect.X,
-                    viewRect.Y - textSize.Height - 4,
-                    textSize.Width + 8,
-                    textSize.Height + 4
-                );
-
-                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(200, boxColor)))
-                    g.FillRectangle(bgBrush, labelBg);
-
-                using (SolidBrush textBrush = new SolidBrush(Color.White))
-                    g.DrawString(labelText, labelFont, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
-                
-                // ✅ 선택된 박스에 크기 조정 핸들 표시 (4개 엣지만)
-                if (box == selectedBox)
+                else
                 {
-                    DrawResizeHandles(g, viewRect);
+                    // 정상 박스는 기존 로직대로
+                    using (Pen pen = new Pen(boxColor, 3))
+                    {
+                        if (box == selectedBox)
+                            pen.Width = 5;
+                        g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
+                    }
+
+                    // 라벨 텍스트 생성 (성능 최적화: 캐싱된 배열 사용)
+                    string labelText = GetBoxLabelText(box);
+                    
+                    // 성능 최적화: 재사용 가능한 Font 사용
+                    SizeF textSize = g.MeasureString(labelText, labelFont);
+                    RectangleF labelBg = new RectangleF(
+                        viewRect.X,
+                        viewRect.Y - textSize.Height - 4,
+                        textSize.Width + 8,
+                        textSize.Height + 4
+                    );
+
+                    using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(200, boxColor)))
+                        g.FillRectangle(bgBrush, labelBg);
+
+                    using (SolidBrush textBrush = new SolidBrush(Color.White))
+                        g.DrawString(labelText, labelFont, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
+                    
+                    // ✅ 선택된 박스에 크기 조정 핸들 표시 (4개 엣지만)
+                    if (box == selectedBox)
+                    {
+                        DrawResizeHandles(g, viewRect);
+                    }
                 }
             }
 
@@ -2102,7 +2117,9 @@ namespace WinFormsApp1
 
         private void UpdateBoxCount()
         {
-            labelBoxCount.Text = $"박스 개수: {boundingBoxes.Count}";
+            // ✅ 삭제되지 않은 박스만 카운트
+            int activeCount = boundingBoxes.Count(b => !b.IsDeleted);
+            labelBoxCount.Text = $"박스 개수: {activeCount}";
         }
 
         private string FormatFrameTime(int frameIndex)
@@ -2135,13 +2152,14 @@ namespace WinFormsApp1
                     if (personBoxes.Count > 0)
                     {
                         var firstBox = personBoxes.First();
-                        string categoryName = GetPersonCategoryName(firstBox.PersonId);
+                        // ✅ 고유 번호 형식으로 표시 (person_03, person_05 등)
+                        string categoryName = GetCategoryName("person", firstBox.PersonId);
                         item.SubItems.Add(categoryName);
-                }
-                else
-                {
-                        item.SubItems.Add("person");
-                }
+                    }
+                    else
+                    {
+                        item.SubItems.Add("person_00");
+                    }
                 
                 item.ForeColor = waypoint.MarkerColor;
                 item.Tag = waypoint;
@@ -2155,12 +2173,13 @@ namespace WinFormsApp1
                     
                     if (vehicleBox != null)
                     {
-                        string categoryName = GetVehicleCategoryName(vehicleBox.VehicleId);
+                        // ✅ 고유 번호 형식으로 표시 (car, motorcycle, e_scooter, bicycle)
+                        string categoryName = GetCategoryName("vehicle", vehicleBox.VehicleId);
                         item.SubItems.Add(categoryName);
                     }
                     else
                     {
-                        item.SubItems.Add("vehicle");
+                        item.SubItems.Add("car");
                     }
                     
                     item.ForeColor = waypoint.MarkerColor;
@@ -2177,12 +2196,13 @@ namespace WinFormsApp1
                     
                     if (eventBox != null)
                     {
-                        string categoryName = GetEventCategoryName(eventBox.EventId);
+                        // ✅ 고유 번호 형식으로 표시 (contact, exchange, board, final_exchange)
+                        string categoryName = GetCategoryName("event", eventBox.EventId);
                         item.SubItems.Add(categoryName);
                     }
                     else
                     {
-                        item.SubItems.Add("event");
+                        item.SubItems.Add("contact");
                     }
                     
                     item.ForeColor = waypoint.MarkerColor;
@@ -2691,7 +2711,7 @@ namespace WinFormsApp1
             panelPersonList.Controls.Clear();
             
             var currentBoxes = boundingBoxes
-                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "person")
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "person" && !b.IsDeleted)
                 .ToList();
             
             if (currentBoxes.Count == 0)
@@ -2799,7 +2819,7 @@ namespace WinFormsApp1
             panelVehicleList.Controls.Clear();
             
             var currentBoxes = boundingBoxes
-                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "vehicle")
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "vehicle" && !b.IsDeleted)
                 .ToList();
             
             if (currentBoxes.Count == 0)
@@ -2912,7 +2932,7 @@ namespace WinFormsApp1
             panelEventList.Controls.Clear();
             
             var currentBoxes = boundingBoxes
-                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "event")
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "event" && !b.IsDeleted)
                 .ToList();
             
             if (currentBoxes.Count == 0)
@@ -3054,8 +3074,10 @@ namespace WinFormsApp1
             }
             
             AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
-            boundingBoxes.Remove(selectedBox);
-            InvalidateBoxCache();
+            
+            // ✅ 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
+            selectedBox.IsDeleted = true;
+            
             selectedBox = null;
             UpdateBoxCount();
             UpdateBboxListDisplay();
@@ -4556,7 +4578,8 @@ namespace WinFormsApp1
                 var annotations = new List<AnnotationData>();
                 var categories = new Dictionary<int, CategoryData>();
 
-                var frameGroups = boundingBoxes.GroupBy(b => b.FrameIndex).OrderBy(g => g.Key);
+                // ✅ 삭제되지 않은 박스만 JSON에 저장
+                var frameGroups = boundingBoxes.Where(b => !b.IsDeleted).GroupBy(b => b.FrameIndex).OrderBy(g => g.Key);
                 int imageId = 0;
 
                 foreach (var frameGroup in frameGroups)
@@ -5001,8 +5024,10 @@ namespace WinFormsApp1
             else if (e.KeyCode == Keys.G && selectedBox != null)
             {
                 AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
-                boundingBoxes.Remove(selectedBox);
-                InvalidateBoxCache();
+                
+                // ✅ 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
+                selectedBox.IsDeleted = true;
+                
                 selectedBox = null;
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
@@ -5012,8 +5037,10 @@ namespace WinFormsApp1
             else if (e.KeyCode == Keys.Delete && selectedBox != null)
             {
                 AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
-                boundingBoxes.Remove(selectedBox);
-                InvalidateBoxCache();
+                
+                // ✅ 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
+                selectedBox.IsDeleted = true;
+                
                 selectedBox = null;
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
