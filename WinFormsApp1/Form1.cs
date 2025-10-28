@@ -10,7 +10,9 @@ using Newtonsoft.Json;
 using System.IO;
 using OpenCvSharp.Tracking;
 using Compunet.YoloSharp;
-using System.CodeDom;  // YoloSharp 추가
+using Compunet.YoloSharp.Data;
+using Compunet.YoloSharp.Plotting;
+using System.CodeDom;
 using FFMpegCore;
 using FFMpegCore.Enums;
 using System.Diagnostics;
@@ -158,6 +160,28 @@ namespace WinFormsApp1
         private YoloPredictor _predictor;
         private string _tempImagePath;
 
+        private static string GetBaseCategory(string appLabel)
+        {
+            if (string.IsNullOrEmpty(appLabel)) return "";
+
+            var parts = appLabel.Split('_');
+            if (parts.Length > 0)
+            {
+                switch (parts[0])
+                {
+                    case "person":
+                        return "person";
+                    case "vehicle":
+                        // "vehicle_0_car" -> "car"
+                        return parts.Length > 2 ? parts[2] : "car"; 
+                    case "event":
+                        // "event_0_contact" -> "contact"
+                        return parts.Length > 2 ? parts[2] : "event";
+                }
+            }
+            return appLabel; // Fallback
+        }
+
         public YoloTrackingEngine(string modelPath)
         {
             _predictor = new YoloPredictor(modelPath);
@@ -190,6 +214,9 @@ namespace WinFormsApp1
             int fixedIdVehicle = startBox.VehicleId;
             int fixedIdEvent = startBox.EventId;
 
+            // 추적 대상의 기본 카테고리를 미리 추출합니다. (예: "person_1" -> "person")
+            string targetCategory = GetBaseCategory(fixedLabel);
+
             for (int i = startFrame; i <= endFrame; i++)
             {
                 if (!videoCapture.Read(frame) || frame.Empty())
@@ -201,142 +228,88 @@ namespace WinFormsApp1
                     Cv2.ImWrite(_tempImagePath, frame);
 
                     var detections = _predictor.Detect(_tempImagePath);
+                    
+                    // ✅ YOLO 탐지 결과 로그 출력
+                    Debug.WriteLine($"[YOLO] Frame {i}: Detected {detections.Count} objects.");
+                    foreach (var d in detections)
+                    {
+                        Debug.WriteLine($"  -> Label: {d.Name}, Confidence: {d.Confidence:F2}, Box: {d.Bounds}");
+                    }
+
 
                     // ✅ 이전 박스와 IoU가 가장 큰 검출만 채택 (Label 필터링 적용)
                     double bestIou = 0.0;
-                    OpenCvSharp.Rect? best = null;
+                    Detection bestDetection = null;
                     const double MIN_IOU_THRESHOLD = 0.3; // IoU 최소 임계값
                     
                     foreach (var d in detections)
                     {
-                        // ✅ 1. Label 필터링: 같은 Label만 고려 (person, vehicle, event 혼동 방지)
-                        // YoloSharp 6.0.0 API: Detection 객체에서 라벨명 추출
-                        string detectionLabel = "";
-                        
-                        // YoloSharp의 API 버전에 따라 다를 수 있으므로 여러 방법 시도
-                        try
+                        // ✅ 1. Label 필터링: 같은 기본 카테고리를 가진 객체만 후보로 고려합니다.
+                        // YOLO 라이브러리가 "0: 'person'" 형식의 이름을 반환하므로, 순수한 이름만 추출합니다.
+                        string rawDetectionName = d.Name.ToString();
+                        string detectionName = rawDetectionName;
+                        int firstQuote = rawDetectionName.IndexOf('\'');
+                        int lastQuote = rawDetectionName.LastIndexOf('\'');
+                        if (firstQuote != -1 && lastQuote > firstQuote)
                         {
-                            // 시도 1: Label.Name (일부 버전)
-                            detectionLabel = ((dynamic)d).Label?.Name?.ToString()?.ToLower() ?? "";
+                            detectionName = rawDetectionName.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
                         }
-                        catch
-                        {
-                            try
-                            {
-                                // 시도 2: ClassName (일반적)
-                                detectionLabel = ((dynamic)d).ClassName?.ToString()?.ToLower() ?? "";
-                            }
-                            catch
-                            {
-                                // 시도 3: Class (인덱스인 경우, 우선 필터링 스킵)
-                                detectionLabel = fixedLabel.ToLower(); // 임시로 통과
-                            }
-                        }
-                        
-                        if (string.IsNullOrEmpty(detectionLabel) || detectionLabel != fixedLabel.ToLower())
-                            continue; // ❌ 다른 Label은 무시
 
-                        var rect = new OpenCvSharp.Rect(
-                            (int)d.Bounds.Left,
-                            (int)d.Bounds.Top,
-                            (int)d.Bounds.Width,
-                            (int)d.Bounds.Height);
-
-                        double iou = ComputeIoU(previousRect, new Rectangle(rect.X, rect.Y, rect.Width, rect.Height));
-                        
-                        // ✅ 2. IoU Threshold: 0.3 이상인 것만 고려 (너무 먼 객체는 무시)
-                        if (iou > bestIou && iou >= MIN_IOU_THRESHOLD)
+                        if (detectionName.Equals(targetCategory, StringComparison.OrdinalIgnoreCase))
                         {
-                            bestIou = iou;
-                            best = rect;
+                            var detectionRect = new Rectangle((int)d.Bounds.X, (int)d.Bounds.Y, (int)d.Bounds.Width, (int)d.Bounds.Height);
+                            double iou = ComputeIoU(previousRect, detectionRect);
+
+                            // ✅ 2. IoU 비교: 가장 많이 겹치는 객체를 찾습니다.
+                            if (iou > bestIou && iou > MIN_IOU_THRESHOLD)
+                            {
+                                bestIou = iou;
+                                bestDetection = d;
+                            }
                         }
                     }
 
-                    // ✅ 3. Detection 실패 시 탐색 범위 확대 (이전 박스 주변 탐색)
-                    var nextRect = previousRect;
-                    if (best.HasValue)
+                    // 가장 일치하는 객체를 찾았으면 해당 객체로 박스를 업데이트합니다.
+                    if (bestDetection != null)
                     {
-                        nextRect = new Rectangle(best.Value.X, best.Value.Y, best.Value.Width, best.Value.Height);
+                        previousRect = new Rectangle((int)bestDetection.Bounds.X, (int)bestDetection.Bounds.Y, (int)bestDetection.Bounds.Width, (int)bestDetection.Bounds.Height);
+                        trackedBoxes.Add(new BoundingBox
+                        {
+                            FrameIndex = i,
+                            Rectangle = previousRect,
+                            Label = fixedLabel, // 라벨과 ID는 고정
+                            PersonId = fixedIdPerson,
+                            VehicleId = fixedIdVehicle,
+                            EventId = fixedIdEvent,
+                            Action = startBox.Action,
+                            VehicleName = startBox.VehicleName,
+                            EventName = startBox.EventName
+                        });
                     }
                     else
                     {
-                        // Detection 실패 시 이전 박스 주변을 확장하여 재탐색
-                        // 약간의 움직임을 예측하여 박스 확장 (±20% 크기)
-                        int expandMargin = Math.Max(previousRect.Width, previousRect.Height) / 5; // 20% 확장
-                        Rectangle searchArea = new Rectangle(
-                            Math.Max(0, previousRect.X - expandMargin),
-                            Math.Max(0, previousRect.Y - expandMargin),
-                            previousRect.Width + expandMargin * 2,
-                            previousRect.Height + expandMargin * 2);
-
-                        // 확장된 영역 내에서 같은 Label의 detection 재탐색
-                        foreach (var d in detections)
+                        // ✅ Detection 실패 시 이전 위치 유지 및 계속 추적
+                        Debug.WriteLine($"[YOLO] Frame {i}: Detection 실패, 이전 위치 유지");
+                        
+                        trackedBoxes.Add(new BoundingBox
                         {
-                            // YoloSharp API: Detection 객체에서 라벨명 추출
-                            string detectionLabel = "";
-                            try
-                            {
-                                detectionLabel = ((dynamic)d).Label?.Name?.ToString()?.ToLower() ?? "";
-                            }
-                            catch
-                            {
-                                try
-                                {
-                                    detectionLabel = ((dynamic)d).ClassName?.ToString()?.ToLower() ?? "";
-                                }
-                                catch
-                                {
-                                    detectionLabel = fixedLabel.ToLower();
-                                }
-                            }
-                            
-                            if (string.IsNullOrEmpty(detectionLabel) || detectionLabel != fixedLabel.ToLower())
-                                continue;
-
-                            var rect = new OpenCvSharp.Rect(
-                                (int)d.Bounds.Left,
-                                (int)d.Bounds.Top,
-                                (int)d.Bounds.Width,
-                                (int)d.Bounds.Height);
-
-                            // 확장된 영역과 겹치는지 확인
-                            Rectangle detRect = new Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
-                            if (searchArea.IntersectsWith(detRect))
-                            {
-                                double iou = ComputeIoU(previousRect, detRect);
-                                if (iou > bestIou) // threshold 없이 가장 가까운 것 선택
-                                {
-                                    bestIou = iou;
-                                    best = rect;
-                                }
-                            }
-                        }
-
-                        // 확장 탐색에서도 찾으면 업데이트
-                        if (best.HasValue)
-                        {
-                            nextRect = new Rectangle(best.Value.X, best.Value.Y, best.Value.Width, best.Value.Height);
-                        }
-                        // 그래도 없으면 이전 박스 유지 (마지막 수단)
+                            FrameIndex = i,
+                            Rectangle = previousRect, // 이전 프레임의 박스 좌표 그대로 사용
+                            Label = fixedLabel,
+                            PersonId = fixedIdPerson,
+                            VehicleId = fixedIdVehicle,
+                            EventId = fixedIdEvent,
+                            Action = startBox.Action,
+                            VehicleName = startBox.VehicleName,
+                            EventName = startBox.EventName
+                        });
+                        // 추적을 계속 진행 (break 하지 않음)
                     }
-
-                    var trackedBox = new BoundingBox
-                    {
-                        FrameIndex = i,
-                        Rectangle = nextRect, // 좌표는 항상 이미지 픽셀 기준
-                        Label = fixedLabel,
-                        PersonId = fixedIdPerson,
-                        VehicleId = fixedIdVehicle,
-                        EventId = fixedIdEvent,
-                        Action = "waypoint"
-                    };
-
-                    trackedBoxes.Add(trackedBox);
-                    previousRect = nextRect;
                 }
                 catch (Exception ex)
                 {
-                    continue;
+                    Debug.WriteLine($"[YOLO ERROR] Frame {i}: {ex.Message}");
+                    break; // 오류 발생 시 추적 중단
                 }
             }
 
@@ -1169,6 +1142,15 @@ namespace WinFormsApp1
             SetEntryMarker();
         }
 
+        private void SetEntryMarker()
+        {
+            // 객체 선택 없이도 Entry 프레임 설정 가능
+            entryFrameIndex = currentFrameIndex;
+            TimeSpan entryTime = TimeSpan.FromSeconds(currentFrameIndex / fps);
+            btnEntry.Text = $"Entry: {entryTime:hh\\:mm\\:ss}";
+            panelTimeline.Invalidate();
+        }
+
         private void btnToggleSubtitle_Click(object sender, EventArgs e)
         {
             isSubtitleVisible = !isSubtitleVisible;
@@ -1187,135 +1169,125 @@ namespace WinFormsApp1
             UpdateTimeLabels();
         }
 
-        private void btnExit_Click(object sender, EventArgs e)
+        private async void btnExit_Click(object sender, EventArgs e)
         {
-            // X키와 동일한 기능: Exit 마커 설정 및 Waypoint 생성
-            SetExitMarkerAndCreateWaypoint();
+            await SetExitMarkerAndCreateWaypoint();
         }
 
-        // E키로 Entry 마커 설정 (원래 기능)
-        private void SetEntryMarker()
+        private async Task SetExitMarkerAndCreateWaypoint()
         {
-            entryFrameIndex = currentFrameIndex;
-            TimeSpan time = TimeSpan.FromSeconds(currentFrameIndex / fps);
-            btnEntry.Text = $"Entry: {time:hh\\:mm\\:ss}";
-            panelTimeline.Invalidate();
-        }
-
-        // X키로 Exit 마커 설정 및 웨이포인트 생성 (원래 기능)
-        private void SetExitMarkerAndCreateWaypoint()
-        {
-            if (!entryFrameIndex.HasValue)
+            if (entryFrameIndex.HasValue && selectedBox != null)
             {
-                MessageBox.Show("먼저 Entry를 설정해주세요. (E키)", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // ✅ Exit 프레임이 Entry 프레임보다 앞에 있으면 막기
-            if (currentFrameIndex <= entryFrameIndex.Value)
-            {
-                TimeSpan currentTimeCheck = TimeSpan.FromSeconds(currentFrameIndex / fps);
-                TimeSpan entryTimeCheck = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
-                
-                MessageBox.Show(
-                    $"Exit 프레임은 Entry 프레임보다 뒤에 있어야 합니다.\n\n" +
-                    $"Entry: {entryTimeCheck:hh\\:mm\\:ss} (프레임 {entryFrameIndex.Value})\n" +
-                    $"현재: {currentTimeCheck:hh\\:mm\\:ss} (프레임 {currentFrameIndex})\n\n" +
-                    $"Entry 프레임 이후로 이동한 후 Exit를 설정해주세요.",
-                    "Warning",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Entry 프레임의 Person 또는 Vehicle 박스 찾기
-            var entryPersonBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "person").ToList();
-            var entryVehicleBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "vehicle").ToList();
-            
-            if (entryPersonBoxes.Count == 0 && entryVehicleBoxes.Count == 0)
-            {
-                MessageBox.Show("Entry 프레임에 Person 또는 Vehicle 박스가 없습니다.\n박스를 그린 후 X키를 눌러주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            exitFrameIndex = currentFrameIndex;
-            TimeSpan exitTime = TimeSpan.FromSeconds(currentFrameIndex / fps);
-            TimeSpan entryTime = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
-
-            btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
-
-            // ✅ 생성된 Waypoint 리스트
-            List<WaypointMarker> createdWaypoints = new List<WaypointMarker>();
-
-            // ✅ 1. Person 박스들에 대해 각각 개별 Waypoint 생성
-            foreach (var personBox in entryPersonBoxes)
-            {
-                int personId = personBox.PersonId;
-                
-                var waypoint = new WaypointMarker
+                // ✅ Exit 프레임이 Entry 프레임보다 앞에 있으면 막기
+                if (currentFrameIndex <= entryFrameIndex.Value)
                 {
-                    EntryFrame = entryFrameIndex.Value,
-                    ExitFrame = exitFrameIndex.Value,
-                    MarkerColor = System.Drawing.Color.FromArgb(255, 107, 107), // 빨강
-                    EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
-                    ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                    ObjectId = personId,
-                    Label = "person"
-                };
-                
-                waypointMarkers.Add(waypoint);
-                createdWaypoints.Add(waypoint);
-                System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Person ID={personId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
-            }
-
-            // ✅ 2. Vehicle 박스들에 대해 각각 개별 Waypoint 생성
-            foreach (var vehicleBox in entryVehicleBoxes)
-            {
-                int vehicleId = vehicleBox.VehicleId;
-                
-                var waypoint = new WaypointMarker
-                {
-                    EntryFrame = entryFrameIndex.Value,
-                    ExitFrame = exitFrameIndex.Value,
-                    MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255), // 파랑
-                    EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
-                    ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                    ObjectId = vehicleId,
-                    Label = "vehicle"
-                };
-                
-                waypointMarkers.Add(waypoint);
-                createdWaypoints.Add(waypoint);
-                System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Vehicle ID={vehicleId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
-            }
-
-            // ✅ 3. UI 업데이트 및 Entry/Exit 초기화
-            UpdateWaypointListView();
-            
-            entryFrameIndex = null;
-            exitFrameIndex = null;
-            btnEntry.Text = "Entry";
-            btnExit.Text = "Exit";
-            
-            panelTimeline.Invalidate();
-
-            // ✅ 4. 자동 추적 확인 (생성된 Waypoint가 있을 때만)
-            if (createdWaypoints.Count > 0)
-            {
-                string summary = $"{createdWaypoints.Count}개의 Waypoint가 생성되었습니다.\n" +
-                                $"(Person: {entryPersonBoxes.Count}개, Vehicle: {entryVehicleBoxes.Count}개)";
-                
-                var result = MessageBox.Show(
-                    $"{summary}\n\n자동 추적을 수행하시겠습니까?",
-                    "Waypoint 생성 완료",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-
-                if (result == DialogResult.Yes)
-                {
-                    // ✅ 순차적으로 추적 실행 (동시 실행으로 인한 충돌 방지)
-                    PerformSequentialTracking(createdWaypoints);
+                    TimeSpan currentTimeCheck = TimeSpan.FromSeconds(currentFrameIndex / fps);
+                    TimeSpan entryTimeCheck = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
+                    
+                    MessageBox.Show(
+                        $"Exit 프레임은 Entry 프레임보다 뒤에 있어야 합니다.\n\n" +
+                        $"Entry: {entryTimeCheck:hh\\:mm\\:ss} (프레임 {entryFrameIndex.Value})\n" +
+                        $"현재: {currentTimeCheck:hh\\:mm\\:ss} (프레임 {currentFrameIndex})\n\n" +
+                        $"Entry 프레임 이후로 이동한 후 Exit를 설정해주세요.",
+                        "Warning",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
                 }
+
+                // Entry 프레임의 Person 또는 Vehicle 박스 찾기
+                var entryPersonBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "person").ToList();
+                var entryVehicleBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "vehicle").ToList();
+                
+                if (entryPersonBoxes.Count == 0 && entryVehicleBoxes.Count == 0)
+                {
+                    MessageBox.Show("Entry 프레임에 Person 또는 Vehicle 박스가 없습니다.\n박스를 그린 후 X키를 눌러주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                exitFrameIndex = currentFrameIndex;
+                TimeSpan exitTime = TimeSpan.FromSeconds(currentFrameIndex / fps);
+                TimeSpan entryTime = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
+
+                btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
+
+                // ✅ 생성된 Waypoint 리스트
+                List<WaypointMarker> createdWaypoints = new List<WaypointMarker>();
+
+                // ✅ 1. Person 박스들에 대해 각각 개별 Waypoint 생성
+                foreach (var personBox in entryPersonBoxes)
+                {
+                    int personId = personBox.PersonId;
+                    
+                    var waypoint = new WaypointMarker
+                    {
+                        EntryFrame = entryFrameIndex.Value,
+                        ExitFrame = exitFrameIndex.Value,
+                        MarkerColor = System.Drawing.Color.FromArgb(255, 107, 107), // 빨강
+                        EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
+                        ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                        ObjectId = personId,
+                        Label = "person"
+                    };
+                    
+                    waypointMarkers.Add(waypoint);
+                    createdWaypoints.Add(waypoint);
+                    System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Person ID={personId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
+                }
+
+                // ✅ 2. Vehicle 박스들에 대해 각각 개별 Waypoint 생성
+                foreach (var vehicleBox in entryVehicleBoxes)
+                {
+                    int vehicleId = vehicleBox.VehicleId;
+                    
+                    var waypoint = new WaypointMarker
+                    {
+                        EntryFrame = entryFrameIndex.Value,
+                        ExitFrame = exitFrameIndex.Value,
+                        MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255), // 파랑
+                        EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
+                        ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                        ObjectId = vehicleId,
+                        Label = "vehicle"
+                    };
+                    
+                    waypointMarkers.Add(waypoint);
+                    createdWaypoints.Add(waypoint);
+                    System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Vehicle ID={vehicleId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
+                }
+
+                // ✅ 3. UI 업데이트 및 Entry/Exit 초기화
+                UpdateWaypointListView();
+                
+                entryFrameIndex = null;
+                exitFrameIndex = null;
+                btnEntry.Text = "Entry";
+                btnExit.Text = "Exit";
+                
+                panelTimeline.Invalidate();
+
+                // ✅ 4. 자동 추적 확인 (생성된 Waypoint가 있을 때만)
+                if (createdWaypoints.Count > 0)
+                {
+                    string summary = $"{createdWaypoints.Count}개의 Waypoint가 생성되었습니다.\n" +
+                                    $"(Person: {entryPersonBoxes.Count}개, Vehicle: {entryVehicleBoxes.Count}개)";
+                    
+                    var result = MessageBox.Show(
+                        $"{summary}\n\n자동 추적을 수행하시겠습니까?",
+                        "Waypoint 생성 완료",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        // ✅ 순차적으로 추적 실행 (동시 실행으로 인한 충돌 방지)
+                        PerformSequentialTracking(createdWaypoints);
+                    }
+                }
+            }
+            else
+            {
+                MessageBox.Show("먼저 Entry 프레임을 지정하고 객체를 선택해야 합니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -5061,7 +5033,7 @@ namespace WinFormsApp1
             }
             else if (e.KeyCode == Keys.X && !e.Control && !e.Alt)
             {
-                SetExitMarkerAndCreateWaypoint();
+                _ = SetExitMarkerAndCreateWaypoint();
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.Q && !e.Control && !e.Alt)
@@ -5072,54 +5044,14 @@ namespace WinFormsApp1
             }
             else if (e.Control && e.KeyCode == Keys.T)
             {
-                if (waypointMarkers.Count > 0)
+                if (selectedWaypoint != null)
                 {
-                    var lastWaypoint = waypointMarkers[waypointMarkers.Count - 1];
-
-                    // YOLO 사용 여부 결정
-                    bool useYolo = isYoloAvailable;
-
-                    if (useYolo)
-                    {
-                        var result = MessageBox.Show(
-                            "YOLO 추적을 사용하시겠습니까?\n\n" +
-                            "[예] YOLO 기반 추적 (권장)\n" +
-                            "[아니오] 기본 OpenCV 추적",
-                            "추적 모드 선택",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Question);
-
-                        useYolo = (result == DialogResult.Yes);
-                    }
-
-                    // ✅ 단일 waypoint도 순차 추적 함수 사용
-                    if (useYolo)
-                    {
-                        PerformSequentialTracking(new List<WaypointMarker> { lastWaypoint });
-                    }
-                    else
-                    {
-                        MessageBox.Show(
-                            "현재는 YOLO 추적만 지원합니다.",
-                            "정보",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Information);
-                    }
+                    _ = PerformTrackingForWaypointAsync(selectedWaypoint, useYolo: true);
                 }
                 else
                 {
-                    MessageBox.Show(
-                        "추적을 위해서는:\n" +
-                        "1. Entry 마커 설정 (E키)\n" +
-                        "2. Exit 프레임으로 이동\n" +
-                        "3. Exit 마커 설정 (X키)\n" +
-                        "→ Waypoint가 생성됩니다\n" +
-                        "4. Ctrl+T로 추적 시작",
-                        "정보",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                    MessageBox.Show("추적할 웨이포인트를 목록에서 먼저 선택해주세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
-                e.Handled = true;
             }
             else if (e.KeyCode == Keys.D1 && !e.Control && !e.Alt)
             {
