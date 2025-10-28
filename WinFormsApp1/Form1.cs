@@ -262,8 +262,8 @@ namespace WinFormsApp1
 
                             // ✅ 2. IoU 비교: 가장 많이 겹치는 객체를 찾습니다.
                             if (iou > bestIou && iou > MIN_IOU_THRESHOLD)
-                            {
-                                bestIou = iou;
+                        {
+                            bestIou = iou;
                                 bestDetection = d;
                             }
                         }
@@ -292,13 +292,13 @@ namespace WinFormsApp1
                         Debug.WriteLine($"[YOLO] Frame {i}: Detection 실패, 이전 위치 유지");
                         
                         trackedBoxes.Add(new BoundingBox
-                        {
-                            FrameIndex = i,
+                    {
+                        FrameIndex = i,
                             Rectangle = previousRect, // 이전 프레임의 박스 좌표 그대로 사용
-                            Label = fixedLabel,
-                            PersonId = fixedIdPerson,
-                            VehicleId = fixedIdVehicle,
-                            EventId = fixedIdEvent,
+                        Label = fixedLabel,
+                        PersonId = fixedIdPerson,
+                        VehicleId = fixedIdVehicle,
+                        EventId = fixedIdEvent,
                             Action = startBox.Action,
                             VehicleName = startBox.VehicleName,
                             EventName = startBox.EventName
@@ -846,11 +846,11 @@ namespace WinFormsApp1
 
                     videoFileList.Sort();
 
-                if (videoFileList.Count == 0)
-                {
-                    MessageBox.Show("선택한 폴더에서 영상 파일을 찾을 수 없습니다.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
+                    if (videoFileList.Count == 0)
+                    {
+                        MessageBox.Show("선택한 폴더에서 영상 파일을 찾을 수 없습니다.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
 
                 // ✅ 폴더 선택 시: 데이터 백업 → 초기화 → 로드 (실패 시 복원)
                 var backupBoxes = new List<BoundingBox>(boundingBoxes);
@@ -859,9 +859,9 @@ namespace WinFormsApp1
                 var backupUndoStack = new Stack<UndoAction>(undoStack.Reverse());
                 var backupRedoStack = new Stack<UndoAction>(redoStack.Reverse());
                 
-                boundingBoxes.Clear();
-                waypointMarkers.Clear();
-                selectedBox = null;
+                    boundingBoxes.Clear();
+                    waypointMarkers.Clear();
+                    selectedBox = null;
                 undoStack.Clear();
                 redoStack.Clear();
                 lastRenderedWaypoint = null;
@@ -1203,14 +1203,14 @@ namespace WinFormsApp1
                 if (entryPersonBoxes.Count == 0 && entryVehicleBoxes.Count == 0)
                 {
                     MessageBox.Show("Entry 프레임에 Person 또는 Vehicle 박스가 없습니다.\n박스를 그린 후 X키를 눌러주세요.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
+                return;
+            }
 
-                exitFrameIndex = currentFrameIndex;
-                TimeSpan exitTime = TimeSpan.FromSeconds(currentFrameIndex / fps);
-                TimeSpan entryTime = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
+            exitFrameIndex = currentFrameIndex;
+            TimeSpan exitTime = TimeSpan.FromSeconds(currentFrameIndex / fps);
+            TimeSpan entryTime = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
 
-                btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
+            btnExit.Text = $"Exit: {exitTime:hh\\:mm\\:ss}";
 
                 // ✅ 생성된 Waypoint 리스트
                 List<WaypointMarker> createdWaypoints = new List<WaypointMarker>();
@@ -1220,13 +1220,13 @@ namespace WinFormsApp1
                 {
                     int personId = personBox.PersonId;
                     
-                    var waypoint = new WaypointMarker
-                    {
-                        EntryFrame = entryFrameIndex.Value,
-                        ExitFrame = exitFrameIndex.Value,
+            var waypoint = new WaypointMarker
+            {
+                EntryFrame = entryFrameIndex.Value,
+                ExitFrame = exitFrameIndex.Value,
                         MarkerColor = System.Drawing.Color.FromArgb(255, 107, 107), // 빨강
-                        EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
-                        ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
+                ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                         ObjectId = personId,
                         Label = "person"
                     };
@@ -1251,36 +1251,36 @@ namespace WinFormsApp1
                         ObjectId = vehicleId,
                         Label = "vehicle"
                     };
-                    
-                    waypointMarkers.Add(waypoint);
+
+            waypointMarkers.Add(waypoint);
                     createdWaypoints.Add(waypoint);
                     System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Vehicle ID={vehicleId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
                 }
 
                 // ✅ 3. UI 업데이트 및 Entry/Exit 초기화
                 UpdateWaypointListView();
-                
-                entryFrameIndex = null;
-                exitFrameIndex = null;
+
+            entryFrameIndex = null;
+            exitFrameIndex = null;
                 btnEntry.Text = "Entry";
                 btnExit.Text = "Exit";
-                
-                panelTimeline.Invalidate();
+
+            panelTimeline.Invalidate();
 
                 // ✅ 4. 자동 추적 확인 (생성된 Waypoint가 있을 때만)
                 if (createdWaypoints.Count > 0)
                 {
                     string summary = $"{createdWaypoints.Count}개의 Waypoint가 생성되었습니다.\n" +
                                     $"(Person: {entryPersonBoxes.Count}개, Vehicle: {entryVehicleBoxes.Count}개)";
-                    
-                    var result = MessageBox.Show(
+
+            var result = MessageBox.Show(
                         $"{summary}\n\n자동 추적을 수행하시겠습니까?",
                         "Waypoint 생성 완료",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
 
-                    if (result == DialogResult.Yes)
-                    {
+            if (result == DialogResult.Yes)
+            {
                         // ✅ 순차적으로 추적 실행 (동시 실행으로 인한 충돌 방지)
                         PerformSequentialTracking(createdWaypoints);
                     }
@@ -1433,8 +1433,9 @@ namespace WinFormsApp1
             {
                 var result = MessageBox.Show(
                     $"선택한 Vehicle Waypoint를 삭제하시겠습니까?\n\n" +
-                    $"프레임: {waypoint.EntryTime}\n\n" +
-                    $"⚠️ 주의: 해당 프레임의 Vehicle 박스가 삭제됩니다.",
+                    $"Entry: {waypoint.EntryTime}\n" +
+                    $"Exit: {waypoint.ExitTime}\n\n" +
+                    $"⚠️ 주의: 해당 구간의 Vehicle 박스가 삭제됩니다.",
                     "Vehicle Waypoint 삭제 확인",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
@@ -1447,7 +1448,8 @@ namespace WinFormsApp1
                     .Where(b => 
                         b.Label == "vehicle" &&
                         b.VehicleId == waypoint.ObjectId &&
-                        b.FrameIndex == waypoint.EntryFrame)
+                        b.FrameIndex >= waypoint.EntryFrame && 
+                        b.FrameIndex <= waypoint.ExitFrame)
                     .ToList();
 
                 foreach (var box in boxesToDelete)
@@ -2135,14 +2137,14 @@ namespace WinFormsApp1
                         var firstBox = personBoxes.First();
                         string categoryName = GetPersonCategoryName(firstBox.PersonId);
                         item.SubItems.Add(categoryName);
-                    }
-                    else
-                    {
+                }
+                else
+                {
                         item.SubItems.Add("person");
-                    }
-                    
-                    item.ForeColor = waypoint.MarkerColor;
-                    item.Tag = waypoint;
+                }
+                
+                item.ForeColor = waypoint.MarkerColor;
+                item.Tag = waypoint;
                     listViewPersonWaypoints.Items.Add(item);
                 }
                 else if (waypoint.Label == "vehicle")
@@ -2341,10 +2343,10 @@ namespace WinFormsApp1
                     await LoadVideoWithSubtitle(videoFileList[currentVideoIndex]);
                     
                     // LoadVideoWithSubtitle 내부의 LoadLabelingData에서 새 데이터가 로드됨
-                    UpdateBoxCount();
-                    UpdateWaypointListView();
-                    pictureBoxVideo.Invalidate();
-                    RefreshVideoListView();
+                UpdateBoxCount();
+                UpdateWaypointListView();
+                pictureBoxVideo.Invalidate();
+                RefreshVideoListView();
                 }
                 catch (Exception ex)
                 {
@@ -2924,7 +2926,7 @@ namespace WinFormsApp1
                     AutoSize = true
                 };
                 panelEventList.Controls.Add(emptyLabel);
-                return;
+                        return;
             }
             
             int yPos = 5;
@@ -2978,11 +2980,11 @@ namespace WinFormsApp1
                         {
                             string eType = selected.Substring(6);
                             int eventId = Array.IndexOf(eventTypes, eType) + 1;
-                            if (eventId > 0)
-                            {
+                        if (eventId > 0)
+                        {
                                 int oldEventId = currentBox.EventId;
                                 SetBoxId(currentBox, "event", eventId);
-                                
+                            
                                 // Event 타입 변경 시 동일한 EventId와 Rectangle을 가진 박스만 업데이트
                                 var waypoint = waypointMarkers.FirstOrDefault(w =>
                                     currentBox.FrameIndex >= w.EntryFrame &&
@@ -3007,8 +3009,8 @@ namespace WinFormsApp1
                                 }
                                 
                                 UpdateObjectInfo(currentBox);
-                                UpdateBboxListDisplay();
-                                pictureBoxVideo.Invalidate();
+                    UpdateBboxListDisplay();
+                    pictureBoxVideo.Invalidate();
                             }
                         }
                     }
@@ -4064,8 +4066,8 @@ namespace WinFormsApp1
             {
                 MessageBox.Show(
                     $"순차 추적 중 오류 발생:\n\n{ex.Message}\n\n{ex.StackTrace}",
-                    "오류",
-                    MessageBoxButtons.OK,
+                        "오류",
+                        MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
         }
@@ -4200,7 +4202,7 @@ namespace WinFormsApp1
 
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
-                
+
                 // ✅ 개별 waypoint 추적 완료 로그
                 System.Diagnostics.Debug.WriteLine($"[추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, BBox 추가={allTrackedBoxes.Count}개");
             }
@@ -4618,7 +4620,7 @@ namespace WinFormsApp1
                         {
                             // Waypoint가 없으면 같은 ObjectId의 모든 박스 범위 사용
                             var sameObjectBoxes = boundingBoxes
-                                .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
+                            .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
                                 .ToList();
                             
                             if (sameObjectBoxes.Any())
@@ -5000,8 +5002,10 @@ namespace WinFormsApp1
             {
                 AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
                 boundingBoxes.Remove(selectedBox);
+                InvalidateBoxCache();
                 selectedBox = null;
                 UpdateBoxCount();
+                UpdateBboxListDisplay();
                 pictureBoxVideo.Invalidate();
                 e.Handled = true;
             }
@@ -5009,6 +5013,7 @@ namespace WinFormsApp1
             {
                 AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
                 boundingBoxes.Remove(selectedBox);
+                InvalidateBoxCache();
                 selectedBox = null;
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
@@ -5077,17 +5082,17 @@ namespace WinFormsApp1
             {
                 // Ctrl+1~9: Person ID 1~9 지정
                 if (e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D9)
-                {
-                    int id = e.KeyCode - Keys.D0;
-                    AssignPersonId(id);
-                    e.Handled = true;
-                }
+            {
+                int id = e.KeyCode - Keys.D0;
+                AssignPersonId(id);
+                e.Handled = true;
+            }
                 else if (e.KeyCode >= Keys.NumPad1 && e.KeyCode <= Keys.NumPad9)
-                {
-                    int id = e.KeyCode - Keys.NumPad0;
-                    AssignPersonId(id);
-                    e.Handled = true;
-                }
+            {
+                int id = e.KeyCode - Keys.NumPad0;
+                AssignPersonId(id);
+                e.Handled = true;
+            }
                 // Ctrl+0: Person ID 10 지정
                 else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0)
                 {
@@ -5099,16 +5104,16 @@ namespace WinFormsApp1
             {
                 // Alt+1~0: Person ID 11~20 지정
                 if (e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D9)
-                {
-                    int id = (e.KeyCode - Keys.D0) + 10;
-                    AssignPersonId(id);
-                    e.Handled = true;
-                }
+            {
+                int id = (e.KeyCode - Keys.D0) + 10;
+                AssignPersonId(id);
+                e.Handled = true;
+            }
                 else if (e.KeyCode >= Keys.NumPad1 && e.KeyCode <= Keys.NumPad9)
-                {
-                    int id = (e.KeyCode - Keys.NumPad0) + 10;
-                    AssignPersonId(id);
-                    e.Handled = true;
+            {
+                int id = (e.KeyCode - Keys.NumPad0) + 10;
+                AssignPersonId(id);
+                e.Handled = true;
                 }
                 else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0)
                 {
