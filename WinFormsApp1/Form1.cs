@@ -456,17 +456,18 @@ namespace WinFormsApp1
         // 카테고리 ID 매핑 (스펙에 따른 고정 매핑)
         private static readonly Dictionary<string, int> CategoryIdMap = new Dictionary<string, int>
         {
-            // Person categories (1~14)
+            // Person categories (1~20)
             {"person_01", 1}, {"person_02", 2}, {"person_03", 3}, {"person_04", 4},
             {"person_05", 5}, {"person_06", 6}, {"person_07", 7}, {"person_08", 8},
             {"person_09", 9}, {"person_10", 10}, {"person_11", 11}, {"person_12", 12},
-            {"person_13", 13}, {"person_14", 14},
+            {"person_13", 13}, {"person_14", 14}, {"person_15", 15}, {"person_16", 16},
+            {"person_17", 17}, {"person_18", 18}, {"person_19", 19}, {"person_20", 20},
             
-            // Vehicle categories (15~18)
-            {"car", 15}, {"motorcycle", 16}, {"e_scooter", 17}, {"bicycle", 18},
+            // Vehicle categories (21~24)
+            {"car", 21}, {"motorcycle", 22}, {"e_scooter", 23}, {"bicycle", 24},
             
-            // Event categories (19~22)
-            {"contact", 19}, {"exchange", 20}, {"board", 21}, {"final_exchange", 22}
+            // Event categories (25~28)
+            {"contact", 25}, {"exchange", 26}, {"board", 27}, {"final_exchange", 28}
         };
 
 
@@ -2740,7 +2741,7 @@ namespace WinFormsApp1
                 // ComboBox 호버 시 스크롤 방지
                 comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
                 
-                for (int i = 1; i <= 14; i++)
+                for (int i = 1; i <= 20; i++)
                 {
                     comboBox.Items.Add($"person_{i:D2}");
                 }
@@ -3085,9 +3086,9 @@ namespace WinFormsApp1
                 return CategoryIdMap[categoryName];
             
             // 기본값 처리 (매핑되지 않은 경우)
-            if (label == "person") return Math.Min(boxId, 14); // 1~14
-            if (label == "vehicle") return Math.Min(15 + (boxId - 1), 18); // 15~18
-            if (label == "event") return Math.Min(19 + (boxId - 1), 22); // 19~22 (4개)
+            if (label == "person") return Math.Min(boxId, 20); // 1~20
+            if (label == "vehicle") return Math.Min(21 + (boxId - 1), 24); // 21~24
+            if (label == "event") return Math.Min(25 + (boxId - 1), 28); // 25~28 (4개)
             
             return boxId;
         }
@@ -3097,30 +3098,30 @@ namespace WinFormsApp1
         {
             if (label == "person")
             {
-                // person은 person_01 ~ person_14 형식
+                // person은 person_01 ~ person_20 형식
                 return $"person_{boxId:D2}";
             }
             else if (label == "vehicle")
             {
-                // vehicle은 고유 이름 매핑 (ID 15~18)
+                // vehicle은 고유 이름 매핑 (ID 21~24)
                 switch (boxId)
                 {
-                    case 1: return "car";           // ID: 15
-                    case 2: return "motorcycle";    // ID: 16
-                    case 3: return "e_scooter";     // ID: 17
-                    case 4: return "bicycle";       // ID: 18
+                    case 1: return "car";           // ID: 21
+                    case 2: return "motorcycle";    // ID: 22
+                    case 3: return "e_scooter";     // ID: 23
+                    case 4: return "bicycle";       // ID: 24
                     default: return "car"; // 기본값
                 }
             }
             else if (label == "event")
             {
-                // event는 고유 이름 매핑 (ID 19~22)
+                // event는 고유 이름 매핑 (ID 25~28)
                 switch (boxId)
                 {
-                    case 1: return "contact";         // ID: 19
-                    case 2: return "exchange";        // ID: 20
-                    case 3: return "board";           // ID: 21
-                    case 4: return "final_exchange";  // ID: 22
+                    case 1: return "contact";         // ID: 25
+                    case 2: return "exchange";        // ID: 26
+                    case 3: return "board";           // ID: 27
+                    case 4: return "final_exchange";  // ID: 28
                     default: return "contact"; // 기본값
                 }
             }
@@ -4283,15 +4284,15 @@ namespace WinFormsApp1
 
                     // CategoryId 범위로 라벨 결정 (더 정확함)
                     int catId = annotation.CategoryId;
-                    if (catId >= 1 && catId <= 14)
+                    if (catId >= 1 && catId <= 20)
                     {
                         label = "person";
                     }
-                    else if (catId >= 15 && catId <= 18)
+                    else if (catId >= 21 && catId <= 24)
                     {
                         label = "vehicle";
                     }
-                    else if (catId >= 19 && catId <= 22)  // ✅ 19~22로 수정 (4개 이벤트)
+                    else if (catId >= 25 && catId <= 28)
                     {
                         label = "event";
                     }
@@ -4327,13 +4328,13 @@ namespace WinFormsApp1
                     }
                     else if (label == "vehicle")
                     {
-                        // Vehicle: CategoryId 15~18 → VehicleId 1~4
-                        vehicleId = catId >= 15 && catId <= 18 ? (catId - 14) : trackId;
+                        // Vehicle: CategoryId 21~24 → VehicleId 1~4
+                        vehicleId = catId >= 21 && catId <= 24 ? (catId - 20) : trackId;
                     }
                     else if (label == "event")
                     {
-                        // Event: CategoryId 19~22 → EventId 1~4
-                        eventId = catId >= 19 && catId <= 22 ? (catId - 18) : trackId;
+                        // Event: CategoryId 25~28 → EventId 1~4
+                        eventId = catId >= 25 && catId <= 28 ? (catId - 24) : trackId;
                     }
 
                     var box = new BoundingBox
@@ -4876,8 +4877,11 @@ namespace WinFormsApp1
                 }
             }
             
-            // Ctrl+1~14: ID 수동 지정 (영상 로드 여부와 무관하게 동작)
-            if (e.Control && !e.Shift && !e.Alt)
+            // ✅ 영상 로드 여부와 무관하게 동작하는 ID 설정 단축키들
+            // (영상 로드 체크보다 앞에 위치하여 항상 동작)
+            
+            // Ctrl+1~10: Person ID 수동 지정 (1~10) - Person만
+            if (e.Control && !e.Shift && !e.Alt && currentSelectedLabel == "person")
             {
                 int? assignedId = null;
                 
@@ -4890,32 +4894,38 @@ namespace WinFormsApp1
                 else if (e.KeyCode == Keys.D7 || e.KeyCode == Keys.NumPad7) assignedId = 7;
                 else if (e.KeyCode == Keys.D8 || e.KeyCode == Keys.NumPad8) assignedId = 8;
                 else if (e.KeyCode == Keys.D9 || e.KeyCode == Keys.NumPad9) assignedId = 9;
+                else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0) assignedId = 10;
                 
                 if (assignedId.HasValue)
                 {
                     currentAssignedId = assignedId.Value;
-                    MessageBox.Show($"{currentSelectedLabel} ID를 {currentAssignedId}로 설정했습니다.", 
+                    MessageBox.Show($"Person ID를 {currentAssignedId}로 설정했습니다.", 
                         "ID 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     e.Handled = true;
                     return;
                 }
             }
             
-            // Ctrl+Shift+1~5로 10~14 지정
-            if (e.Control && e.Shift && !e.Alt)
+            // Alt+1~0으로 11~20 지정 (Person만)
+            if (!e.Control && !e.Shift && e.Alt && currentSelectedLabel == "person")
             {
                 int? assignedId = null;
                 
-                if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) assignedId = 10;
-                else if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2) assignedId = 11;
-                else if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3) assignedId = 12;
-                else if (e.KeyCode == Keys.D4 || e.KeyCode == Keys.NumPad4) assignedId = 13;
-                else if (e.KeyCode == Keys.D5 || e.KeyCode == Keys.NumPad5) assignedId = 14;
+                if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) assignedId = 11;
+                else if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2) assignedId = 12;
+                else if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3) assignedId = 13;
+                else if (e.KeyCode == Keys.D4 || e.KeyCode == Keys.NumPad4) assignedId = 14;
+                else if (e.KeyCode == Keys.D5 || e.KeyCode == Keys.NumPad5) assignedId = 15;
+                else if (e.KeyCode == Keys.D6 || e.KeyCode == Keys.NumPad6) assignedId = 16;
+                else if (e.KeyCode == Keys.D7 || e.KeyCode == Keys.NumPad7) assignedId = 17;
+                else if (e.KeyCode == Keys.D8 || e.KeyCode == Keys.NumPad8) assignedId = 18;
+                else if (e.KeyCode == Keys.D9 || e.KeyCode == Keys.NumPad9) assignedId = 19;
+                else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0) assignedId = 20;
                 
                 if (assignedId.HasValue)
                 {
                     currentAssignedId = assignedId.Value;
-                    MessageBox.Show($"{currentSelectedLabel} ID를 {currentAssignedId}로 설정했습니다.", 
+                    MessageBox.Show($"Person ID를 {currentAssignedId}로 설정했습니다.", 
                         "ID 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     e.Handled = true;
                     return;
@@ -5063,29 +5073,48 @@ namespace WinFormsApp1
                 btnEdit_Click(sender, e);
                 e.Handled = true;
             }
-            else if (selectedBox != null && e.Control && !e.Alt && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D9)
+            else if (selectedBox != null && selectedBox.Label == "person" && e.Control && !e.Shift && !e.Alt)
             {
-                int id = e.KeyCode - Keys.D0;
-                AssignPersonId(id);
-                e.Handled = true;
+                // Ctrl+1~9: Person ID 1~9 지정
+                if (e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D9)
+                {
+                    int id = e.KeyCode - Keys.D0;
+                    AssignPersonId(id);
+                    e.Handled = true;
+                }
+                else if (e.KeyCode >= Keys.NumPad1 && e.KeyCode <= Keys.NumPad9)
+                {
+                    int id = e.KeyCode - Keys.NumPad0;
+                    AssignPersonId(id);
+                    e.Handled = true;
+                }
+                // Ctrl+0: Person ID 10 지정
+                else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0)
+                {
+                    AssignPersonId(10);
+                    e.Handled = true;
+                }
             }
-            else if (selectedBox != null && e.Control && !e.Alt && e.KeyCode >= Keys.NumPad1 && e.KeyCode <= Keys.NumPad9)
+            else if (selectedBox != null && selectedBox.Label == "person" && !e.Control && !e.Shift && e.Alt)
             {
-                int id = e.KeyCode - Keys.NumPad0;
-                AssignPersonId(id);
-                e.Handled = true;
-            }
-            else if (selectedBox != null && e.Alt && !e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D9)
-            {
-                int id = (e.KeyCode - Keys.D0) + 10;
-                AssignPersonId(id);
-                e.Handled = true;
-            }
-            else if (selectedBox != null && e.Alt && !e.Control && e.KeyCode >= Keys.NumPad1 && e.KeyCode <= Keys.NumPad9)
-            {
-                int id = (e.KeyCode - Keys.NumPad0) + 10;
-                AssignPersonId(id);
-                e.Handled = true;
+                // Alt+1~0: Person ID 11~20 지정
+                if (e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D9)
+                {
+                    int id = (e.KeyCode - Keys.D0) + 10;
+                    AssignPersonId(id);
+                    e.Handled = true;
+                }
+                else if (e.KeyCode >= Keys.NumPad1 && e.KeyCode <= Keys.NumPad9)
+                {
+                    int id = (e.KeyCode - Keys.NumPad0) + 10;
+                    AssignPersonId(id);
+                    e.Handled = true;
+                }
+                else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0)
+                {
+                    AssignPersonId(20);
+                    e.Handled = true;
+                }
             }
             else if (e.Control && e.KeyCode == Keys.S)
             {
@@ -5121,6 +5150,9 @@ namespace WinFormsApp1
                 OriginalRectangle = oldRect
             });
 
+            // ✅ UI 업데이트: 선택된 박스의 정보도 갱신
+            UpdateObjectInfo(selectedBox);
+            UpdateBboxListDisplay();
             labelObjectLabel.Text = $"Label: {selectedBox.Label}_{id:D2}";
             pictureBoxVideo.Invalidate();
 
@@ -5129,7 +5161,7 @@ namespace WinFormsApp1
             btnSelectAll.BackColor = SystemColors.Control;
             pictureBoxVideo.Cursor = Cursors.Cross;
 
-            selectedBox = null;
+            // ❌ selectedBox를 null로 초기화하지 않음 (선택 상태 유지)
         }
         #endregion
 
