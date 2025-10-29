@@ -245,7 +245,6 @@ namespace WinFormsApp1
             var localFailureRanges = new List<(int start, int end)>();
             int thresholdFailureStart = -1;
             
-            Debug.WriteLine($"[TRACKING START] Label: {fixedLabel}, Category: {targetCategory}, Frames: {startFrame}~{endFrame} (Total: {totalFrames})");
 
             for (int i = startFrame; i <= endFrame; i++)
             {
@@ -260,11 +259,6 @@ namespace WinFormsApp1
                     var detections = _predictor.Detect(_tempImagePath);
                     
                     // ✅ YOLO 탐지 결과 로그 출력
-                    Debug.WriteLine($"[YOLO] Frame {i}: Detected {detections.Count} objects.");
-                    foreach (var d in detections)
-                    {
-                        Debug.WriteLine($"  -> Label: {d.Name}, Confidence: {d.Confidence:F2}, Box: {d.Bounds}");
-                    }
 
 
                     // ✅ 이전 박스와 IoU가 가장 큰 검출만 채택 (Label 필터링 적용)
@@ -316,17 +310,16 @@ namespace WinFormsApp1
                         // ✅ 연속 실패가 끝났는지 체크
                         if (consecutiveFailures > 0)
                         {
-                            Debug.WriteLine($"[TRACKING SUCCESS] Frame {i}: 추적 성공 (연속 실패 {consecutiveFailures}회 후)");
-                            
-                            // ✅ 30프레임 이상 실패했다면 실패 구간 기록
-                            if (consecutiveFailures >= FAILURE_THRESHOLD && thresholdFailureStart != -1)
-                            {
-                                localFailureRanges.Add((thresholdFailureStart, i - 1));
-                                Debug.WriteLine($"[FAILURE RANGE] {thresholdFailureStart}~{i - 1} (연속 {consecutiveFailures}회 실패)");
-                                thresholdFailureStart = -1;
-                            }
-                            
-                            consecutiveFailures = 0;
+                        Debug.WriteLine($"[BOX POSITION] Frame {i}: Previous({previousRect.X},{previousRect.Y}) -> New({bestDetection.Bounds.X},{bestDetection.Bounds.Y})");
+                        
+                        // ✅ 30프레임 이상 실패했다면 실패 구간 기록
+                        if (consecutiveFailures >= FAILURE_THRESHOLD && thresholdFailureStart != -1)
+                        {
+                            localFailureRanges.Add((thresholdFailureStart, i - 1));
+                            thresholdFailureStart = -1;
+                        }
+                        
+                        consecutiveFailures = 0;
                         }
                         
                         trackedBoxes.Add(new BoundingBox
@@ -378,11 +371,9 @@ namespace WinFormsApp1
                         if (consecutiveFailures == FAILURE_THRESHOLD)
                         {
                             thresholdFailureStart = i - (FAILURE_THRESHOLD - 1);
-                            Debug.WriteLine($"[FAILURE THRESHOLD REACHED] Starting at Frame {thresholdFailureStart}");
                         }
                         
-                        Debug.WriteLine($"[TRACKING FAILURE] Frame {i}: {lastFailureReason} (연속 실패: {consecutiveFailures}회, 구간: {failureStartFrame}~{i})");
-                        
+                        // ✅ Detection 실패 시 이전 위치 유지
                         trackedBoxes.Add(new BoundingBox
                     {
                         FrameIndex = i,
@@ -400,7 +391,6 @@ namespace WinFormsApp1
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"[YOLO ERROR] Frame {i}: {ex.Message}");
                     break; // 오류 발생 시 추적 중단
                 }
             }
@@ -418,30 +408,10 @@ namespace WinFormsApp1
             if (consecutiveFailures >= FAILURE_THRESHOLD && thresholdFailureStart != -1)
             {
                 localFailureRanges.Add((thresholdFailureStart, endFrame));
-                Debug.WriteLine($"[FAILURE RANGE] {thresholdFailureStart}~{endFrame} (끝까지 실패)");
             }
 
             // ✅ 최종 추적 통계 출력
             double successRate = totalFrames > 0 ? (double)successCount / totalFrames * 100 : 0;
-            Debug.WriteLine("===========================================");
-            Debug.WriteLine($"[TRACKING SUMMARY] Label: {fixedLabel}");
-            Debug.WriteLine($"  전체 프레임: {totalFrames}");
-            Debug.WriteLine($"  성공: {successCount} ({successRate:F1}%)");
-            Debug.WriteLine($"  실패: {failureCount} ({(100 - successRate):F1}%)");
-            Debug.WriteLine($"  최대 연속 실패: {maxConsecutiveFailures}회");
-            if (failureCount > 0)
-            {
-                Debug.WriteLine($"  마지막 실패 이유: {lastFailureReason}");
-            }
-            if (localFailureRanges.Count > 0)
-            {
-                Debug.WriteLine($"  실패 구간 수: {localFailureRanges.Count}");
-                foreach (var range in localFailureRanges)
-                {
-                    Debug.WriteLine($"    -> Frame {range.start}~{range.end}");
-                }
-            }
-            Debug.WriteLine("===========================================");
 
             // ✅ 실패 구간을 out 파라미터에 할당
             failureRanges = localFailureRanges;
@@ -484,6 +454,9 @@ namespace WinFormsApp1
 
         private enum DrawMode { None, Select, Draw }
         private DrawMode currentMode = DrawMode.Select;
+
+        // ✅ 추적 상태 플래그 (추적 중에는 다른 키 입력 차단)
+        private bool isTrackingInProgress = false;
 
         private List<BoundingBox> boundingBoxes = new List<BoundingBox>();
         private BoundingBox selectedBox = null;
@@ -1360,7 +1333,6 @@ namespace WinFormsApp1
                     
                     waypointMarkers.Add(waypoint);
                     createdWaypoints.Add(waypoint);
-                    System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Person ID={personId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
                 }
 
                 // ✅ 2. Vehicle 박스들에 대해 각각 개별 Waypoint 생성
@@ -1381,7 +1353,6 @@ namespace WinFormsApp1
 
             waypointMarkers.Add(waypoint);
                     createdWaypoints.Add(waypoint);
-                    System.Diagnostics.Debug.WriteLine($"[Waypoint 생성] Vehicle ID={vehicleId}, {entryFrameIndex.Value}~{exitFrameIndex.Value}");
                 }
 
                 // ✅ 3. UI 업데이트 및 Entry/Exit 초기화
@@ -2785,7 +2756,6 @@ namespace WinFormsApp1
                 // ✅ Event로 변경 시 자동 전파
                 if (oldLabel != "event")
                 {
-                    System.Diagnostics.Debug.WriteLine($"[라벨 변경] {oldLabel} → event, 전파 시작");
                     CreateEventWaypoint(selectedBox);
                     PropagateEventBoxToEnd(selectedBox);
                 }
@@ -3723,7 +3693,6 @@ namespace WinFormsApp1
                     mouseY >= entryTop - clickTolerance && mouseY <= entryBottom + clickTolerance)
                 {
                     LoadFrame(waypoint.EntryFrame);
-                    System.Diagnostics.Debug.WriteLine($"[Timeline] Entry 마커 클릭: {waypoint.Label}, Frame {waypoint.EntryFrame}");
                     return true;
                 }
 
@@ -3732,7 +3701,6 @@ namespace WinFormsApp1
                     mouseY >= exitTop - clickTolerance && mouseY <= exitBottom + clickTolerance)
                 {
                     LoadFrame(waypoint.ExitFrame);
-                    System.Diagnostics.Debug.WriteLine($"[Timeline] Exit 마커 클릭: {waypoint.Label}, Frame {waypoint.ExitFrame}");
                     return true;
                 }
             }
@@ -4008,7 +3976,6 @@ namespace WinFormsApp1
 
             if (startFrame > endFrame) return;
 
-            System.Diagnostics.Debug.WriteLine($"[Event 전파 시작] 프레임 {box.FrameIndex}에서 생성된 Event를 {startFrame}~{endFrame}까지 전파 ({endFrame - startFrame + 1}개 프레임)");
 
             for (int frame = startFrame; frame <= endFrame; frame++)
             {
@@ -4043,7 +4010,6 @@ namespace WinFormsApp1
             InvalidateBoxCache();
             UpdateBoxCount();
             UpdateBboxListDisplay();
-            System.Diagnostics.Debug.WriteLine($"[Event 전파 완료] {endFrame - startFrame + 1}개 프레임에 Event 박스 전파됨");
         }
 
         /// <summary>
@@ -4053,7 +4019,6 @@ namespace WinFormsApp1
         {
             if (box.Label != "event")
             {
-                System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제 중단] Label이 event가 아님: {box.Label}");
                 return;
             }
 
@@ -4069,7 +4034,6 @@ namespace WinFormsApp1
 
             if (boxesToRemove.Count > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제] {boxesToRemove.Count}개 박스 삭제 시작");
                 
                 foreach (var boxToRemove in boxesToRemove)
                 {
@@ -4084,7 +4048,6 @@ namespace WinFormsApp1
                 if (eventWaypoint != null)
                 {
                     waypointMarkers.Remove(eventWaypoint);
-                    System.Diagnostics.Debug.WriteLine($"[전파 박스 삭제] Event Waypoint 삭제 완료");
                 }
 
                 InvalidateBoxCache();
@@ -4146,7 +4109,6 @@ namespace WinFormsApp1
                 return;
             }
 
-            System.Diagnostics.Debug.WriteLine($"[Event 전파 시작] 프레임 {box.FrameIndex}에서 생성된 Event를 {startFrame}~{endFrame}까지 전파 ({endFrame - startFrame + 1}개 프레임)");
 
             int createdCount = 0;
             for (int frame = startFrame; frame <= endFrame; frame++)
@@ -4281,6 +4243,9 @@ namespace WinFormsApp1
         // ✅ 여러 Waypoint를 순차적으로 추적 (동시 실행 방지)
         private async void PerformSequentialTracking(List<WaypointMarker> waypoints)
         {
+            // ✅ 순차 추적 시작 시 플래그 설정
+            isTrackingInProgress = true;
+            
             try
             {
                 int totalCount = waypoints.Count;
@@ -4317,13 +4282,11 @@ namespace WinFormsApp1
                     
                     // JSON 저장
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
-                    System.Diagnostics.Debug.WriteLine($"[JSON 저장] {jsonFilePath}");
                     
                     // JSON 재로드하여 추적 데이터 기반으로 표시
                     if (File.Exists(jsonFilePath))
                     {
                         LoadLabelingData(jsonFilePath);
-                        System.Diagnostics.Debug.WriteLine($"[JSON 재로드] 완료");
                     }
 
                     MessageBox.Show(
@@ -4352,6 +4315,11 @@ namespace WinFormsApp1
                         "오류",
                         MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
+            }
+            finally
+            {
+                // ✅ 순차 추적 종료 시 플래그 해제
+                isTrackingInProgress = false;
             }
         }
 
@@ -4534,6 +4502,9 @@ namespace WinFormsApp1
         // ✅ 부분 재추적 함수 (특정 프레임부터 Exit까지)
         private async Task PerformPartialRetrackingAsync(WaypointMarker waypoint, int startFrame)
         {
+            // ✅ 추적 시작 시 플래그 설정
+            isTrackingInProgress = true;
+            
             try
             {
                 System.Diagnostics.Debug.WriteLine($"[부분 재추적 시작] {waypoint.Label} ID={waypoint.ObjectId}, Frame {startFrame}~{waypoint.ExitFrame}");
@@ -4670,13 +4641,11 @@ namespace WinFormsApp1
                     
                     // JSON 저장
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
-                    System.Diagnostics.Debug.WriteLine($"[재추적 JSON 저장] {jsonFilePath}");
                     
                     // JSON 재로드
                     if (File.Exists(jsonFilePath))
                     {
                         LoadLabelingData(jsonFilePath);
-                        System.Diagnostics.Debug.WriteLine($"[재추적 JSON 재로드] 완료");
                     }
                 }
 
@@ -4686,6 +4655,11 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[부분 재추적 오류] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
                 MessageBox.Show($"재추적 중 오류 발생:\n\n{ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                // ✅ 추적 종료 시 플래그 해제
+                isTrackingInProgress = false;
             }
         }
 
@@ -4880,7 +4854,6 @@ namespace WinFormsApp1
                             };
 
                             waypointMarkers.Add(waypoint);
-                            System.Diagnostics.Debug.WriteLine($"[JSON 로드] {box.Label} Waypoint 복원: ID={objectId}, {entryFrame}~{exitFrame}");
                         }
                     }
                 }
@@ -4893,7 +4866,6 @@ namespace WinFormsApp1
                 UpdateBoxCount();
                 pictureBoxVideo.Invalidate();
                 
-                System.Diagnostics.Debug.WriteLine($"[JSON 로드 완료] 박스 {boundingBoxes.Count}개, Waypoint {waypointMarkers.Count}개 로드됨");
             }
             catch (Exception ex)
             {
@@ -5084,7 +5056,6 @@ namespace WinFormsApp1
                             // Waypoint가 있으면 그 Entry/Exit 사용
                             entryFrame = matchingWaypoint.EntryFrame;
                             exitFrame = matchingWaypoint.ExitFrame;
-                            System.Diagnostics.Debug.WriteLine($"[JSON 저장] {box.Label} ID={boxId}, Frame={box.FrameIndex} → Waypoint {entryFrame}~{exitFrame}");
                         }
                         else
                         {
@@ -5098,7 +5069,6 @@ namespace WinFormsApp1
                                 entryFrame = sameObjectBoxes.Min(b => b.FrameIndex);
                                 exitFrame = sameObjectBoxes.Max(b => b.FrameIndex);
                             }
-                            System.Diagnostics.Debug.WriteLine($"[JSON 저장] {box.Label} ID={boxId}, Frame={box.FrameIndex} → Waypoint 없음, 범위: {entryFrame}~{exitFrame}");
                         }
 
                         // 자막에서 타임스탬프 추출 시도
@@ -5326,6 +5296,13 @@ namespace WinFormsApp1
         
         private void Form1_KeyDown(object sender, KeyEventArgs e)
         {
+            // ✅ 추적 중에는 모든 키 입력 무시 (추적 작업 보호)
+            if (isTrackingInProgress)
+            {
+                e.Handled = true;
+                return;
+            }
+
             // F1/F2/F3: Person/Vehicle/Event 라벨 선택 (영상 로드 여부와 무관)
             if (!e.Control && !e.Shift && !e.Alt)
             {
@@ -5628,6 +5605,24 @@ namespace WinFormsApp1
                 ClearSidebarHighlights(); // ✅ 하이라이트 초기화
                 pictureBoxVideo.Invalidate();
                 e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.Oemcomma) // ',' 키
+            {
+                // ✅ 이전 프레임으로 이동
+                if (currentFrameIndex > 0)
+                {
+                    LoadFrame(currentFrameIndex - 1);
+                    e.Handled = true;
+                }
+            }
+            else if (e.KeyCode == Keys.OemPeriod) // '.' 키
+            {
+                // ✅ 다음 프레임으로 이동
+                if (currentFrameIndex < totalFrames - 1)
+                {
+                    LoadFrame(currentFrameIndex + 1);
+                    e.Handled = true;
+                }
             }
         }
 
