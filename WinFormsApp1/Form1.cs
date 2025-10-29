@@ -205,7 +205,7 @@ namespace WinFormsApp1
             double fps)
         {
             int _inertiaCount;
-            return TrackObjectsWithFailures(videoCapture, startBox, startFrame, endFrame, fps, out _, out _inertiaCount, null);
+            return TrackObjectsWithFailures(videoCapture, startBox, startFrame, endFrame, fps, out _, out _inertiaCount);
         }
 
         // ✅ 실패 구간을 반환하는 오버로드 메서드
@@ -216,8 +216,7 @@ namespace WinFormsApp1
             int endFrame,
             double fps,
             out List<(int start, int end)> failureRanges,
-            out int inertiaAppliedCount,
-            Dictionary<string, bool> inertiaTrackingEnabled = null)
+            out int inertiaAppliedCount)
         {
             failureRanges = new List<(int, int)>();
             inertiaAppliedCount = 0;
@@ -250,33 +249,8 @@ namespace WinFormsApp1
             var localFailureRanges = new List<(int start, int end)>();
             int thresholdFailureStart = -1;
             
-            // ✅ 관성 추적을 위한 변수들 (재추적 완료 후에만 사용)
-            Queue<Rectangle> recentSuccessfulBoxes = new Queue<Rectangle>();
-            const int RECENT_BOXES_COUNT = 5; // 관성 계산에 사용할 최근 성공 박스 개수
-            const int MIN_SUCCESS_FOR_INERTIA = 3; // 관성 추적을 활성화하기 위한 최소 성공 횟수
-            
-            // 관성 추적 관련 변수
-            Rectangle lastSuccessfulRect = startBox.Rectangle;
-            int consecutiveSuccessCount = 0;
-            
-            // ✅ 재추적 완료 후에만 관성 추적 활성화 확인 (활성화된 waypoint 내의 재추적한 객체만)
-            int boxId = 0;
-            if (fixedLabel == "person") boxId = fixedIdPerson;
-            else if (fixedLabel == "vehicle") boxId = fixedIdVehicle;
-            else if (fixedLabel == "event") boxId = fixedIdEvent;
-            
-            string inertiaKey = $"{fixedLabel}_{boxId}";
-            bool isInertiaEnabled = false; // 기본적으로 비활성화
-            
-            // ✅ inertiaTrackingEnabled 딕셔너리가 전달되었고, 해당 객체가 활성화되어 있는지 확인
-            if (inertiaTrackingEnabled != null && inertiaTrackingEnabled.ContainsKey(inertiaKey))
-            {
-                isInertiaEnabled = inertiaTrackingEnabled[inertiaKey];
-                if (isInertiaEnabled)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[관성 추적 확인] {inertiaKey}: 활성화됨");
-                }
-            }
+            // ✅ 성공 프레임 추적 (보간용)
+            var successfulFrames = new Dictionary<int, Rectangle>(); // FrameIndex -> Rectangle
             
 
             for (int i = startFrame; i <= endFrame; i++)
@@ -339,18 +313,9 @@ namespace WinFormsApp1
                         previousRect = new Rectangle((int)bestDetection.Bounds.X, (int)bestDetection.Bounds.Y, (int)bestDetection.Bounds.Width, (int)bestDetection.Bounds.Height);
                         
                         successCount++;
-                        consecutiveSuccessCount++;
                         
-                        // ✅ 관성 추적이 활성화된 경우에만 최근 성공 박스 큐에 추가
-                        if (isInertiaEnabled)
-                        {
-                            recentSuccessfulBoxes.Enqueue(previousRect);
-                            if (recentSuccessfulBoxes.Count > RECENT_BOXES_COUNT)
-                            {
-                                recentSuccessfulBoxes.Dequeue();
-                            }
-                            lastSuccessfulRect = previousRect;
-                        }
+                        // ✅ 성공 프레임 기록 (보간용)
+                        successfulFrames[i] = previousRect;
                         
                         // ✅ 연속 실패가 끝났는지 체크
                         if (consecutiveFailures > 0)
@@ -418,48 +383,11 @@ namespace WinFormsApp1
                             thresholdFailureStart = i - (FAILURE_THRESHOLD - 1);
                         }
                         
-                        // ✅ 관성 추적 적용: Detection 실패 시 이전 성공 위치에서 관성으로 이동
-                        Rectangle inertiaRect = previousRect;
-                        
-                        // ✅ 관성 추적이 활성화되어 있고, 최근 성공 박스가 2개 이상 있으면 관성 보간 적용
-                        if (isInertiaEnabled && recentSuccessfulBoxes.Count >= 2)
-                        {
-                            var boxes = recentSuccessfulBoxes.ToArray();
-                            
-                            // 최근 성공 박스들의 평균 이동 벡터 계산
-                            int avgDx = 0, avgDy = 0;
-                            for (int j = 1; j < boxes.Length; j++)
-                            {
-                                avgDx += boxes[j].X - boxes[j - 1].X;
-                                avgDy += boxes[j].Y - boxes[j - 1].Y;
-                            }
-                            avgDx /= (boxes.Length - 1);
-                            avgDy /= (boxes.Length - 1);
-                            
-                            // 관성에 따라 박스 위치 예측
-                            inertiaRect = new Rectangle(
-                                previousRect.X + avgDx,
-                                previousRect.Y + avgDy,
-                                previousRect.Width,
-                                previousRect.Height
-                            );
-                            
-                            previousRect = inertiaRect;
-                            
-                            Debug.WriteLine($"[관성 추적] Frame {i}: 이동 벡터=({avgDx}, {avgDy}), 새 위치=({inertiaRect.X}, {inertiaRect.Y})");
-                            inertiaAppliedCount++;
-                        }
-                        else
-                        {
-                            // ✅ 관성 추적이 비활성화된 경우 이전 위치 유지
-                            Debug.WriteLine($"[관성 추적 비활성] Frame {i}: 이전 위치 유지 (관성 추적 아직 활성화 안 됨)");
-                        }
-                        
-                        // ✅ Detection 실패 시 관성 예측 박스 사용
+                        // ✅ Detection 실패 시 이전 위치 유지 (추적 완료 후 보간 처리)
                         trackedBoxes.Add(new BoundingBox
                     {
                         FrameIndex = i,
-                            Rectangle = inertiaRect, // 관성으로 예측한 박스 위치
+                            Rectangle = previousRect, // 이전 프레임의 박스 좌표 그대로 사용
                         Label = fixedLabel,
                         PersonId = fixedIdPerson,
                         VehicleId = fixedIdVehicle,
@@ -492,8 +420,91 @@ namespace WinFormsApp1
                 localFailureRanges.Add((thresholdFailureStart, endFrame));
             }
 
+            // ✅ YOLO 추적 완료 후 성공 프레임 간 보간으로 실패 프레임 채우기
+            if (trackedBoxes.Count > 0 && successfulFrames.Count > 0)
+            {
+                // 성공 프레임 목록 정렬
+                var sortedSuccessFrames = successfulFrames.Keys.OrderBy(f => f).ToList();
+                
+                // 각 실패 프레임에 대해 보간 적용
+                for (int frameIdx = startFrame; frameIdx <= endFrame; frameIdx++)
+                {
+                    // 이미 성공 프레임이면 건너뛰기
+                    if (successfulFrames.ContainsKey(frameIdx))
+                        continue;
+                    
+                    // 해당 프레임의 박스 찾기
+                    var box = trackedBoxes.FirstOrDefault(b => b.FrameIndex == frameIdx);
+                    if (box == null)
+                        continue;
+                    
+                    // 앞뒤 성공 프레임 찾기
+                    int? prevSuccessFrame = null;
+                    int? nextSuccessFrame = null;
+                    
+                    // 이전 성공 프레임 찾기
+                    for (int i = sortedSuccessFrames.Count - 1; i >= 0; i--)
+                    {
+                        if (sortedSuccessFrames[i] < frameIdx)
+                        {
+                            prevSuccessFrame = sortedSuccessFrames[i];
+                            break;
+                        }
+                    }
+                    
+                    // 다음 성공 프레임 찾기
+                    for (int i = 0; i < sortedSuccessFrames.Count; i++)
+                    {
+                        if (sortedSuccessFrames[i] > frameIdx)
+                        {
+                            nextSuccessFrame = sortedSuccessFrames[i];
+                            break;
+                        }
+                    }
+                    
+                    // 앞뒤 성공 프레임이 모두 있으면 보간 적용
+                    if (prevSuccessFrame.HasValue && nextSuccessFrame.HasValue)
+                    {
+                        var prevRect = successfulFrames[prevSuccessFrame.Value];
+                        var nextRect = successfulFrames[nextSuccessFrame.Value];
+                        
+                        int totalFramesBetween = nextSuccessFrame.Value - prevSuccessFrame.Value;
+                        int currentOffset = frameIdx - prevSuccessFrame.Value;
+                        
+                        // 선형 보간 계산 (위치 및 크기 모두 보간)
+                        double ratio = (double)currentOffset / totalFramesBetween;
+                        
+                        int interpolatedX = (int)(prevRect.X + (nextRect.X - prevRect.X) * ratio);
+                        int interpolatedY = (int)(prevRect.Y + (nextRect.Y - prevRect.Y) * ratio);
+                        int interpolatedWidth = (int)(prevRect.Width + (nextRect.Width - prevRect.Width) * ratio);
+                        int interpolatedHeight = (int)(prevRect.Height + (nextRect.Height - prevRect.Height) * ratio);
+                        
+                        // 박스 위치 및 크기 업데이트
+                        box.Rectangle = new Rectangle(interpolatedX, interpolatedY, interpolatedWidth, interpolatedHeight);
+                        
+                        inertiaAppliedCount++;
+                        Debug.WriteLine($"[관성 추적 보간] Frame {frameIdx}: {prevSuccessFrame.Value}({prevRect.X},{prevRect.Y}, {prevRect.Width}x{prevRect.Height}) ~ {nextSuccessFrame.Value}({nextRect.X},{nextRect.Y}, {nextRect.Width}x{nextRect.Height}) -> ({interpolatedX},{interpolatedY}, {interpolatedWidth}x{interpolatedHeight})");
+                    }
+                    else if (prevSuccessFrame.HasValue)
+                    {
+                        // 앞 성공 프레임만 있는 경우 (실패 지점부터 exit까지 성공 프레임 없음) - 그 자리에 고정
+                        var prevRect = successfulFrames[prevSuccessFrame.Value];
+                        box.Rectangle = prevRect; // 이전 위치 및 크기 유지 (고정)
+                        Debug.WriteLine($"[관성 추적 고정] Frame {frameIdx}: 실패 지점부터 exit까지 성공 프레임 없음, 이전 성공 프레임({prevSuccessFrame.Value}) 위치 유지");
+                    }
+                    else if (nextSuccessFrame.HasValue)
+                    {
+                        // 뒤 성공 프레임만 있는 경우 (시작 부분 실패)
+                        var nextRect = successfulFrames[nextSuccessFrame.Value];
+                        box.Rectangle = nextRect; // 다음 위치 및 크기로 설정
+                        Debug.WriteLine($"[관성 추적 시작] Frame {frameIdx}: 시작 부분 실패, 다음 성공 프레임({nextSuccessFrame.Value}) 위치로 설정");
+                    }
+                }
+            }
+
             // ✅ 최종 추적 통계 출력
             double successRate = totalFrames > 0 ? (double)successCount / totalFrames * 100 : 0;
+            Debug.WriteLine($"[추적 완료] 성공율: {successRate:F1}%, 성공: {successCount}, 실패: {failureCount}, 관성 보간: {inertiaAppliedCount}개");
 
             // ✅ 실패 구간을 out 파라미터에 할당
             failureRanges = localFailureRanges;
@@ -4500,8 +4511,7 @@ namespace WinFormsApp1
                                     waypoint.ExitFrame,
                                     fps,
                                     out List<(int start, int end)> failures,
-                                    out int inertiaCount,
-                                    inertiaTrackingEnabled); // ✅ 재추적 완료 후 활성화된 객체에 대해 관성 추적 적용
+                                    out int inertiaCount);
                                 return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount };
                             });
                             
@@ -4698,8 +4708,7 @@ namespace WinFormsApp1
                             waypoint.ExitFrame,
                             fps,
                             out List<(int start, int end)> failures,
-                            out int inertiaCount,
-                            inertiaTrackingEnabled); // ✅ 재추적 시 활성화된 waypoint의 객체만 관성 추적 적용
+                            out int inertiaCount);
                         return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount };
                     });
 
@@ -4756,12 +4765,7 @@ namespace WinFormsApp1
                 // ✅ 8. 현재 프레임 새로고침
                 pictureBoxVideo.Invalidate();
 
-                System.Diagnostics.Debug.WriteLine($"[부분 재추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}개 박스 추가됨");
-
-                // ✅ 9. 재추적 완료 후 관성 추적 활성화 플래그 설정
-                string inertiaKey = $"{waypoint.Label}_{waypoint.ObjectId}";
-                inertiaTrackingEnabled[inertiaKey] = true; // 재추적 완료 후에만 관성 추적 활성화
-                System.Diagnostics.Debug.WriteLine($"[관성 추적 활성화] {waypoint.Label} ID={waypoint.ObjectId} - 재추적 완료 후 관성 추적 활성화");
+                System.Diagnostics.Debug.WriteLine($"[부분 재추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}개 박스 추가됨, 관성 보간: {inertiaAppliedFrames}개 프레임");
 
                 // ✅ 10. JSON 자동 저장
                 if (!string.IsNullOrEmpty(currentVideoFile))
@@ -4781,7 +4785,7 @@ namespace WinFormsApp1
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
                 }
 
-                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n관성 추적 프레임: {inertiaAppliedFrames}개 (재추적 완료 후 보간)\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n관성 보간 프레임: {inertiaAppliedFrames}개 (성공 프레임 간 선형 보간 적용)\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
