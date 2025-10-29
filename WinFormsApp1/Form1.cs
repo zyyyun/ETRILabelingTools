@@ -204,7 +204,8 @@ namespace WinFormsApp1
             int endFrame,
             double fps)
         {
-            return TrackObjectsWithFailures(videoCapture, startBox, startFrame, endFrame, fps, out _);
+            int _inertiaCount;
+            return TrackObjectsWithFailures(videoCapture, startBox, startFrame, endFrame, fps, out _, out _inertiaCount, null);
         }
 
         // ✅ 실패 구간을 반환하는 오버로드 메서드
@@ -214,9 +215,12 @@ namespace WinFormsApp1
             int startFrame,
             int endFrame,
             double fps,
-            out List<(int start, int end)> failureRanges)
+            out List<(int start, int end)> failureRanges,
+            out int inertiaAppliedCount,
+            Dictionary<string, bool> inertiaTrackingEnabled = null)
         {
             failureRanges = new List<(int, int)>();
+            inertiaAppliedCount = 0;
             
             var trackedBoxes = new List<BoundingBox>();
             videoCapture.Set(VideoCaptureProperties.PosFrames, startFrame);
@@ -245,6 +249,34 @@ namespace WinFormsApp1
             const int FAILURE_THRESHOLD = 30;
             var localFailureRanges = new List<(int start, int end)>();
             int thresholdFailureStart = -1;
+            
+            // ✅ 관성 추적을 위한 변수들 (재추적 완료 후에만 사용)
+            Queue<Rectangle> recentSuccessfulBoxes = new Queue<Rectangle>();
+            const int RECENT_BOXES_COUNT = 5; // 관성 계산에 사용할 최근 성공 박스 개수
+            const int MIN_SUCCESS_FOR_INERTIA = 3; // 관성 추적을 활성화하기 위한 최소 성공 횟수
+            
+            // 관성 추적 관련 변수
+            Rectangle lastSuccessfulRect = startBox.Rectangle;
+            int consecutiveSuccessCount = 0;
+            
+            // ✅ 재추적 완료 후에만 관성 추적 활성화 확인 (활성화된 waypoint 내의 재추적한 객체만)
+            int boxId = 0;
+            if (fixedLabel == "person") boxId = fixedIdPerson;
+            else if (fixedLabel == "vehicle") boxId = fixedIdVehicle;
+            else if (fixedLabel == "event") boxId = fixedIdEvent;
+            
+            string inertiaKey = $"{fixedLabel}_{boxId}";
+            bool isInertiaEnabled = false; // 기본적으로 비활성화
+            
+            // ✅ inertiaTrackingEnabled 딕셔너리가 전달되었고, 해당 객체가 활성화되어 있는지 확인
+            if (inertiaTrackingEnabled != null && inertiaTrackingEnabled.ContainsKey(inertiaKey))
+            {
+                isInertiaEnabled = inertiaTrackingEnabled[inertiaKey];
+                if (isInertiaEnabled)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[관성 추적 확인] {inertiaKey}: 활성화됨");
+                }
+            }
             
 
             for (int i = startFrame; i <= endFrame; i++)
@@ -307,6 +339,18 @@ namespace WinFormsApp1
                         previousRect = new Rectangle((int)bestDetection.Bounds.X, (int)bestDetection.Bounds.Y, (int)bestDetection.Bounds.Width, (int)bestDetection.Bounds.Height);
                         
                         successCount++;
+                        consecutiveSuccessCount++;
+                        
+                        // ✅ 관성 추적이 활성화된 경우에만 최근 성공 박스 큐에 추가
+                        if (isInertiaEnabled)
+                        {
+                            recentSuccessfulBoxes.Enqueue(previousRect);
+                            if (recentSuccessfulBoxes.Count > RECENT_BOXES_COUNT)
+                            {
+                                recentSuccessfulBoxes.Dequeue();
+                            }
+                            lastSuccessfulRect = previousRect;
+                        }
                         
                         // ✅ 연속 실패가 끝났는지 체크
                         if (consecutiveFailures > 0)
@@ -374,11 +418,48 @@ namespace WinFormsApp1
                             thresholdFailureStart = i - (FAILURE_THRESHOLD - 1);
                         }
                         
-                        // ✅ Detection 실패 시 이전 위치 유지
+                        // ✅ 관성 추적 적용: Detection 실패 시 이전 성공 위치에서 관성으로 이동
+                        Rectangle inertiaRect = previousRect;
+                        
+                        // ✅ 관성 추적이 활성화되어 있고, 최근 성공 박스가 2개 이상 있으면 관성 보간 적용
+                        if (isInertiaEnabled && recentSuccessfulBoxes.Count >= 2)
+                        {
+                            var boxes = recentSuccessfulBoxes.ToArray();
+                            
+                            // 최근 성공 박스들의 평균 이동 벡터 계산
+                            int avgDx = 0, avgDy = 0;
+                            for (int j = 1; j < boxes.Length; j++)
+                            {
+                                avgDx += boxes[j].X - boxes[j - 1].X;
+                                avgDy += boxes[j].Y - boxes[j - 1].Y;
+                            }
+                            avgDx /= (boxes.Length - 1);
+                            avgDy /= (boxes.Length - 1);
+                            
+                            // 관성에 따라 박스 위치 예측
+                            inertiaRect = new Rectangle(
+                                previousRect.X + avgDx,
+                                previousRect.Y + avgDy,
+                                previousRect.Width,
+                                previousRect.Height
+                            );
+                            
+                            previousRect = inertiaRect;
+                            
+                            Debug.WriteLine($"[관성 추적] Frame {i}: 이동 벡터=({avgDx}, {avgDy}), 새 위치=({inertiaRect.X}, {inertiaRect.Y})");
+                            inertiaAppliedCount++;
+                        }
+                        else
+                        {
+                            // ✅ 관성 추적이 비활성화된 경우 이전 위치 유지
+                            Debug.WriteLine($"[관성 추적 비활성] Frame {i}: 이전 위치 유지 (관성 추적 아직 활성화 안 됨)");
+                        }
+                        
+                        // ✅ Detection 실패 시 관성 예측 박스 사용
                         trackedBoxes.Add(new BoundingBox
                     {
                         FrameIndex = i,
-                            Rectangle = previousRect, // 이전 프레임의 박스 좌표 그대로 사용
+                            Rectangle = inertiaRect, // 관성으로 예측한 박스 위치
                         Label = fixedLabel,
                         PersonId = fixedIdPerson,
                         VehicleId = fixedIdVehicle,
@@ -483,6 +564,9 @@ namespace WinFormsApp1
         
         // ✅ 실패 구간 저장 (Key: "Label_ObjectId", Value: List<(startFrame, endFrame)>)
         private Dictionary<string, List<(int start, int end)>> waypointFailureRanges = new Dictionary<string, List<(int, int)>>();
+        
+        // ✅ 관성 추적 활성화 상태 저장 (Key: "Label_ObjectId", Value: true/false)
+        private Dictionary<string, bool> inertiaTrackingEnabled = new Dictionary<string, bool>();
         
         private Color[] markerColors = new Color[]
         {
@@ -4415,8 +4499,10 @@ namespace WinFormsApp1
                                     waypoint.EntryFrame,
                                     waypoint.ExitFrame,
                                     fps,
-                                    out List<(int start, int end)> failures);
-                                return new { Boxes = boxes, Failures = failures };
+                                    out List<(int start, int end)> failures,
+                                    out int inertiaCount,
+                                    inertiaTrackingEnabled); // ✅ 재추적 완료 후 활성화된 객체에 대해 관성 추적 적용
+                                return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount };
                             });
                             
                             allTrackedBoxes.AddRange(result.Boxes);
@@ -4510,8 +4596,7 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[부분 재추적 시작] {waypoint.Label} ID={waypoint.ObjectId}, Frame {startFrame}~{waypoint.ExitFrame}");
 
-                // ✅ 1. 기존 데이터 삭제 (재추적 범위)
-                int removedCount = 0;
+                // ✅ 1. 먼저 startBox 찾기 (삭제 전에 찾아야 함)
                 string key = $"{waypoint.Label}_{waypoint.ObjectId}";
                 
                 // ✅ 재추적 시작 시 해당 객체의 실패 구간 정보 초기화
@@ -4521,27 +4606,20 @@ namespace WinFormsApp1
                     System.Diagnostics.Debug.WriteLine($"[재추적] {key}의 실패 구간 정보 초기화됨");
                 }
                 
-                // startFrame부터 waypoint.ExitFrame까지의 기존 박스 삭제
-                var boxesToRemove = boundingBoxes.Where(b =>
-                    b.Label == waypoint.Label &&
-                    GetBoxId(b) == waypoint.ObjectId &&
-                    b.FrameIndex >= startFrame &&
-                    b.FrameIndex <= waypoint.ExitFrame).ToList();
-
-                foreach (var box in boxesToRemove)
-                {
-                    boundingBoxes.Remove(box);
-                    removedCount++;
-                }
-
-                System.Diagnostics.Debug.WriteLine($"[부분 재추적] {removedCount}개 기존 박스 삭제됨");
-
-                // ✅ 2. 현재 프레임의 박스를 startBox로 사용
-                // selectedBox를 먼저 시도하고, 없으면 현재 프레임에서 찾기
-                BoundingBox startBox = selectedBox;
+                // ✅ 2. 현재 프레임의 박스를 startBox로 사용 (삭제 전에 찾아야 함)
+                BoundingBox startBox = null;
                 
-                if (startBox == null || startBox.FrameIndex != startFrame || 
-                    startBox.Label != waypoint.Label || GetBoxId(startBox) != waypoint.ObjectId)
+                // selectedBox가 올바른 박스인지 확인
+                if (selectedBox != null && 
+                    selectedBox.FrameIndex == startFrame &&
+                    selectedBox.Label == waypoint.Label && 
+                    GetBoxId(selectedBox) == waypoint.ObjectId)
+                {
+                    startBox = selectedBox;
+                }
+                
+                // startBox를 찾지 못했으면 현재 프레임에서 찾기
+                if (startBox == null)
                 {
                     startBox = boundingBoxes.FirstOrDefault(b =>
                         b.FrameIndex == startFrame &&
@@ -4555,7 +4633,26 @@ namespace WinFormsApp1
                     return;
                 }
 
-                // ✅ 3. 재추적 수행
+                // ✅ 3. 기존 데이터 삭제 (재추적 범위) - startBox는 제외
+                int removedCount = 0;
+                
+                // startFrame부터 waypoint.ExitFrame까지의 기존 박스 삭제 (startBox 제외)
+                var boxesToRemove = boundingBoxes.Where(b =>
+                    b.Label == waypoint.Label &&
+                    GetBoxId(b) == waypoint.ObjectId &&
+                    b.FrameIndex >= startFrame &&
+                    b.FrameIndex <= waypoint.ExitFrame &&
+                    b != startBox).ToList(); // startBox는 삭제하지 않음
+
+                foreach (var box in boxesToRemove)
+                {
+                    boundingBoxes.Remove(box);
+                    removedCount++;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[부분 재추적] {removedCount}개 기존 박스 삭제됨");
+
+                // ✅ 4. 재추적 수행
                 if (!isYoloAvailable)
                 {
                     MessageBox.Show("YOLO 모델을 사용할 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -4588,6 +4685,7 @@ namespace WinFormsApp1
                 loadingForm.Refresh();
 
                 List<BoundingBox> newTrackedBoxes = new List<BoundingBox>();
+                int inertiaAppliedFrames = 0; // ✅ 관성 추적 적용된 프레임 수
 
                 if (trackingEngine is YoloTrackingEngine yoloEngine)
                 {
@@ -4599,11 +4697,14 @@ namespace WinFormsApp1
                             startFrame,
                             waypoint.ExitFrame,
                             fps,
-                            out List<(int start, int end)> failures);
-                        return new { Boxes = boxes, Failures = failures };
+                            out List<(int start, int end)> failures,
+                            out int inertiaCount,
+                            inertiaTrackingEnabled); // ✅ 재추적 시 활성화된 waypoint의 객체만 관성 추적 적용
+                        return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount };
                     });
 
                     newTrackedBoxes = result.Boxes;
+                    inertiaAppliedFrames = result.InertiaCount;
 
                     // ✅ 실패 구간 업데이트
                     if (result.Failures != null && result.Failures.Count > 0)
@@ -4615,25 +4716,54 @@ namespace WinFormsApp1
 
                 loadingForm.Close();
 
-                // ✅ 4. 새 데이터 추가
+                // ✅ 5. 새 데이터 추가 전 중복 제거 확인
+                int duplicateCount = 0;
+                var framesToCheck = newTrackedBoxes.Select(b => b.FrameIndex).Distinct().ToList();
+                
+                // 새로 추가할 박스의 프레임에 이미 존재하는 동일한 객체 박스 제거
+                foreach (var frame in framesToCheck)
+                {
+                    var existingBoxes = boundingBoxes.Where(b =>
+                        b.FrameIndex == frame &&
+                        b.Label == waypoint.Label &&
+                        GetBoxId(b) == waypoint.ObjectId).ToList();
+                    
+                    foreach (var existingBox in existingBoxes)
+                    {
+                        boundingBoxes.Remove(existingBox);
+                        duplicateCount++;
+                    }
+                }
+                
+                if (duplicateCount > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[재추적 중복 제거] {duplicateCount}개 중복 박스 삭제됨");
+                }
+
+                // ✅ 6. 새 데이터 추가
                 foreach (var box in newTrackedBoxes)
                 {
                     boundingBoxes.Add(box);
                 }
 
-                // ✅ 5. 정렬
+                // ✅ 7. 정렬
                 boundingBoxes.Sort((a, b) => a.FrameIndex.CompareTo(b.FrameIndex));
 
                 InvalidateBoxCache();
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
 
-                // ✅ 6. 현재 프레임 새로고침
+                // ✅ 8. 현재 프레임 새로고침
                 pictureBoxVideo.Invalidate();
 
                 System.Diagnostics.Debug.WriteLine($"[부분 재추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}개 박스 추가됨");
 
-                // ✅ 7. JSON 자동 저장
+                // ✅ 9. 재추적 완료 후 관성 추적 활성화 플래그 설정
+                string inertiaKey = $"{waypoint.Label}_{waypoint.ObjectId}";
+                inertiaTrackingEnabled[inertiaKey] = true; // 재추적 완료 후에만 관성 추적 활성화
+                System.Diagnostics.Debug.WriteLine($"[관성 추적 활성화] {waypoint.Label} ID={waypoint.ObjectId} - 재추적 완료 후 관성 추적 활성화");
+
+                // ✅ 10. JSON 자동 저장
                 if (!string.IsNullOrEmpty(currentVideoFile))
                 {
                     string videoDir = Path.GetDirectoryName(currentVideoFile);
@@ -4651,7 +4781,7 @@ namespace WinFormsApp1
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
                 }
 
-                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n관성 추적 프레임: {inertiaAppliedFrames}개 (재추적 완료 후 보간)\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
