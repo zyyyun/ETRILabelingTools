@@ -203,6 +203,19 @@ namespace WinFormsApp1
             int endFrame,
             double fps)
         {
+            return TrackObjectsWithFailures(videoCapture, startBox, startFrame, endFrame, fps, out _);
+        }
+
+        // ✅ 실패 구간을 반환하는 오버로드 메서드
+        public List<BoundingBox> TrackObjectsWithFailures(
+            VideoCapture videoCapture,
+            BoundingBox startBox,
+            int startFrame,
+            int endFrame,
+            double fps,
+            out List<(int start, int end)> failureRanges)
+        {
+            failureRanges = new List<(int, int)>();
             
             var trackedBoxes = new List<BoundingBox>();
             videoCapture.Set(VideoCaptureProperties.PosFrames, startFrame);
@@ -217,6 +230,22 @@ namespace WinFormsApp1
 
             // 추적 대상의 기본 카테고리를 미리 추출합니다. (예: "person_1" -> "person")
             string targetCategory = GetBaseCategory(fixedLabel);
+
+            // ✅ 추적 실패 분석을 위한 통계 변수
+            int totalFrames = endFrame - startFrame + 1;
+            int successCount = 0;
+            int failureCount = 0;
+            int failureStartFrame = -1;
+            int consecutiveFailures = 0;
+            int maxConsecutiveFailures = 0;
+            string lastFailureReason = "";
+            
+            // ✅ 30프레임 연속 실패 구간 추적
+            const int FAILURE_THRESHOLD = 30;
+            var localFailureRanges = new List<(int start, int end)>();
+            int thresholdFailureStart = -1;
+            
+            Debug.WriteLine($"[TRACKING START] Label: {fixedLabel}, Category: {targetCategory}, Frames: {startFrame}~{endFrame} (Total: {totalFrames})");
 
             for (int i = startFrame; i <= endFrame; i++)
             {
@@ -243,6 +272,9 @@ namespace WinFormsApp1
                     Detection bestDetection = null;
                     const double MIN_IOU_THRESHOLD = 0.3; // IoU 최소 임계값
                     
+                    int candidateCount = 0; // 같은 카테고리의 후보 수
+                    double maxIouOfCategory = 0.0; // 같은 카테고리 중 최대 IoU
+                    
                     foreach (var d in detections)
                     {
                         // ✅ 1. Label 필터링: 같은 기본 카테고리를 가진 객체만 후보로 고려합니다.
@@ -258,8 +290,12 @@ namespace WinFormsApp1
 
                         if (detectionName.Equals(targetCategory, StringComparison.OrdinalIgnoreCase))
                         {
+                            candidateCount++;
                             var detectionRect = new Rectangle((int)d.Bounds.X, (int)d.Bounds.Y, (int)d.Bounds.Width, (int)d.Bounds.Height);
                             double iou = ComputeIoU(previousRect, detectionRect);
+                            
+                            if (iou > maxIouOfCategory)
+                                maxIouOfCategory = iou;
 
                             // ✅ 2. IoU 비교: 가장 많이 겹치는 객체를 찾습니다.
                             if (iou > bestIou && iou > MIN_IOU_THRESHOLD)
@@ -274,6 +310,25 @@ namespace WinFormsApp1
                     if (bestDetection != null)
                     {
                         previousRect = new Rectangle((int)bestDetection.Bounds.X, (int)bestDetection.Bounds.Y, (int)bestDetection.Bounds.Width, (int)bestDetection.Bounds.Height);
+                        
+                        successCount++;
+                        
+                        // ✅ 연속 실패가 끝났는지 체크
+                        if (consecutiveFailures > 0)
+                        {
+                            Debug.WriteLine($"[TRACKING SUCCESS] Frame {i}: 추적 성공 (연속 실패 {consecutiveFailures}회 후)");
+                            
+                            // ✅ 30프레임 이상 실패했다면 실패 구간 기록
+                            if (consecutiveFailures >= FAILURE_THRESHOLD && thresholdFailureStart != -1)
+                            {
+                                localFailureRanges.Add((thresholdFailureStart, i - 1));
+                                Debug.WriteLine($"[FAILURE RANGE] {thresholdFailureStart}~{i - 1} (연속 {consecutiveFailures}회 실패)");
+                                thresholdFailureStart = -1;
+                            }
+                            
+                            consecutiveFailures = 0;
+                        }
+                        
                         trackedBoxes.Add(new BoundingBox
                         {
                             FrameIndex = i,
@@ -289,8 +344,44 @@ namespace WinFormsApp1
                     }
                     else
                     {
-                        // ✅ Detection 실패 시 이전 위치 유지 및 계속 추적
-                        Debug.WriteLine($"[YOLO] Frame {i}: Detection 실패, 이전 위치 유지");
+                        // ✅ Detection 실패 분석
+                        failureCount++;
+                        consecutiveFailures++;
+                        
+                        // 실패 이유 결정
+                        if (detections.Count == 0)
+                        {
+                            lastFailureReason = "탐지된 객체 없음";
+                        }
+                        else if (candidateCount == 0)
+                        {
+                            lastFailureReason = $"같은 카테고리({targetCategory}) 없음 - 탐지된 카테고리: {string.Join(", ", detections.Take(3).Select(d => d.Name.ToString()))}";
+                        }
+                        else
+                        {
+                            lastFailureReason = $"IoU 임계값(0.3) 미만 - 최대 IoU: {maxIouOfCategory:F2}";
+                        }
+                        
+                        // 실패 구간 시작 체크
+                        if (failureStartFrame == -1)
+                        {
+                            failureStartFrame = i;
+                        }
+                        
+                        // 최대 연속 실패 업데이트
+                        if (consecutiveFailures > maxConsecutiveFailures)
+                        {
+                            maxConsecutiveFailures = consecutiveFailures;
+                        }
+                        
+                        // ✅ 30프레임 연속 실패 시작 체크
+                        if (consecutiveFailures == FAILURE_THRESHOLD)
+                        {
+                            thresholdFailureStart = i - (FAILURE_THRESHOLD - 1);
+                            Debug.WriteLine($"[FAILURE THRESHOLD REACHED] Starting at Frame {thresholdFailureStart}");
+                        }
+                        
+                        Debug.WriteLine($"[TRACKING FAILURE] Frame {i}: {lastFailureReason} (연속 실패: {consecutiveFailures}회, 구간: {failureStartFrame}~{i})");
                         
                         trackedBoxes.Add(new BoundingBox
                     {
@@ -323,6 +414,37 @@ namespace WinFormsApp1
             }
             catch { }
 
+            // ✅ 추적 종료 시 미종료된 실패 구간 처리
+            if (consecutiveFailures >= FAILURE_THRESHOLD && thresholdFailureStart != -1)
+            {
+                localFailureRanges.Add((thresholdFailureStart, endFrame));
+                Debug.WriteLine($"[FAILURE RANGE] {thresholdFailureStart}~{endFrame} (끝까지 실패)");
+            }
+
+            // ✅ 최종 추적 통계 출력
+            double successRate = totalFrames > 0 ? (double)successCount / totalFrames * 100 : 0;
+            Debug.WriteLine("===========================================");
+            Debug.WriteLine($"[TRACKING SUMMARY] Label: {fixedLabel}");
+            Debug.WriteLine($"  전체 프레임: {totalFrames}");
+            Debug.WriteLine($"  성공: {successCount} ({successRate:F1}%)");
+            Debug.WriteLine($"  실패: {failureCount} ({(100 - successRate):F1}%)");
+            Debug.WriteLine($"  최대 연속 실패: {maxConsecutiveFailures}회");
+            if (failureCount > 0)
+            {
+                Debug.WriteLine($"  마지막 실패 이유: {lastFailureReason}");
+            }
+            if (localFailureRanges.Count > 0)
+            {
+                Debug.WriteLine($"  실패 구간 수: {localFailureRanges.Count}");
+                foreach (var range in localFailureRanges)
+                {
+                    Debug.WriteLine($"    -> Frame {range.start}~{range.end}");
+                }
+            }
+            Debug.WriteLine("===========================================");
+
+            // ✅ 실패 구간을 out 파라미터에 할당
+            failureRanges = localFailureRanges;
             return trackedBoxes;
         }
 
@@ -384,6 +506,10 @@ namespace WinFormsApp1
 
         private List<WaypointMarker> waypointMarkers = new List<WaypointMarker>();
         private WaypointMarker selectedWaypoint = null; // ✅ 선택된 Waypoint 추적
+        
+        // ✅ 실패 구간 저장 (Key: "Label_ObjectId", Value: List<(startFrame, endFrame)>)
+        private Dictionary<string, List<(int start, int end)>> waypointFailureRanges = new Dictionary<string, List<(int, int)>>();
+        
         private Color[] markerColors = new Color[]
         {
             Color.FromArgb(59, 130, 246),
@@ -1178,7 +1304,7 @@ namespace WinFormsApp1
 
         private async Task SetExitMarkerAndCreateWaypoint()
         {
-            if (entryFrameIndex.HasValue && selectedBox != null)
+            if (entryFrameIndex.HasValue)
             {
                 // ✅ Exit 프레임이 Entry 프레임보다 앞에 있으면 막기
                 if (currentFrameIndex <= entryFrameIndex.Value)
@@ -1549,6 +1675,12 @@ namespace WinFormsApp1
             btnSelectAll.BackColor = Color.FromArgb(59, 130, 246);
             btnEdit.BackColor = SystemColors.Control;
             pictureBoxVideo.Cursor = Cursors.Hand;
+            
+            // ✅ 선택된 박스가 있으면 하이라이트 유지
+            if (selectedBox != null)
+            {
+                HighlightSelectedBoxInSidebar();
+            }
         }
 
         private void btnEdit_Click(object sender, EventArgs e)
@@ -1557,6 +1689,12 @@ namespace WinFormsApp1
             btnEdit.BackColor = Color.FromArgb(59, 130, 246);
             btnSelectAll.BackColor = SystemColors.Control;
             pictureBoxVideo.Cursor = Cursors.Cross;
+            
+            // ✅ Edit 모드로 전환 시 하이라이트 유지
+            if (selectedBox != null)
+            {
+                HighlightSelectedBoxInSidebar();
+            }
         }
 
         private void pictureBoxVideo_MouseDown(object sender, MouseEventArgs e)
@@ -1614,6 +1752,16 @@ namespace WinFormsApp1
                     dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
                     UpdateObjectInfo(selectedBox);
                     UpdateBboxListDisplay(); // 선택 후 우측 패널 동기화
+                    HighlightSelectedBoxInSidebar(); // ✅ 우측 사이드바에서 선택된 박스 하이라이트
+                    pictureBoxVideo.Invalidate();
+                }
+                else
+                {
+                    // ✅ 빈 공간 클릭 시 선택 해제
+                    selectedBox = null;
+                    ClearSidebarHighlights(); // 하이라이트 초기화
+                    UpdateObjectInfo(null); // 객체 정보 초기화
+                    UpdateBboxListDisplay(); // 우측 패널 동기화
                     pictureBoxVideo.Invalidate();
                 }
             }
@@ -1816,6 +1964,7 @@ namespace WinFormsApp1
                     SizeF textSize = g.MeasureString(labelText, labelFont);
                     RectangleF labelBg = new RectangleF(
                         viewRect.X,
+                        
                         viewRect.Y - textSize.Height - 4,
                         textSize.Width + 8,
                         textSize.Height + 4
@@ -1847,13 +1996,112 @@ namespace WinFormsApp1
             }
         }
 
+        // ✅ 실패 박스 판별 함수
+        private bool IsTrackingFailed(BoundingBox box)
+        {
+            string key = $"{box.Label}_{GetBoxId(box)}";
+            if (!waypointFailureRanges.ContainsKey(key))
+                return false;
+            
+            return waypointFailureRanges[key].Any(range => 
+                box.FrameIndex >= range.start && box.FrameIndex <= range.end);
+        }
+        
+        // ✅ 우측 사이드바에서 선택된 박스 하이라이트
+        private void HighlightSelectedBoxInSidebar()
+        {
+            if (selectedBox == null) return;
+            
+            // 모든 패널의 하이라이트 초기화
+            ClearSidebarHighlights();
+            
+            // 선택된 박스의 라벨에 따라 해당 패널에서 하이라이트
+            switch (selectedBox.Label.ToLower())
+            {
+                case "person":
+                    HighlightBoxInPanel(panelPersonList, selectedBox);
+                    break;
+                case "vehicle":
+                    HighlightBoxInPanel(panelVehicleList, selectedBox);
+                    break;
+                case "event":
+                    HighlightBoxInPanel(panelEventList, selectedBox);
+                    break;
+            }
+        }
+        
+        // ✅ 패널에서 특정 박스 하이라이트
+        private void HighlightBoxInPanel(Panel panel, BoundingBox targetBox)
+        {
+            // 카테고리별 하이라이트 색상 결정
+            Color highlightColor;
+            if (panel == panelPersonList)
+                highlightColor = Color.FromArgb(252, 231, 243); // 연한 분홍색
+            else if (panel == panelVehicleList)
+                highlightColor = Color.FromArgb(219, 234, 254); // 연한 파란색
+            else if (panel == panelEventList)
+                highlightColor = Color.FromArgb(220, 252, 231); // 연한 녹색
+            else
+                highlightColor = Color.FromArgb(200, 255, 200); // 기본 연한 녹색
+            
+            foreach (Control ctrl in panel.Controls)
+            {
+                if (ctrl is Panel itemPanel)
+                {
+                    // 패널의 Tag에서 박스 정보 가져오기
+                    if (itemPanel.Tag is BoundingBox box && box == targetBox)
+                    {
+                        itemPanel.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+                        itemPanel.BackColor = highlightColor; // 카테고리별 색상으로 하이라이트
+                    }
+                    else
+                    {
+                        itemPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+                        itemPanel.BackColor = SystemColors.Control;
+                    }
+                }
+            }
+        }
+        
+        // ✅ 사이드바 하이라이트 초기화
+        private void ClearSidebarHighlights()
+        {
+            ClearPanelHighlights(panelPersonList);
+            ClearPanelHighlights(panelVehicleList);
+            ClearPanelHighlights(panelEventList);
+        }
+        
+        // ✅ 패널 하이라이트 초기화
+        private void ClearPanelHighlights(Panel panel)
+        {
+            // 카테고리별 기본 색상 결정
+            Color defaultColor;
+            if (panel == panelPersonList)
+                defaultColor = Color.FromArgb(252, 231, 243); // 연한 분홍색
+            else if (panel == panelVehicleList)
+                defaultColor = Color.FromArgb(219, 234, 254); // 연한 파란색
+            else if (panel == panelEventList)
+                defaultColor = Color.FromArgb(220, 252, 231); // 연한 녹색
+            else
+                defaultColor = SystemColors.Control; // 기본 색상
+            
+            foreach (Control ctrl in panel.Controls)
+            {
+                if (ctrl is Panel itemPanel)
+                {
+                    itemPanel.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+                    itemPanel.BackColor = defaultColor; // 카테고리별 기본 색상으로 복원
+                }
+            }
+        }
+        
         private BoundingBox GetBoundingBoxAt(System.Drawing.Point location)
         {
             // 뷰 좌표를 이미지 좌표로 변환
             var imageLocation = ViewToImage(new PointF(location.X, location.Y));
             
-            // 현재 프레임에 해당하는 박스들을 필터링
-            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex);
+            // ✅ 현재 프레임에 해당하는 박스들을 필터링 (삭제되지 않은 박스만)
+            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex && !b.IsDeleted);
 
             foreach (var box in currentFrameBoxes.Reverse())
             {
@@ -2225,7 +2473,7 @@ namespace WinFormsApp1
 
         private string GetVehicleCategoryName(int vehicleId)
         {
-            string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+            string[] vehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
             if (vehicleId > 0 && vehicleId <= vehicleTypes.Length)
                 return vehicleTypes[vehicleId - 1];
             return $"vehicle_{vehicleId}";
@@ -2241,6 +2489,15 @@ namespace WinFormsApp1
 
         private void UpdateObjectInfo(BoundingBox box)
         {
+            if (box == null)
+            {
+                // ✅ 박스가 null일 때 정보 초기화
+                labelObjectLabel.Text = "Label: -";
+                labelPrevWaypoint.Text = "Previous Waypoint: -";
+                labelNextWaypoint.Text = "Next Waypoint: -";
+                return;
+            }
+            
             string labelText = "";
             if (box.Label == "person")
             {
@@ -2248,7 +2505,7 @@ namespace WinFormsApp1
             }
             else if (box.Label == "vehicle")
             {
-                string[] vehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+                string[] vehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
                 if (box.VehicleId > 0 && box.VehicleId <= vehicleTypes.Length)
                     labelText = $"Label: vehicle_{vehicleTypes[box.VehicleId - 1]}";
                 else
@@ -2623,7 +2880,7 @@ namespace WinFormsApp1
         }
 
         // 성능 최적화: 박스 라벨 텍스트 생성 (재사용 가능한 배열 사용)
-        private static readonly string[] VehicleTypes = { "car", "motorcycle", "bicycle", "e_scooter" };
+        private static readonly string[] VehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
         private static readonly string[] EventTypes = { "contact", "exchange", "board", "final_exchange" };
         
         private string GetBoxLabelText(BoundingBox box)
@@ -2710,6 +2967,15 @@ namespace WinFormsApp1
         {
             panelPersonList.Controls.Clear();
             
+            // ✅ 패널 자체 클릭 시 선택 해제
+            panelPersonList.Click += (s, e) =>
+            {
+                selectedBox = null;
+                ClearSidebarHighlights();
+                UpdateObjectInfo(null);
+                pictureBoxVideo.Invalidate();
+            };
+            
             var currentBoxes = boundingBoxes
                 .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "person" && !b.IsDeleted)
                 .ToList();
@@ -2739,7 +3005,8 @@ namespace WinFormsApp1
                     Size = new System.Drawing.Size(260, 65),
                     BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
                     BackColor = System.Drawing.Color.FromArgb(252, 231, 243),
-                    Cursor = Cursors.Hand
+                    Cursor = Cursors.Hand,
+                    Tag = currentBox // ✅ 박스 정보를 Tag에 저장
                 };
                 
                 Label itemLabel = new Label
@@ -2792,17 +3059,8 @@ namespace WinFormsApp1
                 {
                     selectedBox = currentBox;
                     UpdateObjectInfo(selectedBox);
+                    HighlightSelectedBoxInSidebar(); // ✅ 하이라이트 업데이트
                     pictureBoxVideo.Invalidate();
-                    
-                    foreach (Control ctrl in panelPersonList.Controls)
-                    {
-                        if (ctrl is Panel p)
-                        {
-                            p.BorderStyle = (p == itemPanel) 
-                                ? System.Windows.Forms.BorderStyle.Fixed3D 
-                                : System.Windows.Forms.BorderStyle.FixedSingle;
-                        }
-                    }
                 };
                 
                 itemPanel.Click += clickHandler;
@@ -2817,6 +3075,15 @@ namespace WinFormsApp1
         private void UpdateVehicleListDisplay()
         {
             panelVehicleList.Controls.Clear();
+            
+            // ✅ 패널 자체 클릭 시 선택 해제
+            panelVehicleList.Click += (s, e) =>
+            {
+                selectedBox = null;
+                ClearSidebarHighlights();
+                UpdateObjectInfo(null);
+                pictureBoxVideo.Invalidate();
+            };
             
             var currentBoxes = boundingBoxes
                 .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "vehicle" && !b.IsDeleted)
@@ -2851,7 +3118,8 @@ namespace WinFormsApp1
                     Size = new System.Drawing.Size(260, 65),
                     BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
                     BackColor = System.Drawing.Color.FromArgb(219, 234, 254),
-                    Cursor = Cursors.Hand
+                    Cursor = Cursors.Hand,
+                    Tag = currentBox // ✅ 박스 정보를 Tag에 저장
                 };
                 
                 Label itemLabel = new Label
@@ -2905,17 +3173,8 @@ namespace WinFormsApp1
                 {
                     selectedBox = currentBox;
                     UpdateObjectInfo(selectedBox);
+                    HighlightSelectedBoxInSidebar(); // ✅ 하이라이트 업데이트
                     pictureBoxVideo.Invalidate();
-                    
-                    foreach (Control ctrl in panelVehicleList.Controls)
-                    {
-                        if (ctrl is Panel p)
-                        {
-                            p.BorderStyle = (p == itemPanel) 
-                                ? System.Windows.Forms.BorderStyle.Fixed3D 
-                                : System.Windows.Forms.BorderStyle.FixedSingle;
-                        }
-                    }
                 };
                 
                 itemPanel.Click += clickHandler;
@@ -2930,6 +3189,15 @@ namespace WinFormsApp1
         private void UpdateEventListDisplay()
         {
             panelEventList.Controls.Clear();
+            
+            // ✅ 패널 자체 클릭 시 선택 해제
+            panelEventList.Click += (s, e) =>
+            {
+                selectedBox = null;
+                ClearSidebarHighlights();
+                UpdateObjectInfo(null);
+                pictureBoxVideo.Invalidate();
+            };
             
             var currentBoxes = boundingBoxes
                 .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "event" && !b.IsDeleted)
@@ -2964,7 +3232,8 @@ namespace WinFormsApp1
                     Size = new System.Drawing.Size(260, 65),
                     BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle,
                     BackColor = System.Drawing.Color.FromArgb(220, 252, 231),
-                    Cursor = Cursors.Hand
+                    Cursor = Cursors.Hand,
+                    Tag = currentBox // ✅ 박스 정보를 Tag에 저장
                 };
                 
                 Label itemLabel = new Label
@@ -3043,17 +3312,8 @@ namespace WinFormsApp1
                 {
                     selectedBox = currentBox;
                     UpdateObjectInfo(selectedBox);
+                    HighlightSelectedBoxInSidebar(); // ✅ 하이라이트 업데이트
                     pictureBoxVideo.Invalidate();
-                    
-                    foreach (Control ctrl in panelEventList.Controls)
-                    {
-                        if (ctrl is Panel p)
-                        {
-                            p.BorderStyle = (p == itemPanel) 
-                                ? System.Windows.Forms.BorderStyle.Fixed3D 
-                                : System.Windows.Forms.BorderStyle.FixedSingle;
-                        }
-                    }
                 };
                 
                 itemPanel.Click += clickHandler;
@@ -3079,6 +3339,7 @@ namespace WinFormsApp1
             selectedBox.IsDeleted = true;
             
             selectedBox = null;
+            ClearSidebarHighlights(); // ✅ 하이라이트 초기화
             UpdateBoxCount();
             UpdateBboxListDisplay();
             pictureBoxVideo.Invalidate();
@@ -4174,15 +4435,42 @@ namespace WinFormsApp1
                     // 각 startBox에 대해 개별적으로 YOLO 추적 수행
                     foreach (var startBox in startBoxes)
                     {
-                        
-                        var trackedBoxes = await Task.Run(() => trackingEngine.TrackObjects(
-                            videoCapture,
-                            startBox,
-                            waypoint.EntryFrame,
-                            waypoint.ExitFrame,
-                            fps));
-                        
-                        allTrackedBoxes.AddRange(trackedBoxes);
+                        // ✅ 실패 구간을 받아오는 오버로드 메서드 호출
+                        if (trackingEngine is YoloTrackingEngine yoloEngine)
+                        {
+                            var result = await Task.Run(() =>
+                            {
+                                var boxes = yoloEngine.TrackObjectsWithFailures(
+                                    videoCapture,
+                                    startBox,
+                                    waypoint.EntryFrame,
+                                    waypoint.ExitFrame,
+                                    fps,
+                                    out List<(int start, int end)> failures);
+                                return new { Boxes = boxes, Failures = failures };
+                            });
+                            
+                            allTrackedBoxes.AddRange(result.Boxes);
+                            
+                            // ✅ 실패 구간 저장
+                            string key = $"{waypoint.Label}_{waypoint.ObjectId}";
+                            if (result.Failures != null && result.Failures.Count > 0)
+                            {
+                                waypointFailureRanges[key] = result.Failures;
+                                System.Diagnostics.Debug.WriteLine($"[실패 구간 저장] {key}: {result.Failures.Count}개 구간");
+                            }
+                        }
+                        else
+                        {
+                            var trackedBoxes = await Task.Run(() => trackingEngine.TrackObjects(
+                                videoCapture,
+                                startBox,
+                                waypoint.EntryFrame,
+                                waypoint.ExitFrame,
+                                fps));
+                            
+                            allTrackedBoxes.AddRange(trackedBoxes);
+                        }
                     }
                 }
                 else 
@@ -4242,6 +4530,165 @@ namespace WinFormsApp1
                 throw; // 예외를 상위로 전파하여 순차 추적이 중단되도록
             }
         }
+
+        // ✅ 부분 재추적 함수 (특정 프레임부터 Exit까지)
+        private async Task PerformPartialRetrackingAsync(WaypointMarker waypoint, int startFrame)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine($"[부분 재추적 시작] {waypoint.Label} ID={waypoint.ObjectId}, Frame {startFrame}~{waypoint.ExitFrame}");
+
+                // ✅ 1. 기존 데이터 삭제 (재추적 범위)
+                int removedCount = 0;
+                string key = $"{waypoint.Label}_{waypoint.ObjectId}";
+                
+                // startFrame부터 waypoint.ExitFrame까지의 기존 박스 삭제
+                var boxesToRemove = boundingBoxes.Where(b =>
+                    b.Label == waypoint.Label &&
+                    GetBoxId(b) == waypoint.ObjectId &&
+                    b.FrameIndex >= startFrame &&
+                    b.FrameIndex <= waypoint.ExitFrame).ToList();
+
+                foreach (var box in boxesToRemove)
+                {
+                    boundingBoxes.Remove(box);
+                    removedCount++;
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[부분 재추적] {removedCount}개 기존 박스 삭제됨");
+
+                // ✅ 2. 현재 프레임의 박스를 startBox로 사용
+                // selectedBox를 먼저 시도하고, 없으면 현재 프레임에서 찾기
+                BoundingBox startBox = selectedBox;
+                
+                if (startBox == null || startBox.FrameIndex != startFrame || 
+                    startBox.Label != waypoint.Label || GetBoxId(startBox) != waypoint.ObjectId)
+                {
+                    startBox = boundingBoxes.FirstOrDefault(b =>
+                        b.FrameIndex == startFrame &&
+                        b.Label == waypoint.Label &&
+                        GetBoxId(b) == waypoint.ObjectId);
+                }
+
+                if (startBox == null)
+                {
+                    MessageBox.Show($"Frame {startFrame}에 해당하는 박스를 찾을 수 없습니다.\n\n박스를 선택한 후 재추적을 실행해주세요.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // ✅ 3. 재추적 수행
+                if (!isYoloAvailable)
+                {
+                    MessageBox.Show("YOLO 모델을 사용할 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // 로딩 폼
+                Form loadingForm = new Form
+                {
+                    Width = 350,
+                    Height = 120,
+                    Text = "재추적 중",
+                    StartPosition = FormStartPosition.CenterParent,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false,
+                    TopMost = true
+                };
+
+                Label loadingLabel = new Label
+                {
+                    Text = "재추적 중... 잠시만 기다려주세요.",
+                    AutoSize = true,
+                    Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
+                    Location = new System.Drawing.Point(40, 35)
+                };
+
+                loadingForm.Controls.Add(loadingLabel);
+                loadingForm.Show();
+                loadingForm.Refresh();
+
+                List<BoundingBox> newTrackedBoxes = new List<BoundingBox>();
+
+                if (trackingEngine is YoloTrackingEngine yoloEngine)
+                {
+                    var result = await Task.Run(() =>
+                    {
+                        var boxes = yoloEngine.TrackObjectsWithFailures(
+                            videoCapture,
+                            startBox,
+                            startFrame,
+                            waypoint.ExitFrame,
+                            fps,
+                            out List<(int start, int end)> failures);
+                        return new { Boxes = boxes, Failures = failures };
+                    });
+
+                    newTrackedBoxes = result.Boxes;
+
+                    // ✅ 실패 구간 업데이트
+                    if (result.Failures != null && result.Failures.Count > 0)
+                    {
+                        waypointFailureRanges[key] = result.Failures;
+                        System.Diagnostics.Debug.WriteLine($"[재추적 실패 구간] {key}: {result.Failures.Count}개 구간");
+                    }
+                }
+
+                loadingForm.Close();
+
+                // ✅ 4. 새 데이터 추가
+                foreach (var box in newTrackedBoxes)
+                {
+                    boundingBoxes.Add(box);
+                }
+
+                // ✅ 5. 정렬
+                boundingBoxes.Sort((a, b) => a.FrameIndex.CompareTo(b.FrameIndex));
+
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                UpdateBboxListDisplay();
+
+                // ✅ 6. 현재 프레임 새로고침
+                pictureBoxVideo.Invalidate();
+
+                System.Diagnostics.Debug.WriteLine($"[부분 재추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}개 박스 추가됨");
+
+                // ✅ 7. JSON 자동 저장 및 재로드
+                if (!string.IsNullOrEmpty(currentVideoFile))
+                {
+                    string videoDir = Path.GetDirectoryName(currentVideoFile);
+                    string saveDir = Path.Combine(videoDir, "labels");
+                    
+                    if (!Directory.Exists(saveDir))
+                    {
+                        Directory.CreateDirectory(saveDir);
+                    }
+                    
+                    string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                    string jsonFilePath = Path.Combine(saveDir, fileName);
+                    
+                    // JSON 저장
+                    await Task.Run(() => ExportToJsonExtended(jsonFilePath));
+                    System.Diagnostics.Debug.WriteLine($"[재추적 JSON 저장] {jsonFilePath}");
+                    
+                    // JSON 재로드
+                    if (File.Exists(jsonFilePath))
+                    {
+                        LoadLabelingData(jsonFilePath);
+                        System.Diagnostics.Debug.WriteLine($"[재추적 JSON 재로드] 완료");
+                    }
+                }
+
+                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n💾 JSON 자동 저장 및 재로드 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[부분 재추적 오류] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
+                MessageBox.Show($"재추적 중 오류 발생:\n\n{ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         #endregion
 
         #region JSON Load/Export
@@ -5086,13 +5533,34 @@ namespace WinFormsApp1
             }
             else if (e.Control && e.KeyCode == Keys.T)
             {
-                if (selectedWaypoint != null)
+                // ✅ selectedBox가 있으면 부분 재추적, 없으면 selectedWaypoint 전체 재추적
+                if (selectedBox != null)
                 {
+                    // selectedBox의 waypoint 찾기
+                    var waypoint = waypointMarkers.FirstOrDefault(w => 
+                        w.Label == selectedBox.Label &&
+                        w.ObjectId == GetBoxId(selectedBox) &&
+                        currentFrameIndex >= w.EntryFrame && 
+                        currentFrameIndex <= w.ExitFrame);
+                    
+                    if (waypoint != null)
+                    {
+                        // 부분 재추적: 현재 프레임부터 ExitFrame까지
+                        _ = PerformPartialRetrackingAsync(waypoint, currentFrameIndex);
+                    }
+                    else
+                    {
+                        MessageBox.Show("현재 박스에 해당하는 Waypoint를 찾을 수 없습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+                else if (selectedWaypoint != null)
+                {
+                    // 기존 로직: Waypoint 전체 재추적
                     _ = PerformTrackingForWaypointAsync(selectedWaypoint, useYolo: true);
                 }
                 else
                 {
-                    MessageBox.Show("추적할 웨이포인트를 목록에서 먼저 선택해주세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("추적할 박스나 웨이포인트를 먼저 선택해주세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             else if (e.KeyCode == Keys.D1 && !e.Control && !e.Alt)
@@ -5157,6 +5625,7 @@ namespace WinFormsApp1
             else if (e.KeyCode == Keys.Escape)
             {
                 selectedBox = null;
+                ClearSidebarHighlights(); // ✅ 하이라이트 초기화
                 pictureBoxVideo.Invalidate();
                 e.Handled = true;
             }
