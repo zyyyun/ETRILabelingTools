@@ -4762,10 +4762,25 @@ namespace WinFormsApp1
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
 
-                // ✅ 8. 현재 프레임 새로고침
-                pictureBoxVideo.Invalidate();
+                // ✅ 8. 재추적 완료 후 전체 범위(EntryFrame~ExitFrame)에서 재보간 수행
+                // 재추적 이전 마지막 성공 프레임과 재추적 후 첫 성공 프레임 사이도 보간하기 위함
+                int additionalInterpolatedFrames = await Task.Run(() =>
+                {
+                    return ApplyInertialInterpolationForWaypoint(waypoint, startFrame);
+                });
 
-                System.Diagnostics.Debug.WriteLine($"[부분 재추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}개 박스 추가됨, 관성 보간: {inertiaAppliedFrames}개 프레임");
+                System.Diagnostics.Debug.WriteLine($"[부분 재추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}개 박스 추가됨, 재추적 범위 보간: {inertiaAppliedFrames}개, 전체 범위 재보간: {additionalInterpolatedFrames}개");
+
+                // ✅ 재보간 후 UI 업데이트
+                if (additionalInterpolatedFrames > 0)
+                {
+                    InvalidateBoxCache();
+                    UpdateBoxCount();
+                    UpdateBboxListDisplay();
+                }
+
+                // ✅ 9. 현재 프레임 새로고침
+                pictureBoxVideo.Invalidate();
 
                 // ✅ 10. JSON 자동 저장
                 if (!string.IsNullOrEmpty(currentVideoFile))
@@ -4785,7 +4800,8 @@ namespace WinFormsApp1
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
                 }
 
-                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n관성 보간 프레임: {inertiaAppliedFrames}개 (성공 프레임 간 선형 보간 적용)\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                int totalInterpolated = inertiaAppliedFrames + additionalInterpolatedFrames;
+                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n관성 보간:\n- 재추적 범위: {inertiaAppliedFrames}개 프레임\n- 전체 범위 재보간: {additionalInterpolatedFrames}개 프레임\n- 총 보간: {totalInterpolated}개 프레임\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -4797,6 +4813,139 @@ namespace WinFormsApp1
                 // ✅ 추적 종료 시 플래그 해제
                 isTrackingInProgress = false;
             }
+        }
+
+        // ✅ 재추적 완료 후 전체 범위에서 재보간 수행
+        private int ApplyInertialInterpolationForWaypoint(WaypointMarker waypoint, int retrackingStartFrame)
+        {
+            int interpolatedCount = 0;
+            
+            try
+            {
+                // waypoint의 전체 범위에서 해당 객체의 모든 박스 찾기
+                List<BoundingBox> allBoxes = boundingBoxes
+                    .Where(b => b.FrameIndex >= waypoint.EntryFrame && 
+                               b.FrameIndex <= waypoint.ExitFrame &&
+                               b.Label == waypoint.Label &&
+                               GetBoxId(b) == waypoint.ObjectId)
+                    .OrderBy(b => b.FrameIndex)
+                    .ToList();
+                
+                if (allBoxes.Count == 0)
+                    return 0;
+                
+                // ✅ 성공 프레임 찾기: 연속된 프레임에서 위치가 변경된 프레임 = Detection 성공 프레임
+                var successfulFrames = new Dictionary<int, Rectangle>();
+                BoundingBox prevBox = null;
+                
+                foreach (var box in allBoxes)
+                {
+                    if (prevBox == null)
+                    {
+                        // 첫 프레임은 항상 성공으로 간주 (시작 박스)
+                        successfulFrames[box.FrameIndex] = box.Rectangle;
+                    }
+                    else
+                    {
+                        // 이전 박스와 위치가 다르면 성공 프레임으로 간주
+                        if (box.Rectangle.X != prevBox.Rectangle.X || 
+                            box.Rectangle.Y != prevBox.Rectangle.Y ||
+                            box.Rectangle.Width != prevBox.Rectangle.Width ||
+                            box.Rectangle.Height != prevBox.Rectangle.Height)
+                        {
+                            successfulFrames[box.FrameIndex] = box.Rectangle;
+                        }
+                        // 재추적 시작 프레임은 항상 성공 프레임으로 간주 (재추적 시작점)
+                        else if (box.FrameIndex == retrackingStartFrame)
+                        {
+                            successfulFrames[box.FrameIndex] = box.Rectangle;
+                        }
+                    }
+                    prevBox = box;
+                }
+                
+                if (successfulFrames.Count < 2)
+                    return 0; // 성공 프레임이 2개 미만이면 보간 불가
+                
+                // ✅ 성공 프레임 목록 정렬
+                var sortedSuccessFrames = successfulFrames.Keys.OrderBy(f => f).ToList();
+                
+                System.Diagnostics.Debug.WriteLine($"[전체 범위 재보간] {waypoint.Label} ID={waypoint.ObjectId}: EntryFrame={waypoint.EntryFrame}~ExitFrame={waypoint.ExitFrame}, 성공 프레임 {successfulFrames.Count}개");
+                
+                // ✅ 각 실패 프레임에 대해 보간 적용
+                for (int frameIdx = waypoint.EntryFrame; frameIdx <= waypoint.ExitFrame; frameIdx++)
+                {
+                    // 이미 성공 프레임이면 건너뛰기
+                    if (successfulFrames.ContainsKey(frameIdx))
+                        continue;
+                    
+                    // 해당 프레임의 박스 찾기
+                    var box = allBoxes.FirstOrDefault(b => b.FrameIndex == frameIdx);
+                    if (box == null)
+                        continue;
+                    
+                    // 앞뒤 성공 프레임 찾기
+                    int? prevSuccessFrame = null;
+                    int? nextSuccessFrame = null;
+                    
+                    // 이전 성공 프레임 찾기
+                    for (int i = sortedSuccessFrames.Count - 1; i >= 0; i--)
+                    {
+                        if (sortedSuccessFrames[i] < frameIdx)
+                        {
+                            prevSuccessFrame = sortedSuccessFrames[i];
+                            break;
+                        }
+                    }
+                    
+                    // 다음 성공 프레임 찾기
+                    for (int i = 0; i < sortedSuccessFrames.Count; i++)
+                    {
+                        if (sortedSuccessFrames[i] > frameIdx)
+                        {
+                            nextSuccessFrame = sortedSuccessFrames[i];
+                            break;
+                        }
+                    }
+                    
+                    // 앞뒤 성공 프레임이 모두 있으면 보간 적용
+                    if (prevSuccessFrame.HasValue && nextSuccessFrame.HasValue)
+                    {
+                        var prevRect = successfulFrames[prevSuccessFrame.Value];
+                        var nextRect = successfulFrames[nextSuccessFrame.Value];
+                        
+                        int totalFramesBetween = nextSuccessFrame.Value - prevSuccessFrame.Value;
+                        int currentOffset = frameIdx - prevSuccessFrame.Value;
+                        
+                        // 선형 보간 계산 (위치 및 크기 모두 보간)
+                        double ratio = (double)currentOffset / totalFramesBetween;
+                        
+                        int interpolatedX = (int)(prevRect.X + (nextRect.X - prevRect.X) * ratio);
+                        int interpolatedY = (int)(prevRect.Y + (nextRect.Y - prevRect.Y) * ratio);
+                        int interpolatedWidth = (int)(prevRect.Width + (nextRect.Width - prevRect.Width) * ratio);
+                        int interpolatedHeight = (int)(prevRect.Height + (nextRect.Height - prevRect.Height) * ratio);
+                        
+                        // 박스 위치 및 크기 업데이트
+                        box.Rectangle = new Rectangle(interpolatedX, interpolatedY, interpolatedWidth, interpolatedHeight);
+                        
+                        interpolatedCount++;
+                        
+                        // 재추적 시작 이전 구간인 경우 로그 출력
+                        if (frameIdx < retrackingStartFrame)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[전체 범위 재보간] Frame {frameIdx} (재추적 이전): {prevSuccessFrame.Value}({prevRect.X},{prevRect.Y}, {prevRect.Width}x{prevRect.Height}) ~ {nextSuccessFrame.Value}({nextRect.X},{nextRect.Y}, {nextRect.Width}x{nextRect.Height}) -> ({interpolatedX},{interpolatedY}, {interpolatedWidth}x{interpolatedHeight})");
+                        }
+                    }
+                }
+                
+                System.Diagnostics.Debug.WriteLine($"[전체 범위 재보간 완료] {waypoint.Label} ID={waypoint.ObjectId}: {interpolatedCount}개 프레임 보간됨");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[전체 범위 재보간 오류] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
+            }
+            
+            return interpolatedCount;
         }
 
         #endregion
