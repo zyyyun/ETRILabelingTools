@@ -142,6 +142,7 @@ namespace WinFormsApp1
         [JsonProperty("images")] public List<ImageInfo> Images { get; set; }
         [JsonProperty("annotations")] public List<AnnotationData> Annotations { get; set; }
         [JsonProperty("categories")] public List<CategoryData> Categories { get; set; }
+        [JsonProperty("failure_ranges")] public Dictionary<string, List<(int start, int end)>>? FailureRanges { get; set; }
     }
 
     #endregion
@@ -4513,6 +4514,13 @@ namespace WinFormsApp1
                 int removedCount = 0;
                 string key = $"{waypoint.Label}_{waypoint.ObjectId}";
                 
+                // ✅ 재추적 시작 시 해당 객체의 실패 구간 정보 초기화
+                if (waypointFailureRanges.ContainsKey(key))
+                {
+                    waypointFailureRanges.Remove(key);
+                    System.Diagnostics.Debug.WriteLine($"[재추적] {key}의 실패 구간 정보 초기화됨");
+                }
+                
                 // startFrame부터 waypoint.ExitFrame까지의 기존 박스 삭제
                 var boxesToRemove = boundingBoxes.Where(b =>
                     b.Label == waypoint.Label &&
@@ -4625,7 +4633,7 @@ namespace WinFormsApp1
 
                 System.Diagnostics.Debug.WriteLine($"[부분 재추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}개 박스 추가됨");
 
-                // ✅ 7. JSON 자동 저장 및 재로드
+                // ✅ 7. JSON 자동 저장
                 if (!string.IsNullOrEmpty(currentVideoFile))
                 {
                     string videoDir = Path.GetDirectoryName(currentVideoFile);
@@ -4639,17 +4647,11 @@ namespace WinFormsApp1
                     string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
                     string jsonFilePath = Path.Combine(saveDir, fileName);
                     
-                    // JSON 저장
+                    // JSON 저장 (재로드하지 않음 - 메모리 상태가 이미 최신)
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
-                    
-                    // JSON 재로드
-                    if (File.Exists(jsonFilePath))
-                    {
-                        LoadLabelingData(jsonFilePath);
-                    }
                 }
 
-                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n💾 JSON 자동 저장 및 재로드 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -4700,6 +4702,14 @@ namespace WinFormsApp1
                 lastRenderedWaypoint = null;
                 nextAnnotationId = 1;
                 // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
+                
+                // ✅ 실패 구간 정보 복원
+                waypointFailureRanges.Clear();
+                if (labelingData.FailureRanges != null)
+                {
+                    waypointFailureRanges = labelingData.FailureRanges;
+                    System.Diagnostics.Debug.WriteLine($"[JSON 로드] 실패 구간 정보 복원됨: {waypointFailureRanges.Count}개 객체");
+                }
 
                 // ImageId → FrameNumber 매핑 생성
                 var imageIdToFrameNumber = new Dictionary<int, int>();
@@ -5125,7 +5135,8 @@ namespace WinFormsApp1
                     Licenses = new List<object>(),
                     Images = images,
                     Annotations = annotations,
-                    Categories = categories.Values.ToList()
+                    Categories = categories.Values.ToList(),
+                    FailureRanges = waypointFailureRanges
                 };
 
                 string json = JsonConvert.SerializeObject(labelingData, Formatting.Indented);
