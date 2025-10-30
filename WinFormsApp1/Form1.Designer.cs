@@ -502,9 +502,9 @@
             this.listViewEventWaypoints.FullRowSelect = true;
             this.listViewEventWaypoints.TabStop = false;
             this.listViewEventWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 255, 224); // 연한 초록
-            this.listViewEventWaypoints.Columns.Add("Entry", 80);
-            this.listViewEventWaypoints.Columns.Add("Exit", 80);
-            this.listViewEventWaypoints.Columns.Add("객체", 60);
+            this.listViewEventWaypoints.Columns.Add("Event", 80);
+            this.listViewEventWaypoints.Columns.Add("Frame Time", 90);
+            this.listViewEventWaypoints.Columns.Add("객체(P/V)", 80);
             this.listViewEventWaypoints.Click += new System.EventHandler(this.listViewEventWaypoints_Click);
 
             this.btnDeleteEventWaypoint = new System.Windows.Forms.Button();

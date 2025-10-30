@@ -40,6 +40,7 @@ namespace WinFormsApp1
         public string ExitTime { get; set; }
         public int ObjectId { get; set; } // PersonId, VehicleId, EventId 중 하나
         public string Label { get; set; }
+        public string InteractingObject { get; set; } // Event 전용: 객체(P/V) 텍스트
     }
 
     // ✅ BBox 크기 조정 핸들 (4개 모서리만)
@@ -117,6 +118,9 @@ namespace WinFormsApp1
         [JsonProperty("iscrowd")] public int Iscrowd { get; set; }
         [JsonProperty("track_id")] public int TrackId { get; set; }
         [JsonProperty("track_info")] public TrackInfo TrackInfo { get; set; }
+        // Event 전용: 상호작용 객체 텍스트 (person/vehicle 등)
+        [JsonProperty("interacting_object", NullValueHandling = NullValueHandling.Ignore)]
+        public string InteractingObject { get; set; }
     }
 
     public class CategoryData
@@ -920,20 +924,7 @@ namespace WinFormsApp1
 
             try
             {
-                // ✅ 저장 전 모든 웨이포인트의 Event 박스 자동 전파
-                foreach (var waypoint in waypointMarkers)
-                {
-                    // Entry 프레임에 Event 박스가 있는지 확인
-                    var eventBoxesAtEntry = boundingBoxes
-                        .Where(b => b.FrameIndex == waypoint.EntryFrame && b.Label == "event")
-                        .ToList();
-                    
-                    if (eventBoxesAtEntry.Count > 0)
-                    {
-                        PropagateAllEventBoxesInRange(waypoint.EntryFrame, waypoint.ExitFrame);
-                    }
-                }
-                
+                // 이벤트 전파는 Exit 확정 시 완료되므로, 저장 시 별도 전파 작업을 수행하지 않습니다.
                 InvalidateBoxCache();
                 UpdateBoxCount();
 
@@ -1468,6 +1459,34 @@ namespace WinFormsApp1
                     createdWaypoints.Add(waypoint);
                 }
 
+                // ✅ 2.5. Entry~Exit 범위 내 Event 박스 처리 (추적 없음)
+                var eventBoxesInRange = boundingBoxes
+                    .Where(b => b.Label == "event" &&
+                                b.FrameIndex >= entryFrameIndex.Value &&
+                                b.FrameIndex <= exitFrameIndex.Value)
+                    .ToList();
+
+                foreach (var evBox in eventBoxesInRange)
+                {
+                    var evWp = new WaypointMarker
+                    {
+                        EntryFrame = evBox.FrameIndex,
+                        ExitFrame = exitFrameIndex.Value,
+                        MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107),
+                        EntryTime = TimeSpan.FromSeconds(evBox.FrameIndex / fps).ToString(@"hh\:mm\:ss"),
+                        ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                        ObjectId = evBox.EventId,
+                        Label = "event",
+                        InteractingObject = ShowInputDialog("객체(P/V) 입력", "해당 event와 상호작용하는 객체를 입력하세요 (예: person/vehicle 세부명)")
+                    };
+                    waypointMarkers.Add(evWp);
+
+                    PropagateEventBoxWithinRange(evBox, exitFrameIndex.Value);
+                }
+
+                // ✅ 이벤트 Exit 확정 시 자동 JSON 저장
+                SaveCurrentLabelingData();
+
                 // ✅ 3. UI 업데이트 및 Entry/Exit 초기화
                 UpdateWaypointListView();
 
@@ -1961,11 +1980,10 @@ namespace WinFormsApp1
                     UpdateBoxCount();
                     UpdateBboxListDisplay();
                     
-                    // Event bbox 생성 시 자동으로 Waypoint 추가 및 영상 끝까지 전파 (초록 색상)
+                    // Event: 즉시 전파/웨이포인트 생성하지 않음. Exit 확정 시 처리
                     if (drawingBox.Label == "event")
                     {
-                        CreateEventWaypoint(drawingBox);
-                        PropagateEventBoxToEnd(drawingBox); // 영상 끝까지 전파
+                        // no-op
                     }
                 }
 
@@ -2779,23 +2797,25 @@ namespace WinFormsApp1
                 }
                 else if (waypoint.Label == "event")
                 {
-                    // Event: Entry~Exit 구간의 Event category name 표시
+                    // Event: [Event, Frame Time, 객체(P/V)] 형식으로 표시
                     var eventBox = boundingBoxes
                         .FirstOrDefault(b => b.Label == "event" && 
                                            b.FrameIndex >= waypoint.EntryFrame && 
                                            b.FrameIndex <= waypoint.ExitFrame);
-                    
+
+                    string eventName = "contact";
                     if (eventBox != null)
                     {
-                        // ✅ 고유 번호 형식으로 표시 (contact, exchange, board, final_exchange)
-                        string categoryName = GetCategoryName("event", eventBox.EventId);
-                        item.SubItems.Add(categoryName);
+                        eventName = GetCategoryName("event", eventBox.EventId);
                     }
-                    else
-                    {
-                        item.SubItems.Add("contact");
-                    }
-                    
+
+                    // 첫 컬럼: Event 이름
+                    item = new ListViewItem(eventName);
+                    // 두 번째: 프레임 시간 (Entry 기준)
+                    item.SubItems.Add(waypoint.EntryTime);
+                    // 세 번째: 객체(P/V) 텍스트
+                    item.SubItems.Add(waypoint.InteractingObject ?? "");
+
                     item.ForeColor = waypoint.MarkerColor;
                     item.Tag = waypoint;
                     listViewEventWaypoints.Items.Add(item);
@@ -2824,7 +2844,7 @@ namespace WinFormsApp1
 
         private string GetEventCategoryName(int eventId)
         {
-            string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+            string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
             if (eventId > 0 && eventId <= eventTypes.Length)
                 return eventTypes[eventId - 1];
             return $"event_{eventId}";
@@ -2856,7 +2876,7 @@ namespace WinFormsApp1
             }
             else if (box.Label == "event")
             {
-                string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
                 if (box.EventId > 0 && box.EventId <= eventTypes.Length)
                     labelText = $"Label: event_{eventTypes[box.EventId - 1]}";
                 else
@@ -3125,12 +3145,7 @@ namespace WinFormsApp1
                 UpdateBboxListDisplay();
                 UpdateObjectInfo(selectedBox);
                 
-                // ✅ Event로 변경 시 자동 전파
-                if (oldLabel != "event")
-                {
-                    CreateEventWaypoint(selectedBox);
-                    PropagateEventBoxToEnd(selectedBox);
-                }
+                // Event: 즉시 전파/웨이포인트 생성하지 않음. Exit 확정 시 처리
             }
         }
 
@@ -3563,7 +3578,7 @@ namespace WinFormsApp1
             foreach (var box in currentBoxes)
             {
                 var currentBox = box;
-                string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
                 string eventName = currentBox.EventId > 0 && currentBox.EventId <= eventTypes.Length 
                     ? eventTypes[currentBox.EventId - 1] 
                     : currentBox.EventId.ToString();
@@ -3599,7 +3614,7 @@ namespace WinFormsApp1
                 // ComboBox 호버 시 스크롤 방지
                 comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
                 
-                comboBox.Items.AddRange(new object[] { "event_contact", "event_exchange", "event_board", "event_final_exchange" });
+                comboBox.Items.AddRange(new object[] { "event_contact", "event_exchange", "event_board", "event_final_exchange", "event_throw" });
                 comboBox.SelectedItem = $"event_{eventName}";
                 
                 comboBox.SelectedIndexChanged += (s, e) =>
@@ -4317,18 +4332,20 @@ namespace WinFormsApp1
             if (box.Label != "event") return;
 
             TimeSpan entryTime = TimeSpan.FromSeconds(box.FrameIndex / fps);
-            TimeSpan exitTime = TimeSpan.FromSeconds((totalFrames - 1) / fps); // 영상 끝
+            // Exit은 나중에 확정되므로 초기값은 동일 프레임으로 설정
+            TimeSpan exitTime = TimeSpan.FromSeconds(box.FrameIndex / fps);
 
             // ✅ Event Waypoint 생성 (초록 색상, EventId 저장)
             var waypoint = new WaypointMarker
             {
                 EntryFrame = box.FrameIndex,
-                ExitFrame = totalFrames - 1, // 영상 끝 (Q키로 조기 종료 가능)
+                ExitFrame = box.FrameIndex,
                 MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107), // 초록
                 EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                 ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                 ObjectId = box.EventId,
-                Label = "event"
+                Label = "event",
+                InteractingObject = ShowInputDialog("객체(P/V) 입력", "해당 event와 상호작용하는 객체를 입력하세요 (예: person/vehicle 세부명)")
             };
 
             waypointMarkers.Add(waypoint);
@@ -4352,6 +4369,50 @@ namespace WinFormsApp1
             for (int frame = startFrame; frame <= endFrame; frame++)
             {
                 // 같은 EventId와 위치를 가진 박스가 이미 있는지 확인
+                bool exists = boundingBoxes.Any(b =>
+                    b.FrameIndex == frame &&
+                    b.Label == "event" &&
+                    b.EventId == box.EventId &&
+                    b.Rectangle.X == box.Rectangle.X &&
+                    b.Rectangle.Y == box.Rectangle.Y &&
+                    b.Rectangle.Width == box.Rectangle.Width &&
+                    b.Rectangle.Height == box.Rectangle.Height);
+
+                if (!exists)
+                {
+                    var copiedBox = new BoundingBox
+                    {
+                        FrameIndex = frame,
+                        Rectangle = new Rectangle(box.Rectangle.X, box.Rectangle.Y, box.Rectangle.Width, box.Rectangle.Height),
+                        Label = "event",
+                        PersonId = 0,
+                        VehicleId = 0,
+                        EventId = box.EventId,
+                        Action = box.Action,
+                        VehicleName = box.VehicleName,
+                        EventName = box.EventName
+                    };
+                    boundingBoxes.Add(copiedBox);
+                }
+            }
+
+            InvalidateBoxCache();
+            UpdateBoxCount();
+            UpdateBboxListDisplay();
+        }
+
+        /// <summary>
+        /// Event 박스를 생성 프레임 다음부터 지정 종료 프레임까지 전파
+        /// </summary>
+        private void PropagateEventBoxWithinRange(BoundingBox box, int endFrame)
+        {
+            if (box.Label != "event") return;
+
+            int startFrame = box.FrameIndex + 1;
+            if (startFrame > endFrame) return;
+
+            for (int frame = startFrame; frame <= endFrame; frame++)
+            {
                 bool exists = boundingBoxes.Any(b =>
                     b.FrameIndex == frame &&
                     b.Label == "event" &&
@@ -5675,6 +5736,12 @@ namespace WinFormsApp1
                             }
                         };
 
+                        // Event인 경우 상호작용 객체 텍스트 포함 (해당 박스가 속한 웨이포인트에서 가져옴)
+                        if (box.Label == "event" && matchingWaypoint != null && !string.IsNullOrWhiteSpace(matchingWaypoint.InteractingObject))
+                        {
+                            annotation.InteractingObject = matchingWaypoint.InteractingObject;
+                        }
+
                         annotations.Add(annotation);
                     }
 
@@ -5736,7 +5803,7 @@ namespace WinFormsApp1
             else
             {
                 // 여러 Event 중 선택
-                string[] eventTypes = { "contact", "exchange", "board", "final_exchange" };
+                string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
                 var eventNames = eventBoxesAtFrame.Select(b => 
                 {
                     string name = b.EventId > 0 && b.EventId <= eventTypes.Length 
@@ -5788,7 +5855,7 @@ namespace WinFormsApp1
             }
             
             // 삭제 확인
-            string[] eventTypes2 = { "contact", "exchange", "board", "final_exchange" };
+            string[] eventTypes2 = { "contact", "exchange", "board", "final_exchange", "throw" };
             string eventName = targetEvent.EventId > 0 && targetEvent.EventId <= eventTypes2.Length 
                 ? eventTypes2[targetEvent.EventId - 1] 
                 : targetEvent.EventId.ToString();
