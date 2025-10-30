@@ -229,6 +229,9 @@ namespace WinFormsApp1
             videoCapture.Set(VideoCaptureProperties.PosFrames, startFrame);
             Mat frame = new Mat();
 
+            // ✅ 추적 구간 동안 탐지된 객체 수를 카테고리별로 집계
+            var detectionCountByCategory = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
             // 이전 프레임 박스 초기화: 사용자 지정 startBox로 시작
             Rectangle previousRect = startBox.Rectangle;
             string fixedLabel = startBox.Label;
@@ -291,6 +294,14 @@ namespace WinFormsApp1
                         if (firstQuote != -1 && lastQuote > firstQuote)
                         {
                             detectionName = rawDetectionName.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
+                        }
+
+                        // ✅ 전체 탐지 수 집계 (카테고리별)
+                        if (!string.IsNullOrEmpty(detectionName))
+                        {
+                            if (!detectionCountByCategory.ContainsKey(detectionName))
+                                detectionCountByCategory[detectionName] = 0;
+                            detectionCountByCategory[detectionName]++;
                         }
 
                         if (detectionName.Equals(targetCategory, StringComparison.OrdinalIgnoreCase))
@@ -409,6 +420,17 @@ namespace WinFormsApp1
                 }
             }
 
+            // ✅ 추적 종료 요약 로그 (카테고리별 탐지 개수)
+            try
+            {
+                var summary = string.Join(", ", detectionCountByCategory
+                    .OrderBy(kv => kv.Key)
+                    .Select(kv => $"{kv.Key}:{kv.Value}"));
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Tracking Summary] Frames {startFrame}-{endFrame}, TotalCategories={detectionCountByCategory.Count} -> {summary}");
+            }
+            catch { /* 로그 실패 무시 */ }
+
             frame.Dispose();
 
             try
@@ -487,21 +509,20 @@ namespace WinFormsApp1
                         box.Rectangle = new Rectangle(interpolatedX, interpolatedY, interpolatedWidth, interpolatedHeight);
                         
                         inertiaAppliedCount++;
-                        Debug.WriteLine($"[관성 추적 보간] Frame {frameIdx}: {prevSuccessFrame.Value}({prevRect.X},{prevRect.Y}, {prevRect.Width}x{prevRect.Height}) ~ {nextSuccessFrame.Value}({nextRect.X},{nextRect.Y}, {nextRect.Width}x{nextRect.Height}) -> ({interpolatedX},{interpolatedY}, {interpolatedWidth}x{interpolatedHeight})");
                     }
                     else if (prevSuccessFrame.HasValue)
                     {
                         // 앞 성공 프레임만 있는 경우 (실패 지점부터 exit까지 성공 프레임 없음) - 그 자리에 고정
                         var prevRect = successfulFrames[prevSuccessFrame.Value];
                         box.Rectangle = prevRect; // 이전 위치 및 크기 유지 (고정)
-                        Debug.WriteLine($"[관성 추적 고정] Frame {frameIdx}: 실패 지점부터 exit까지 성공 프레임 없음, 이전 성공 프레임({prevSuccessFrame.Value}) 위치 유지");
+                        // per-frame log suppressed
                     }
                     else if (nextSuccessFrame.HasValue)
                     {
                         // 뒤 성공 프레임만 있는 경우 (시작 부분 실패)
                         var nextRect = successfulFrames[nextSuccessFrame.Value];
                         box.Rectangle = nextRect; // 다음 위치 및 크기로 설정
-                        Debug.WriteLine($"[관성 추적 시작] Frame {frameIdx}: 시작 부분 실패, 다음 성공 프레임({nextSuccessFrame.Value}) 위치로 설정");
+                        // per-frame log suppressed
                     }
                 }
             }
@@ -5311,11 +5332,7 @@ namespace WinFormsApp1
                         
                         interpolatedCount++;
                         
-                        // 재추적 시작 이전 구간인 경우 로그 출력
-                        if (frameIdx < retrackingStartFrame)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[전체 범위 재보간] Frame {frameIdx} (재추적 이전): {prevSuccessFrame.Value}({prevRect.X},{prevRect.Y}, {prevRect.Width}x{prevRect.Height}) ~ {nextSuccessFrame.Value}({nextRect.X},{nextRect.Y}, {nextRect.Width}x{nextRect.Height}) -> ({interpolatedX},{interpolatedY}, {interpolatedWidth}x{interpolatedHeight})");
-                        }
+                        // per-frame interpolation log suppressed
                     }
                 }
                 
