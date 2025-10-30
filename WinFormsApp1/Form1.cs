@@ -1199,6 +1199,23 @@ namespace WinFormsApp1
             }
 
             currentFrameIndex = frameIndex;
+            // ✅ 프레임 전환 시 선택 박스 재바인딩 또는 해제
+            if (selectedBox != null && selectedBox.FrameIndex != frameIndex)
+            {
+                var selLabel = selectedBox.Label;
+                int selId = GetBoxId(selectedBox);
+                var rebound = boundingBoxes.FirstOrDefault(b => b.FrameIndex == frameIndex && b.Label == selLabel && GetBoxId(b) == selId && !b.IsDeleted);
+                if (rebound != null)
+                {
+                    selectedBox = rebound;
+                    HighlightSelectedBoxInSidebar();
+                }
+                else
+                {
+                    selectedBox = null;
+                    ClearSidebarHighlights();
+                }
+            }
             UpdateTimeLabels();
             
             // Waypoint entry 프레임에서만 bbox 리스트 업데이트 (리소스 최적화)
@@ -1805,6 +1822,47 @@ namespace WinFormsApp1
                         originalResizeRect = selectedBox.Rectangle;
                         return;
                     }
+
+                    // ✅ 선택 유지 개선: 선택된 박스 내부 클릭이더라도
+                    // 동일 지점에 다른 후보 박스가 있으면 새 선택을 허용
+                    if (viewRect.Contains(e.Location))
+                    {
+                        if (!HasAnotherHitCandidateAt(e.Location, selectedBox))
+                        {
+                            // 다른 후보가 없을 때만 드래그 시작
+                            isDragging = true;
+                            dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
+                            UpdateObjectInfo(selectedBox);
+                            UpdateBboxListDisplay();
+                            HighlightSelectedBoxInSidebar();
+                            pictureBoxVideo.Invalidate();
+                            return;
+                        }
+                        else
+                        {
+                            // ✅ 다른 후보가 있으면 현재 선택 다음 후보로 전환 (라벨 전환 보장)
+                            var ordered = GetOrderedCandidatesAt(e.Location);
+                            if (ordered.Count > 0)
+                            {
+                                int idx = ordered.IndexOf(selectedBox);
+                                // 현재가 목록에 없으면 첫 후보, 있으면 다음 후보
+                                BoundingBox next = (idx < 0)
+                                    ? ordered[0]
+                                    : ordered[(idx + 1) % ordered.Count];
+
+                                if (next != selectedBox)
+                                {
+                                    selectedBox = next;
+                                    UpdateObjectInfo(selectedBox);
+                                    UpdateBboxListDisplay();
+                                    HighlightSelectedBoxInSidebar();
+                                    pictureBoxVideo.Invalidate();
+                                    return;
+                                }
+                            }
+                        }
+                        // 후보 없음이면 아래 선택 로직으로 진행
+                    }
                 }
                 
                 // 핸들이 아니면 박스 선택 또는 드래그
@@ -2162,33 +2220,251 @@ namespace WinFormsApp1
             }
         }
         
+        // 선택 디버그 로깅 플래그
+        private bool enableSelectionDebugLog = false;
+        private System.Drawing.Point lastClickViewPoint;
+        private List<BoundingBox> lastHitCandidates = new List<BoundingBox>();
+        private int lastHitIndex = -1;
+
         private BoundingBox GetBoundingBoxAt(System.Drawing.Point location)
         {
             // 뷰 좌표를 이미지 좌표로 변환
             var imageLocation = ViewToImage(new PointF(location.X, location.Y));
             
             // ✅ 현재 프레임에 해당하는 박스들을 필터링 (삭제되지 않은 박스만)
-            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex && !b.IsDeleted);
+            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex && !b.IsDeleted).ToList();
 
-            foreach (var box in currentFrameBoxes.Reverse())
+            // ✅ 히트 테스트 마진(이미지 좌표 기준)으로 경계 클릭 허용
+            const int hitMargin = 4;
+
+            // 후보 수집
+            var candidates = new List<(BoundingBox box, bool inActiveWaypoint, int labelPri, double dist, int area, int zIndex)>();
+
+            foreach (var box in currentFrameBoxes)
             {
-                // 웨이포인트 확인: 해당 박스의 PersonId와 일치하는 웨이포인트 찾기
-                var waypoint = waypointMarkers.FirstOrDefault(w => 
-                    w.ObjectId == GetBoxId(box) && 
+                // 선택 단계에서는 Waypoint 범위 제한을 적용하지 않음 (편집 시에만 제한)
+
+                // 히트마진 적용한 이미지 좌표 내 포함 여부
+                var r = box.Rectangle;
+                r.Inflate(hitMargin, hitMargin);
+                if (!r.Contains((int)imageLocation.X, (int)imageLocation.Y))
+                    continue;
+
+                bool inActiveWaypoint = false;
+                if (selectedWaypoint != null)
+                {
+                    inActiveWaypoint = (box.Label == selectedWaypoint.Label &&
+                                        GetBoxId(box) == selectedWaypoint.ObjectId &&
+                                        currentFrameIndex >= selectedWaypoint.EntryFrame &&
+                                        currentFrameIndex <= selectedWaypoint.ExitFrame);
+                }
+
+                int labelPri = GetLabelPriority(box.Label);
+                var centerX = box.Rectangle.X + box.Rectangle.Width / 2.0;
+                var centerY = box.Rectangle.Y + box.Rectangle.Height / 2.0;
+                var dx = centerX - imageLocation.X;
+                var dy = centerY - imageLocation.Y;
+                double dist = Math.Sqrt(dx * dx + dy * dy);
+                int area = Math.Max(1, box.Rectangle.Width * box.Rectangle.Height);
+                int zIndex = boundingBoxes.IndexOf(box); // 더 뒤쪽(큰 인덱스)이 화면상 위에 있다고 가정
+
+                candidates.Add((box, inActiveWaypoint, labelPri, dist, area, zIndex));
+            }
+
+            if (candidates.Count == 0)
+                return null;
+
+            // ✅ 가중치 기반 정렬: 활성 웨이포인트 > 라벨 우선순위 > 중심거리↓ > 면적↓(작은 것 우선) > Z-Order
+            var ordered = candidates
+                .OrderByDescending(c => c.inActiveWaypoint)
+                .ThenByDescending(c => c.labelPri)
+                .ThenBy(c => c.dist)
+                .ThenBy(c => c.area)
+                .ThenByDescending(c => c.zIndex)
+                .ToList();
+
+            // 디버그 로그
+            if (enableSelectionDebugLog)
+            {
+                System.Diagnostics.Debug.WriteLine($"[선택 후보] 클릭=({location.X},{location.Y}) 프레임={currentFrameIndex} 후보={ordered.Count}");
+                int idx = 0;
+                foreach (var c in ordered)
+                {
+                    var r = c.box.Rectangle;
+                    System.Diagnostics.Debug.WriteLine($"  #{idx++}: {c.box.Label} id={GetBoxId(c.box)} rect=({r.X},{r.Y},{r.Width},{r.Height}) activeWp={c.inActiveWaypoint} pri={c.labelPri} dist={c.dist:F1} area={c.area} z={c.zIndex}");
+                }
+            }
+
+            // 선택 사이클링을 위해 후보 및 클릭 위치 저장
+            lastHitCandidates = ordered.Select(c => c.box).ToList();
+            lastHitIndex = 0;
+            lastClickViewPoint = location;
+
+            return lastHitCandidates[0];
+        }
+
+        private int GetLabelPriority(string label)
+        {
+            switch ((label ?? string.Empty).ToLower())
+            {
+                case "person": return 3;
+                case "vehicle": return 2;
+                case "event": return 1;
+                default: return 0;
+            }
+        }
+
+        // 현재 클릭 지점에 선택된 박스 외의 다른 후보가 존재하는지 검사
+        private bool HasAnotherHitCandidateAt(System.Drawing.Point viewLocation, BoundingBox exclude)
+        {
+            var imageLocation = ViewToImage(new PointF(viewLocation.X, viewLocation.Y));
+            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex && !b.IsDeleted);
+            const int hitMargin = 4;
+
+            foreach (var box in currentFrameBoxes)
+            {
+                if (box == exclude) continue;
+                // 선택 단계에서는 Waypoint 범위 제한을 적용하지 않음
+
+                var r = box.Rectangle;
+                r.Inflate(hitMargin, hitMargin);
+                if (r.Contains((int)imageLocation.X, (int)imageLocation.Y))
+                    return true;
+            }
+            return false;
+        }
+
+        private List<BoundingBox> GetOrderedCandidatesAt(System.Drawing.Point viewLocation)
+        {
+            var imageLocation = ViewToImage(new PointF(viewLocation.X, viewLocation.Y));
+            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex && !b.IsDeleted).ToList();
+            const int hitMargin = 4;
+
+            var candidates = new List<(BoundingBox box, bool inActiveWaypoint, int labelPri, double dist, int area, int zIndex)>();
+
+            foreach (var box in currentFrameBoxes)
+            {
+                // 선택 단계에서는 Waypoint 범위 제한을 적용하지 않음
+
+                var r = box.Rectangle;
+                r.Inflate(hitMargin, hitMargin);
+                if (!r.Contains((int)imageLocation.X, (int)imageLocation.Y))
+                    continue;
+
+                bool inActiveWaypoint = false;
+                if (selectedWaypoint != null)
+                {
+                    inActiveWaypoint = (box.Label == selectedWaypoint.Label &&
+                                        GetBoxId(box) == selectedWaypoint.ObjectId &&
+                                        currentFrameIndex >= selectedWaypoint.EntryFrame &&
+                                        currentFrameIndex <= selectedWaypoint.ExitFrame);
+                }
+
+                int labelPri = GetLabelPriority(box.Label);
+                var centerX = box.Rectangle.X + box.Rectangle.Width / 2.0;
+                var centerY = box.Rectangle.Y + box.Rectangle.Height / 2.0;
+                var dx = centerX - imageLocation.X;
+                var dy = centerY - imageLocation.Y;
+                double dist = Math.Sqrt(dx * dx + dy * dy);
+                int area = Math.Max(1, box.Rectangle.Width * box.Rectangle.Height);
+                int zIndex = boundingBoxes.IndexOf(box);
+
+                candidates.Add((box, inActiveWaypoint, labelPri, dist, area, zIndex));
+            }
+
+            var ordered = candidates
+                .OrderByDescending(c => c.inActiveWaypoint)
+                .ThenByDescending(c => c.labelPri)
+                .ThenBy(c => c.dist)
+                .ThenBy(c => c.area)
+                .ThenByDescending(c => c.zIndex)
+                .Select(c => c.box)
+                .ToList();
+
+            return ordered;
+        }
+
+        // 현재 선택(exclude)을 제외하고 동일 지점의 최적 후보 반환
+        private BoundingBox GetBestCandidateAtExcluding(System.Drawing.Point viewLocation, BoundingBox exclude)
+        {
+            var imageLocation = ViewToImage(new PointF(viewLocation.X, viewLocation.Y));
+            var currentFrameBoxes = boundingBoxes.Where(b => b.FrameIndex == currentFrameIndex && !b.IsDeleted && b != exclude).ToList();
+            const int hitMargin = 2;
+
+            var candidates = new List<(BoundingBox box, bool inActiveWaypoint, int labelPri, double dist, int area, int zIndex)>();
+
+            foreach (var box in currentFrameBoxes)
+            {
+                var waypoint = waypointMarkers.FirstOrDefault(w =>
+                    w.ObjectId == GetBoxId(box) &&
                     w.Label == box.Label);
 
-                // 웨이포인트가 있으면 Entry 프레임 이후에만 선택 가능
                 if (waypoint != null)
                 {
                     if (currentFrameIndex < waypoint.EntryFrame || currentFrameIndex > waypoint.ExitFrame)
                         continue;
                 }
 
-                // 이미지 좌표로 비교
-                if (box.Rectangle.Contains((int)imageLocation.X, (int)imageLocation.Y))
-                    return box;
+                var r = box.Rectangle;
+                r.Inflate(hitMargin, hitMargin);
+                if (!r.Contains((int)imageLocation.X, (int)imageLocation.Y))
+                    continue;
+
+                bool inActiveWaypoint = false;
+                if (selectedWaypoint != null)
+                {
+                    inActiveWaypoint = (box.Label == selectedWaypoint.Label &&
+                                        GetBoxId(box) == selectedWaypoint.ObjectId &&
+                                        currentFrameIndex >= selectedWaypoint.EntryFrame &&
+                                        currentFrameIndex <= selectedWaypoint.ExitFrame);
+                }
+
+                int labelPri = GetLabelPriority(box.Label);
+                var centerX = box.Rectangle.X + box.Rectangle.Width / 2.0;
+                var centerY = box.Rectangle.Y + box.Rectangle.Height / 2.0;
+                var dx = centerX - imageLocation.X;
+                var dy = centerY - imageLocation.Y;
+                double dist = Math.Sqrt(dx * dx + dy * dy);
+                int area = Math.Max(1, box.Rectangle.Width * box.Rectangle.Height);
+                int zIndex = boundingBoxes.IndexOf(box);
+
+                candidates.Add((box, inActiveWaypoint, labelPri, dist, area, zIndex));
             }
-            return null;
+
+            if (candidates.Count == 0)
+                return null;
+
+            var ordered = candidates
+                .OrderByDescending(c => c.inActiveWaypoint)
+                .ThenByDescending(c => c.labelPri)
+                .ThenBy(c => c.dist)
+                .ThenBy(c => c.area)
+                .ThenByDescending(c => c.zIndex)
+                .ToList();
+
+            return ordered[0].box;
+        }
+
+        // Tab/Shift+Tab 선택 사이클링
+        private void CycleSelection(bool reverse)
+        {
+            if (lastHitCandidates == null || lastHitCandidates.Count == 0)
+                return;
+
+            if (reverse)
+            {
+                lastHitIndex = (lastHitIndex - 1 + lastHitCandidates.Count) % lastHitCandidates.Count;
+            }
+            else
+            {
+                lastHitIndex = (lastHitIndex + 1) % lastHitCandidates.Count;
+            }
+
+            selectedBox = lastHitCandidates[lastHitIndex];
+            HighlightSelectedBoxInSidebar();
+            UpdateObjectInfo(selectedBox);
+            UpdateBboxListDisplay();
+            pictureBoxVideo.Invalidate();
         }
 
         // ✅ 크기 조정 핸들 그리기 (4개 모서리만)
@@ -5680,6 +5956,13 @@ namespace WinFormsApp1
                 return;
 
             // 방향키는 ProcessCmdKey에서 처리하므로 여기서는 제외
+            // Tab/Shift+Tab: 선택 사이클링
+            if (e.KeyCode == Keys.Tab)
+            {
+                CycleSelection(e.Shift);
+                e.Handled = true;
+                return;
+            }
             // Space bar - 재생/일시정지
             if (e.KeyCode == Keys.Space)
             {
