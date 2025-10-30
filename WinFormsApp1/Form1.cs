@@ -579,6 +579,9 @@ namespace WinFormsApp1
         
         // ✅ 실패 구간 저장 (Key: "Label_ObjectId", Value: List<(startFrame, endFrame)>)
         private Dictionary<string, List<(int start, int end)>> waypointFailureRanges = new Dictionary<string, List<(int, int)>>();
+
+        // 리스트뷰 MouseDown에서 이미 이동 처리한 경우 Click 핸들러 1회 무시
+        private bool suppressWaypointClickOnce = false;
         
         // ✅ 관성 추적 활성화 상태 저장 (Key: "Label_ObjectId", Value: true/false)
         private Dictionary<string, bool> inertiaTrackingEnabled = new Dictionary<string, bool>();
@@ -1524,6 +1527,11 @@ namespace WinFormsApp1
 
         private void listViewPersonWaypoints_Click(object sender, EventArgs e)
         {
+            if (suppressWaypointClickOnce)
+            {
+                suppressWaypointClickOnce = false;
+                return;
+            }
             // Person Waypoint 항목을 클릭하면 해당 Entry 프레임으로 이동
             if (listViewPersonWaypoints.SelectedItems.Count > 0)
             {
@@ -1546,6 +1554,11 @@ namespace WinFormsApp1
 
         private void listViewVehicleWaypoints_Click(object sender, EventArgs e)
         {
+            if (suppressWaypointClickOnce)
+            {
+                suppressWaypointClickOnce = false;
+                return;
+            }
             // Vehicle Waypoint 항목을 클릭하면 해당 프레임으로 이동 (단일 프레임)
             if (listViewVehicleWaypoints.SelectedItems.Count > 0)
             {
@@ -1569,6 +1582,11 @@ namespace WinFormsApp1
         private void listViewEventWaypoints_Click(object sender, EventArgs e)
         {
             // Event Waypoint 항목을 클릭하면 해당 Entry 프레임으로 이동
+            if (suppressWaypointClickOnce)
+            {
+                suppressWaypointClickOnce = false;
+                return;
+            }
             if (listViewEventWaypoints.SelectedItems.Count > 0)
             {
                 var selectedItem = listViewEventWaypoints.SelectedItems[0];
@@ -1585,6 +1603,32 @@ namespace WinFormsApp1
             {
                 selectedWaypoint = null; // ✅ 선택 해제
                 panelTimeline.Invalidate();
+            }
+        }
+
+        // 리스트뷰 항목 좌우 절반 클릭에 따라 Entry/Exit로 이동
+        private void listViewWaypoints_MouseDown(object sender, MouseEventArgs e)
+        {
+            var listView = sender as ListView;
+            if (listView == null) return;
+
+            var hit = listView.HitTest(e.Location);
+            if (hit.Item == null) return;
+
+            if (hit.Item.Tag is WaypointMarker waypoint)
+            {
+                selectedWaypoint = waypoint;
+                panelTimeline.Invalidate();
+
+                // 아이템 영역의 좌우 절반 기준으로 분기
+                int left = hit.Item.Bounds.Left;
+                int width = hit.Item.Bounds.Width;
+                bool goExit = e.X >= left + (width / 2);
+
+                int targetFrame = goExit ? waypoint.ExitFrame : waypoint.EntryFrame;
+                LoadFrame(targetFrame);
+                // 클릭 이벤트 1회 무시
+                suppressWaypointClickOnce = true;
             }
         }
 

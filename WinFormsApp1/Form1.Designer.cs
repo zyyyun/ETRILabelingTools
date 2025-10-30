@@ -438,6 +438,7 @@
             this.listViewPersonWaypoints.Columns.Add("Exit", 80);
             this.listViewPersonWaypoints.Columns.Add("객체", 60);
             this.listViewPersonWaypoints.Click += new System.EventHandler(this.listViewPersonWaypoints_Click);
+            this.listViewPersonWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
 
             this.btnDeletePersonWaypoint = new System.Windows.Forms.Button();
             this.btnDeletePersonWaypoint.Text = "선택 삭제";
@@ -472,6 +473,7 @@
             this.listViewVehicleWaypoints.Columns.Add("Exit", 80);
             this.listViewVehicleWaypoints.Columns.Add("객체", 60);
             this.listViewVehicleWaypoints.Click += new System.EventHandler(this.listViewVehicleWaypoints_Click);
+            this.listViewVehicleWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
 
             this.btnDeleteVehicleWaypoint = new System.Windows.Forms.Button();
             this.btnDeleteVehicleWaypoint.Text = "선택 삭제";
@@ -506,6 +508,7 @@
             this.listViewEventWaypoints.Columns.Add("Frame Time", 90);
             this.listViewEventWaypoints.Columns.Add("객체(P/V)", 80);
             this.listViewEventWaypoints.Click += new System.EventHandler(this.listViewEventWaypoints_Click);
+            this.listViewEventWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
 
             this.btnDeleteEventWaypoint = new System.Windows.Forms.Button();
             this.btnDeleteEventWaypoint.Text = "선택 삭제";
