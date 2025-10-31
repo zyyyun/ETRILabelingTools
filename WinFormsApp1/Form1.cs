@@ -612,6 +612,13 @@ namespace WinFormsApp1
         // ✅ Shift+E로 설정한 a프레임 저장 (Key: "Label_ObjectId", Value: a프레임)
         private Dictionary<string, int> forcedInertiaTrackingStartFrames = new Dictionary<string, int>();
         
+        // ✅ 객체 사라짐 구간 추적 (Key: "Label_ObjectId", Value: List<(시작 프레임, 종료 프레임)>)
+        // 사라짐 의도가 기록된 구간 (아직 종료 프레임이 확정되지 않음)
+        private Dictionary<string, List<(int startFrame, int? endFrame)>> disappearedRanges = new Dictionary<string, List<(int, int?)>>();
+        
+        // ✅ 연속 박스 부재 감지용 임계값 (프레임 단위)
+        private const int DISAPPEARANCE_THRESHOLD = 5; // 5프레임 이상 연속 부재 시 사라짐으로 간주
+        
         private Color[] markerColors = new Color[]
         {
             Color.FromArgb(59, 130, 246),
@@ -1619,35 +1626,48 @@ namespace WinFormsApp1
                     int eventId = eventGroup.Key;
                     // 같은 EventId를 가진 박스 중 가장 작은 FrameIndex를 EntryFrame으로 사용
                     int minFrameIndex = eventGroup.Min(b => b.FrameIndex);
+                    int currentEntryFrame = entryFrameIndex.Value;
+                    int currentExitFrame = exitFrameIndex.Value;
                     
-                    // 이미 해당 EventId에 대한 Waypoint가 있는지 확인 (중복 방지)
-                    bool waypointExists = waypointMarkers.Any(w =>
+                    // ✅ 현재 Entry~Exit 범위와 겹치거나 포함되는 기존 waypoint 확인
+                    // 같은 EventId를 가진 waypoint 중에서 현재 Entry~Exit 범위가 기존 waypoint 범위와 겹치는 경우
+                    var overlappingWaypoint = waypointMarkers.FirstOrDefault(w =>
                         w.Label == "event" &&
                         w.ObjectId == eventId &&
-                        w.EntryFrame == minFrameIndex &&
-                        w.ExitFrame == exitFrameIndex.Value);
+                        // 범위가 겹치는 경우: 
+                        // 1. 현재 Entry가 기존 Entry~Exit 범위 내에 있음 (currentEntry >= w.Entry && currentEntry <= w.Exit)
+                        // 2. 현재 Exit가 기존 Entry~Exit 범위 내에 있음 (currentExit >= w.Entry && currentExit <= w.Exit)
+                        // 3. 현재 범위가 기존 범위를 완전히 포함 (currentEntry <= w.Entry && currentExit >= w.Exit)
+                        ((currentEntryFrame >= w.EntryFrame && currentEntryFrame <= w.ExitFrame) ||
+                         (currentExitFrame >= w.EntryFrame && currentExitFrame <= w.ExitFrame) ||
+                         (currentEntryFrame <= w.EntryFrame && currentExitFrame >= w.ExitFrame)));
                     
-                    if (!waypointExists)
+                    if (overlappingWaypoint != null)
                     {
-                        // Entry 프레임의 Event 박스 찾기 (가장 작은 FrameIndex)
-                        var entryEventBox = eventGroup.FirstOrDefault(b => b.FrameIndex == minFrameIndex);
-                        if (entryEventBox != null)
+                        // 이미 같은 EventId의 waypoint가 현재 Entry~Exit 범위와 겹치면 중복 생성하지 않음
+                        System.Diagnostics.Debug.WriteLine($"[Event Waypoint 중복 방지] EventId={eventId}: 기존 waypoint({overlappingWaypoint.EntryFrame}~{overlappingWaypoint.ExitFrame})와 겹치는 범위({currentEntryFrame}~{currentExitFrame})여서 새로 생성하지 않음");
+                        continue;
+                    }
+                    
+                    // 새로운 waypoint 생성
+                    // Entry 프레임의 Event 박스 찾기 (가장 작은 FrameIndex)
+                    var entryEventBox = eventGroup.FirstOrDefault(b => b.FrameIndex == minFrameIndex);
+                    if (entryEventBox != null)
+                    {
+                        var evWp = new WaypointMarker
                         {
-                            var evWp = new WaypointMarker
-                            {
-                                EntryFrame = minFrameIndex,
-                                ExitFrame = exitFrameIndex.Value,
-                                MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107),
-                                EntryTime = TimeSpan.FromSeconds(minFrameIndex / fps).ToString(@"hh\:mm\:ss"),
-                                ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                                ObjectId = eventId,
-                                Label = "event",
-                                InteractingObject = "" // BoundingBox에는 InteractingObject 속성이 없으므로 빈 문자열로 설정
-                            };
-                            waypointMarkers.Add(evWp);
+                            EntryFrame = minFrameIndex,
+                            ExitFrame = exitFrameIndex.Value,
+                            MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107),
+                            EntryTime = TimeSpan.FromSeconds(minFrameIndex / fps).ToString(@"hh\:mm\:ss"),
+                            ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                            ObjectId = eventId,
+                            Label = "event",
+                            InteractingObject = "" // BoundingBox에는 InteractingObject 속성이 없으므로 빈 문자열로 설정
+                        };
+                        waypointMarkers.Add(evWp);
 
-                            PropagateEventBoxWithinRange(entryEventBox, exitFrameIndex.Value);
-                        }
+                        PropagateEventBoxWithinRange(entryEventBox, exitFrameIndex.Value);
                     }
                 }
 
@@ -4172,6 +4192,33 @@ namespace WinFormsApp1
             }
         }
         
+        // ✅ 박스 삭제 시 사라짐 의도 기록
+        private void RecordDisappearanceIntent(BoundingBox box)
+        {
+            if (box == null) return;
+            
+            // waypoint 내부에서만 기록
+            var waypoint = FindWaypointForBox(box);
+            if (waypoint == null) return;
+            
+            string key = $"{box.Label}_{GetBoxId(box)}";
+            
+            if (!disappearedRanges.ContainsKey(key))
+            {
+                disappearedRanges[key] = new List<(int, int?)>();
+            }
+            
+            // 이미 해당 프레임에서 시작하는 사라짐 기록이 있는지 확인
+            bool exists = disappearedRanges[key].Any(r => r.startFrame == box.FrameIndex && !r.endFrame.HasValue);
+            
+            if (!exists)
+            {
+                // 사라짐 시작 프레임 기록 (종료 프레임은 아직 미확정)
+                disappearedRanges[key].Add((box.FrameIndex, null));
+                System.Diagnostics.Debug.WriteLine($"[사라짐 의도 기록] {key}: 프레임 {box.FrameIndex}에서 사라짐 시작");
+            }
+        }
+        
         // 박스의 특정 라벨 타입에 ID 설정
         private void SetBoxId(BoundingBox box, string label, int id)
         {
@@ -5187,17 +5234,37 @@ namespace WinFormsApp1
                 }
             }
             
-            // 3. b 프레임 박스 확인 및 추가
+            // 3. b 프레임 박스 확인 및 추가 (Shift+T를 누른 시점의 박스)
             var boxB = boundingBoxes.FirstOrDefault(b =>
                 b.FrameIndex == bFrame &&
                 b.Label == selectedBox.Label &&
                 GetBoxId(b) == boxId &&
                 !b.IsDeleted);
             
+            // b 프레임에 박스가 없으면 현재 선택된 박스를 사용 (Shift+T를 누른 시점의 박스)
+            if (boxB == null && selectedBox.FrameIndex == bFrame)
+            {
+                boxB = selectedBox;
+            }
+            
             if (boxB != null)
             {
                 // b 프레임도 성공 프레임으로 추가 (최우선)
                 successFrames[bFrame] = boxB.Rectangle;
+            }
+            else
+            {
+                // b 프레임에 박스가 없으면 a 프레임의 박스를 복사하여 사용
+                var boxBFromA = CloneBoundingBox(boxA);
+                boxBFromA.FrameIndex = bFrame;
+                boxBFromA.Rectangle = boxA.Rectangle;
+                
+                // 박스 추가
+                boundingBoxes.Add(boxBFromA);
+                boxB = boxBFromA;
+                successFrames[bFrame] = boxB.Rectangle;
+                
+                System.Diagnostics.Debug.WriteLine($"[강제 관성 추적] b프레임({bFrame})에 박스가 없어 a프레임 박스를 복사하여 생성");
             }
             
             // 성공 프레임이 2개 미만이면 보간 불가
@@ -5369,6 +5436,214 @@ namespace WinFormsApp1
             
             boundingBoxes.Add(newBox);
             return newBox;
+        }
+        
+        #endregion
+
+        #region Disappearance Handling
+        
+        /// <summary>
+        /// 특정 프레임에서 사라짐 구간 처리 (재추적 시작 시점에서 호출)
+        /// </summary>
+        private void ProcessDisappearedRangesAtFrame(WaypointMarker waypoint, int returnFrame)
+        {
+            int boxId = waypoint.ObjectId;
+            string key = $"{waypoint.Label}_{boxId}";
+            
+            if (!disappearedRanges.ContainsKey(key))
+                return;
+            
+            // 미확정 사라짐 구간 처리 (endFrame이 null인 것들)
+            var pendingRanges = disappearedRanges[key]
+                .Where(r => !r.endFrame.HasValue && r.startFrame < returnFrame)
+                .ToList();
+            
+            foreach (var pendingRange in pendingRanges)
+            {
+                int aFrame = pendingRange.startFrame;
+                int endFrame = returnFrame - 1; // 복귀 프레임 직전까지
+                
+                if (endFrame >= aFrame)
+                {
+                    // 사라진 구간 확정: a ~ (returnFrame-1)
+                    var index = disappearedRanges[key].IndexOf(pendingRange);
+                    disappearedRanges[key][index] = (aFrame, endFrame);
+                    
+                    System.Diagnostics.Debug.WriteLine($"[재추적 시점 복귀 감지] {key}: 프레임 {aFrame}~{endFrame} (복귀: {returnFrame})");
+                    
+                    // a ~ endFrame 구간의 박스 삭제
+                    DeleteBoxesInRange(key, waypoint, aFrame, endFrame);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 사라짐 의도가 기록된 구간을 처리 (복귀 시점 감지 및 사라진 구간 확정)
+        /// </summary>
+        private void ProcessDisappearedRanges(WaypointMarker waypoint)
+        {
+            int boxId = waypoint.ObjectId;
+            string key = $"{waypoint.Label}_{boxId}";
+            
+            if (!disappearedRanges.ContainsKey(key))
+                return;
+            
+            // waypoint 범위 내의 박스 찾기
+            var boxesInWaypoint = boundingBoxes
+                .Where(b => 
+                    b.Label == waypoint.Label &&
+                    GetBoxId(b) == boxId &&
+                    b.FrameIndex >= waypoint.EntryFrame &&
+                    b.FrameIndex <= waypoint.ExitFrame &&
+                    !b.IsDeleted)
+                .OrderBy(b => b.FrameIndex)
+                .ToList();
+            
+            // 미확정 사라짐 구간 처리 (endFrame이 null인 것들)
+            var pendingRanges = disappearedRanges[key]
+                .Where(r => !r.endFrame.HasValue)
+                .ToList();
+            
+            foreach (var pendingRange in pendingRanges)
+            {
+                int aFrame = pendingRange.startFrame;
+                
+                // a 프레임 이후 첫 번째 성공 프레임(b) 찾기
+                int? bFrame = boxesInWaypoint
+                    .Where(b => b.FrameIndex > aFrame)
+                    .Select(b => (int?)b.FrameIndex)
+                    .FirstOrDefault();
+                
+                if (bFrame.HasValue && bFrame.Value > aFrame)
+                {
+                    // 사라진 구간 확정: a ~ (b-1)
+                    int endFrame = bFrame.Value - 1;
+                    
+                    // 기존 항목 업데이트
+                    var index = disappearedRanges[key].IndexOf(pendingRange);
+                    disappearedRanges[key][index] = (aFrame, endFrame);
+                    
+                    System.Diagnostics.Debug.WriteLine($"[사라짐 구간 확정] {key}: 프레임 {aFrame}~{endFrame} (복귀: {bFrame.Value})");
+                    
+                    // a ~ endFrame 구간의 박스 삭제
+                    DeleteBoxesInRange(key, waypoint, aFrame, endFrame);
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 연속 박스 부재 구간 자동 감지 및 처리
+        /// </summary>
+        private void DetectContinuousAbsence(WaypointMarker waypoint)
+        {
+            int boxId = waypoint.ObjectId;
+            string key = $"{waypoint.Label}_{boxId}";
+            
+            // waypoint 범위 내의 박스 찾기
+            var boxesInWaypoint = boundingBoxes
+                .Where(b => 
+                    b.Label == waypoint.Label &&
+                    GetBoxId(b) == boxId &&
+                    b.FrameIndex >= waypoint.EntryFrame &&
+                    b.FrameIndex <= waypoint.ExitFrame &&
+                    !b.IsDeleted)
+                .Select(b => b.FrameIndex)
+                .OrderBy(f => f)
+                .ToList();
+            
+            // 빈 프레임 구간 찾기
+            List<(int start, int end)> emptyRanges = new List<(int, int)>();
+            int currentStart = -1;
+            
+            for (int frame = waypoint.EntryFrame; frame <= waypoint.ExitFrame; frame++)
+            {
+                bool hasBox = boxesInWaypoint.Contains(frame);
+                
+                if (!hasBox && currentStart == -1)
+                {
+                    // 빈 구간 시작
+                    currentStart = frame;
+                }
+                else if (hasBox && currentStart != -1)
+                {
+                    // 빈 구간 종료
+                    int end = frame - 1;
+                    if (end >= currentStart)
+                    {
+                        emptyRanges.Add((currentStart, end));
+                    }
+                    currentStart = -1;
+                }
+            }
+            
+            // 마지막 빈 구간 처리
+            if (currentStart != -1)
+            {
+                emptyRanges.Add((currentStart, waypoint.ExitFrame));
+            }
+            
+            // 임계값 이상의 연속 부재 구간만 처리
+            foreach (var emptyRange in emptyRanges)
+            {
+                int duration = emptyRange.end - emptyRange.start + 1;
+                
+                if (duration >= DISAPPEARANCE_THRESHOLD)
+                {
+                    // 이미 처리된 구간인지 확인
+                    bool alreadyProcessed = disappearedRanges.ContainsKey(key) &&
+                        disappearedRanges[key].Any(r => 
+                            r.startFrame == emptyRange.start && 
+                            r.endFrame.HasValue && 
+                            r.endFrame.Value == emptyRange.end);
+                    
+                    if (!alreadyProcessed)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[연속 부재 감지] {key}: 프레임 {emptyRange.start}~{emptyRange.end} ({duration}프레임)");
+                        
+                        // 사라진 구간으로 기록
+                        if (!disappearedRanges.ContainsKey(key))
+                        {
+                            disappearedRanges[key] = new List<(int, int?)>();
+                        }
+                        disappearedRanges[key].Add((emptyRange.start, emptyRange.end));
+                        
+                        // 해당 구간의 박스 삭제
+                        DeleteBoxesInRange(key, waypoint, emptyRange.start, emptyRange.end);
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 지정된 구간의 박스 삭제
+        /// </summary>
+        private void DeleteBoxesInRange(string key, WaypointMarker waypoint, int startFrame, int endFrame)
+        {
+            int boxId = waypoint.ObjectId;
+            int deletedCount = 0;
+            
+            var boxesToDelete = boundingBoxes
+                .Where(b => 
+                    b.Label == waypoint.Label &&
+                    GetBoxId(b) == boxId &&
+                    b.FrameIndex >= startFrame &&
+                    b.FrameIndex <= endFrame &&
+                    !b.IsDeleted)
+                .ToList();
+            
+            foreach (var box in boxesToDelete)
+            {
+                box.IsDeleted = true;
+                deletedCount++;
+            }
+            
+            if (deletedCount > 0)
+            {
+                InvalidateBoxCache();
+                UpdateBoxCount();
+                UpdateBboxListDisplay();
+                System.Diagnostics.Debug.WriteLine($"[박스 삭제] {key}: 프레임 {startFrame}~{endFrame}에서 {deletedCount}개 박스 삭제");
+            }
         }
         
         #endregion
@@ -5613,6 +5888,12 @@ namespace WinFormsApp1
                     InvalidateBoxCache();
                     AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = allTrackedBoxes });
                 }
+                
+                // ✅ 추적 완료 후 사라짐 구간 처리
+                ProcessDisappearedRanges(waypoint);
+                
+                // ✅ 추적 완료 후 연속 박스 부재 구간 자동 감지
+                DetectContinuousAbsence(waypoint);
 
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
@@ -5654,6 +5935,10 @@ namespace WinFormsApp1
                     waypointFailureRanges.Remove(key);
                     System.Diagnostics.Debug.WriteLine($"[재추적] {key}의 실패 구간 정보 초기화됨");
                 }
+                
+                // ✅ 재추적 시작 시점에서 사라짐 구간 처리 (복귀 시점으로 간주)
+                // 현재 프레임(startFrame)이 복귀 시점(b)일 수 있으므로, 이전 사라짐 구간 확정
+                ProcessDisappearedRangesAtFrame(waypoint, startFrame);
                 
                 // ✅ 2. 현재 프레임의 박스를 startBox로 사용 (삭제 전에 찾아야 함)
                 BoundingBox startBox = null;
@@ -5840,6 +6125,13 @@ namespace WinFormsApp1
                 }
 
                 int totalInterpolated = inertiaAppliedFrames + additionalInterpolatedFrames;
+                
+                // ✅ 재추적 완료 후 사라짐 구간 처리
+                ProcessDisappearedRanges(waypoint);
+                
+                // ✅ 재추적 완료 후 연속 박스 부재 구간 자동 감지
+                DetectContinuousAbsence(waypoint);
+                
                 MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n관성 보간:\n- 재추적 범위: {inertiaAppliedFrames}개 프레임\n- 전체 범위 재보간: {additionalInterpolatedFrames}개 프레임\n- 총 보간: {totalInterpolated}개 프레임\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -6814,6 +7106,9 @@ namespace WinFormsApp1
                 // ✅ 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
                 selectedBox.IsDeleted = true;
                 
+                // ✅ 사라짐 의도 기록
+                RecordDisappearanceIntent(selectedBox);
+                
                 selectedBox = null;
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
@@ -6826,6 +7121,9 @@ namespace WinFormsApp1
                 
                 // ✅ 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
                 selectedBox.IsDeleted = true;
+                
+                // ✅ 사라짐 의도 기록
+                RecordDisappearanceIntent(selectedBox);
                 
                 selectedBox = null;
                 UpdateBoxCount();
@@ -6888,8 +7186,9 @@ namespace WinFormsApp1
                             $"a프레임이 설정되었습니다.\n\n" +
                             $"객체: {GetCategoryName(selectedBox.Label, boxId)}\n" +
                             $"a프레임: {currentFrameIndex}\n\n" +
-                            $"이제 b프레임에서 박스를 수동으로 수정한 후\n" +
-                            $"Shift+T를 눌러 강제 관성 추적을 실행하세요.",
+                            $"이제 b프레임으로 이동한 후\n" +
+                            $"Shift+T를 눌러 강제 관성 추적을 실행하세요.\n" +
+                            $"(Shift+T를 누른 시점이 b프레임이 됩니다)",
                             "a프레임 설정 완료",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Information);
@@ -6909,7 +7208,7 @@ namespace WinFormsApp1
             }
             else if (e.Shift && e.KeyCode == Keys.T && !e.Control && !e.Alt)
             {
-                // ✅ Shift+T: 강제 관성 추적 (수동 수정 프레임 기준)
+                // ✅ Shift+T: 강제 관성 추적 (현재 프레임을 b프레임으로 사용)
                 if (selectedBox != null)
                 {
                     var waypoint = FindWaypointForBox(selectedBox);
@@ -6918,7 +7217,7 @@ namespace WinFormsApp1
                         int boxId = GetBoxId(selectedBox);
                         string key = $"{selectedBox.Label}_{boxId}";
                         
-                        // a 프레임: Shift+E로 설정한 a프레임 우선 사용, 없으면 현재 프레임
+                        // a 프레임: R키로 설정한 a프레임 우선 사용, 없으면 현재 프레임
                         int aFrame;
                         if (forcedInertiaTrackingStartFrames.ContainsKey(key))
                         {
@@ -6930,35 +7229,11 @@ namespace WinFormsApp1
                             aFrame = currentFrameIndex;
                         }
                         
-                        // b 프레임: a 프레임 이후 가장 먼저 수정한 프레임
-                        int? bFrame = null;
-                        
-                        if (manuallyAdjustedFrames.ContainsKey(key))
-                        {
-                            // ✅ FirstOrDefault는 조건이 없으면 0을 반환하므로, Where()로 필터링한 후 실제 값이 있는지 확인
-                            var filteredFrames = manuallyAdjustedFrames[key].Where(f => f > aFrame).ToList();
-                            if (filteredFrames.Count > 0)
-                            {
-                                bFrame = filteredFrames.First();
-                            }
-                        }
-                        
-                        if (!bFrame.HasValue)
-                        {
-                            MessageBox.Show(
-                                $"a프레임({aFrame}) 이후에 수정된 프레임이 없습니다.\n\n" +
-                                $"먼저 나중 프레임(b프레임)에서 박스를 수동으로 수정한 후\n" +
-                                $"Shift+T를 사용할 수 있습니다.\n\n" +
-                                $"또는 R키로 a프레임을 먼저 설정하세요.",
-                                "알림",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Information);
-                            e.Handled = true;
-                            return;
-                        }
+                        // ✅ b 프레임: Shift+T를 누른 시점(현재 프레임)
+                        int bFrame = currentFrameIndex;
                         
                         // b 프레임이 waypoint 범위를 넘지 않도록 제한
-                        if (bFrame.Value > waypoint.ExitFrame)
+                        if (bFrame > waypoint.ExitFrame)
                         {
                             bFrame = waypoint.ExitFrame;
                         }
@@ -6978,10 +7253,10 @@ namespace WinFormsApp1
                         }
                         
                         // bFrame이 waypoint 범위를 벗어나는 경우
-                        if (bFrame.Value < waypoint.EntryFrame || bFrame.Value > waypoint.ExitFrame)
+                        if (bFrame < waypoint.EntryFrame || bFrame > waypoint.ExitFrame)
                         {
                             MessageBox.Show(
-                                $"b프레임({bFrame.Value})이 waypoint 범위({waypoint.EntryFrame}~{waypoint.ExitFrame})를 벗어났습니다.\n\n" +
+                                $"b프레임({bFrame})이 waypoint 범위({waypoint.EntryFrame}~{waypoint.ExitFrame})를 벗어났습니다.\n\n" +
                                 $"b프레임은 waypoint Entry~Exit 범위 내에 있어야 합니다.",
                                 "오류",
                                 MessageBoxButtons.OK,
@@ -6991,18 +7266,17 @@ namespace WinFormsApp1
                         }
                         
                         // aFrame >= bFrame인 경우 (보간 불가)
-                        if (aFrame >= bFrame.Value)
+                        if (aFrame >= bFrame)
                         {
                             MessageBox.Show(
                                 $"프레임 범위가 유효하지 않습니다.\n\n" +
                                 $"a프레임: {aFrame}\n" +
-                                $"b프레임: {bFrame.Value}\n" +
+                                $"b프레임: {bFrame}\n" +
                                 $"waypoint 범위: {waypoint.EntryFrame}~{waypoint.ExitFrame}\n\n" +
                                 $"a프레임은 b프레임보다 작아야 합니다.\n" +
                                 $"현재 b프레임이 a프레임과 같거나 작습니다.\n\n" +
                                 $"해결 방법:\n" +
-                                $"1. a프레임보다 큰 프레임에서 박스를 수동으로 수정하세요.\n" +
-                                $"2. 또는 Shift+E로 더 작은 a프레임을 설정하세요.",
+                                $"R키로 a프레임을 더 작은 값으로 설정하세요.",
                                 "오류",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
@@ -7033,7 +7307,7 @@ namespace WinFormsApp1
                         }
                         
                         // 강제 관성 추적 실행
-                        PerformForcedInertiaTracking(boxForTracking, aFrame, bFrame.Value);
+                        PerformForcedInertiaTracking(boxForTracking, aFrame, bFrame);
                         e.Handled = true;
                     }
                     else
