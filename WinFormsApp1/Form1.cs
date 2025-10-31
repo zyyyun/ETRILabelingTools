@@ -606,6 +606,12 @@ namespace WinFormsApp1
         // ✅ 관성 추적 활성화 상태 저장 (Key: "Label_ObjectId", Value: true/false)
         private Dictionary<string, bool> inertiaTrackingEnabled = new Dictionary<string, bool>();
         
+        // ✅ 수동으로 수정된 프레임 추적 (Key: "Label_ObjectId", Value: List<수정된 프레임>)
+        private Dictionary<string, List<int>> manuallyAdjustedFrames = new Dictionary<string, List<int>>();
+        
+        // ✅ Shift+E로 설정한 a프레임 저장 (Key: "Label_ObjectId", Value: a프레임)
+        private Dictionary<string, int> forcedInertiaTrackingStartFrames = new Dictionary<string, int>();
+        
         private Color[] markerColors = new Color[]
         {
             Color.FromArgb(59, 130, 246),
@@ -1793,18 +1799,16 @@ namespace WinFormsApp1
                             targetFrame = waypoint.EntryFrame;
                         else if (subIndex == 1) // Exit 컬럼
                             targetFrame = waypoint.ExitFrame;
-                        else if (subIndex == 2) // 객체 컬럼: EntryFrame으로 이동 후 박스 선택
+                        else if (subIndex == 2) // 객체 컬럼: 현재 프레임에서 박스 선택만 (EntryFrame 이동 안 함)
                         {
-                            targetFrame = waypoint.EntryFrame;
                             shouldSelectBox = true;
                         }
                     }
                     // Event: 컬럼0(Event)=Entry, 컬럼1(시간)=Entry, 컬럼2(객체)=박스 선택
                     else if (listView == listViewEventWaypoints)
                     {
-                        if (subIndex == 2) // 객체 컬럼: EntryFrame으로 이동 후 박스 선택
+                        if (subIndex == 2) // 객체 컬럼: 현재 프레임에서 박스 선택만 (EntryFrame 이동 안 함)
                         {
-                            targetFrame = waypoint.EntryFrame;
                             shouldSelectBox = true;
                         }
                         else // 다른 컬럼은 Entry로 이동
@@ -1812,9 +1816,13 @@ namespace WinFormsApp1
                     }
                 }
                 
-                LoadFrame(targetFrame);
+                // ✅ 객체 컬럼이 아닐 때만 프레임 이동
+                if (!shouldSelectBox)
+                {
+                    LoadFrame(targetFrame);
+                }
                 
-                // 객체 컬럼 클릭 시 해당 객체의 박스 선택
+                // 객체 컬럼 클릭 시 해당 객체의 박스 선택 (현재 프레임에서)
                 if (shouldSelectBox)
                 {
                     SelectBoxForWaypoint(waypoint);
@@ -2403,6 +2411,9 @@ namespace WinFormsApp1
                 undoBox.Rectangle = originalResizeRect;
                 AddUndoAction(new UndoAction { Type = UndoActionType.ModifyBox, Box = undoBox });
                 
+                // ✅ 수동 수정 프레임 기록
+                RecordManuallyAdjustedFrame(selectedBox);
+                
                 InvalidateBoxCache();
                 UpdateObjectInfo(selectedBox);
                 UpdateBboxListDisplay();
@@ -2419,6 +2430,12 @@ namespace WinFormsApp1
             else if (isDragging)
             {
                 isDragging = false;
+                
+                // ✅ 수동 수정 프레임 기록
+                if (selectedBox != null)
+                {
+                    RecordManuallyAdjustedFrame(selectedBox);
+                }
                 
                 // 박스 이동/수정 완료 시에도 Event 박스 전파
                 if (selectedBox != null && selectedBox.Label == "event")
@@ -4131,6 +4148,30 @@ namespace WinFormsApp1
             return waypoint;
         }
         
+        // 박스 수정 완료 시 수정된 프레임 기록
+        private void RecordManuallyAdjustedFrame(BoundingBox box)
+        {
+            if (box == null) return;
+            
+            // waypoint 내부에서만 기록
+            var waypoint = FindWaypointForBox(box);
+            if (waypoint == null) return;
+            
+            string key = $"{box.Label}_{GetBoxId(box)}";
+            
+            if (!manuallyAdjustedFrames.ContainsKey(key))
+            {
+                manuallyAdjustedFrames[key] = new List<int>();
+            }
+            
+            // 중복 제거 및 정렬 유지
+            if (!manuallyAdjustedFrames[key].Contains(box.FrameIndex))
+            {
+                manuallyAdjustedFrames[key].Add(box.FrameIndex);
+                manuallyAdjustedFrames[key].Sort();
+            }
+        }
+        
         // 박스의 특정 라벨 타입에 ID 설정
         private void SetBoxId(BoundingBox box, string label, int id)
         {
@@ -5088,6 +5129,248 @@ namespace WinFormsApp1
                 System.Diagnostics.Debug.WriteLine($"[Event 전파] 업데이트할 박스 없음 (이미 존재하거나 범위 밖)");
             }
         }
+        #endregion
+
+        #region Forced Inertia Tracking (Shift+T)
+        
+        /// <summary>
+        /// 강제 관성 추적: a 프레임부터 b 프레임까지 수동 수정 프레임을 기준으로 보간
+        /// </summary>
+        private void PerformForcedInertiaTracking(BoundingBox selectedBox, int aFrame, int bFrame)
+        {
+            if (selectedBox == null || aFrame >= bFrame)
+            {
+                MessageBox.Show("잘못된 프레임 범위입니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            
+            int boxId = GetBoxId(selectedBox);
+            string key = $"{selectedBox.Label}_{boxId}";
+            
+            // a 프레임의 박스 찾기
+            var boxA = boundingBoxes.FirstOrDefault(b =>
+                b.FrameIndex == aFrame &&
+                b.Label == selectedBox.Label &&
+                GetBoxId(b) == boxId &&
+                !b.IsDeleted);
+            
+            if (boxA == null)
+            {
+                MessageBox.Show($"프레임 {aFrame}에서 해당 박스를 찾을 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            
+            // 성공 프레임 딕셔너리 생성
+            Dictionary<int, Rectangle> successFrames = new Dictionary<int, Rectangle>();
+            
+            // 1. a 프레임 추가 (최우선)
+            successFrames[aFrame] = boxA.Rectangle;
+            
+            // 2. 수동 수정 프레임들 추가 (a 이후부터 b까지)
+            if (manuallyAdjustedFrames.ContainsKey(key))
+            {
+                foreach (int adjustedFrame in manuallyAdjustedFrames[key])
+                {
+                    if (adjustedFrame > aFrame && adjustedFrame <= bFrame)
+                    {
+                        var boxAtFrame = boundingBoxes.FirstOrDefault(b =>
+                            b.FrameIndex == adjustedFrame &&
+                            b.Label == selectedBox.Label &&
+                            GetBoxId(b) == boxId &&
+                            !b.IsDeleted);
+                        
+                        if (boxAtFrame != null)
+                        {
+                            successFrames[adjustedFrame] = boxAtFrame.Rectangle;
+                        }
+                    }
+                }
+            }
+            
+            // 3. b 프레임 박스 확인 및 추가
+            var boxB = boundingBoxes.FirstOrDefault(b =>
+                b.FrameIndex == bFrame &&
+                b.Label == selectedBox.Label &&
+                GetBoxId(b) == boxId &&
+                !b.IsDeleted);
+            
+            if (boxB != null)
+            {
+                // b 프레임도 성공 프레임으로 추가 (최우선)
+                successFrames[bFrame] = boxB.Rectangle;
+            }
+            
+            // 성공 프레임이 2개 미만이면 보간 불가
+            if (successFrames.Count < 2)
+            {
+                MessageBox.Show(
+                    $"보간할 수 있는 성공 프레임이 부족합니다.\n\n" +
+                    $"a 프레임: {aFrame}\n" +
+                    $"b 프레임: {bFrame}\n" +
+                    $"성공 프레임: {successFrames.Count}개\n\n" +
+                    $"최소 2개의 성공 프레임이 필요합니다.",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
+            }
+            
+            // 성공 프레임 목록 정렬
+            var sortedSuccessFrames = successFrames.Keys.OrderBy(f => f).ToList();
+            
+            // Undo 스택에 추가
+            var boxesToModify = new List<BoundingBox>();
+            for (int frameIdx = aFrame + 1; frameIdx < bFrame; frameIdx++)
+            {
+                if (!successFrames.ContainsKey(frameIdx))
+                {
+                    var box = FindOrCreateBoxAtFrame(frameIdx, selectedBox);
+                    boxesToModify.Add(box);
+                }
+            }
+            
+            if (boxesToModify.Count > 0)
+            {
+                var undoAction = new UndoAction
+                {
+                    Type = UndoActionType.ModifyBox,
+                    Box = CloneBoundingBox(boxesToModify[0]), // 첫 번째 박스만 저장 (대표)
+                    TrackedBoxes = boxesToModify.Select(b => CloneBoundingBox(b)).ToList()
+                };
+                AddUndoAction(undoAction);
+            }
+            
+            // 보간 적용
+            int interpolatedCount = 0;
+            for (int frameIdx = aFrame + 1; frameIdx < bFrame; frameIdx++)
+            {
+                // 이미 성공 프레임이면 건너뛰기
+                if (successFrames.ContainsKey(frameIdx))
+                    continue;
+                
+                // 해당 프레임의 박스 찾기 또는 생성
+                var box = FindOrCreateBoxAtFrame(frameIdx, selectedBox);
+                
+                // 앞뒤 성공 프레임 찾기
+                int? prevSuccess = FindPreviousSuccessFrame(frameIdx, sortedSuccessFrames);
+                int? nextSuccess = FindNextSuccessFrame(frameIdx, sortedSuccessFrames);
+                
+                if (prevSuccess.HasValue && nextSuccess.HasValue)
+                {
+                    // 양방향 보간
+                    box.Rectangle = InterpolateRect(
+                        successFrames[prevSuccess.Value],
+                        successFrames[nextSuccess.Value],
+                        prevSuccess.Value,
+                        nextSuccess.Value,
+                        frameIdx
+                    );
+                    interpolatedCount++;
+                }
+                else if (prevSuccess.HasValue)
+                {
+                    // 이전 성공 프레임만 있으면 고정
+                    box.Rectangle = successFrames[prevSuccess.Value];
+                    interpolatedCount++;
+                }
+                else if (nextSuccess.HasValue)
+                {
+                    // 다음 성공 프레임만 있으면 그 위치로 설정
+                    box.Rectangle = successFrames[nextSuccess.Value];
+                    interpolatedCount++;
+                }
+            }
+            
+            // UI 업데이트
+            InvalidateBoxCache();
+            UpdateBoxCount();
+            UpdateBboxListDisplay();
+            pictureBoxVideo.Invalidate();
+            
+            MessageBox.Show(
+                $"강제 관성 추적이 완료되었습니다.\n\n" +
+                $"범위: 프레임 {aFrame} ~ {bFrame}\n" +
+                $"성공 프레임: {successFrames.Count}개\n" +
+                $"보간된 박스: {interpolatedCount}개",
+                "완료",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        
+        /// <summary>
+        /// 정렬된 성공 프레임 리스트에서 이전 성공 프레임 찾기
+        /// </summary>
+        private int? FindPreviousSuccessFrame(int currentFrame, List<int> sortedSuccessFrames)
+        {
+            for (int i = sortedSuccessFrames.Count - 1; i >= 0; i--)
+            {
+                if (sortedSuccessFrames[i] < currentFrame)
+                    return sortedSuccessFrames[i];
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// 정렬된 성공 프레임 리스트에서 다음 성공 프레임 찾기
+        /// </summary>
+        private int? FindNextSuccessFrame(int currentFrame, List<int> sortedSuccessFrames)
+        {
+            foreach (var frame in sortedSuccessFrames)
+            {
+                if (frame > currentFrame)
+                    return frame;
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// 선형 보간 계산 (위치 및 크기 모두 보간)
+        /// </summary>
+        private Rectangle InterpolateRect(Rectangle prev, Rectangle next, int prevFrame, int nextFrame, int currentFrame)
+        {
+            double ratio = (double)(currentFrame - prevFrame) / (nextFrame - prevFrame);
+            
+            int x = (int)(prev.X + (next.X - prev.X) * ratio);
+            int y = (int)(prev.Y + (next.Y - prev.Y) * ratio);
+            int width = (int)(prev.Width + (next.Width - prev.Width) * ratio);
+            int height = (int)(prev.Height + (next.Height - prev.Height) * ratio);
+            
+            return new Rectangle(x, y, width, height);
+        }
+        
+        /// <summary>
+        /// 해당 프레임의 박스 찾기 또는 생성
+        /// </summary>
+        private BoundingBox FindOrCreateBoxAtFrame(int frameIndex, BoundingBox templateBox)
+        {
+            int boxId = GetBoxId(templateBox);
+            
+            // 먼저 기존 박스 찾기
+            var existing = boundingBoxes.FirstOrDefault(b =>
+                b.FrameIndex == frameIndex &&
+                b.Label == templateBox.Label &&
+                GetBoxId(b) == boxId &&
+                !b.IsDeleted);
+            
+            if (existing != null)
+                return existing;
+            
+            // 없으면 생성
+            var newBox = new BoundingBox
+            {
+                FrameIndex = frameIndex,
+                Label = templateBox.Label,
+                PersonId = templateBox.PersonId,
+                VehicleId = templateBox.VehicleId,
+                EventId = templateBox.EventId,
+                Rectangle = templateBox.Rectangle, // 임시값, 보간으로 업데이트됨
+                Action = "waypoint"
+            };
+            
+            boundingBoxes.Add(newBox);
+            return newBox;
+        }
+        
         #endregion
 
         #region Tracking Algorithm
@@ -6587,9 +6870,187 @@ namespace WinFormsApp1
                 TerminateEventFromCurrentFrame();
                 e.Handled = true;
             }
+            else if (e.KeyCode == Keys.R && !e.Shift && !e.Control && !e.Alt)
+            {
+                // ✅ R: 강제 관성 추적을 위한 a프레임 설정
+                if (selectedBox != null)
+                {
+                    var waypoint = FindWaypointForBox(selectedBox);
+                    if (waypoint != null)
+                    {
+                        int boxId = GetBoxId(selectedBox);
+                        string key = $"{selectedBox.Label}_{boxId}";
+                        
+                        // a프레임 저장 (현재 프레임)
+                        forcedInertiaTrackingStartFrames[key] = currentFrameIndex;
+                        
+                        MessageBox.Show(
+                            $"a프레임이 설정되었습니다.\n\n" +
+                            $"객체: {GetCategoryName(selectedBox.Label, boxId)}\n" +
+                            $"a프레임: {currentFrameIndex}\n\n" +
+                            $"이제 b프레임에서 박스를 수동으로 수정한 후\n" +
+                            $"Shift+T를 눌러 강제 관성 추적을 실행하세요.",
+                            "a프레임 설정 완료",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        MessageBox.Show("현재 박스에 해당하는 Waypoint를 찾을 수 없습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        e.Handled = true;
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("a프레임을 설정할 박스를 먼저 선택해주세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    e.Handled = true;
+                }
+            }
+            else if (e.Shift && e.KeyCode == Keys.T && !e.Control && !e.Alt)
+            {
+                // ✅ Shift+T: 강제 관성 추적 (수동 수정 프레임 기준)
+                if (selectedBox != null)
+                {
+                    var waypoint = FindWaypointForBox(selectedBox);
+                    if (waypoint != null)
+                    {
+                        int boxId = GetBoxId(selectedBox);
+                        string key = $"{selectedBox.Label}_{boxId}";
+                        
+                        // a 프레임: Shift+E로 설정한 a프레임 우선 사용, 없으면 현재 프레임
+                        int aFrame;
+                        if (forcedInertiaTrackingStartFrames.ContainsKey(key))
+                        {
+                            aFrame = forcedInertiaTrackingStartFrames[key];
+                        }
+                        else
+                        {
+                            // 설정된 a프레임이 없으면 현재 프레임 사용
+                            aFrame = currentFrameIndex;
+                        }
+                        
+                        // b 프레임: a 프레임 이후 가장 먼저 수정한 프레임
+                        int? bFrame = null;
+                        
+                        if (manuallyAdjustedFrames.ContainsKey(key))
+                        {
+                            // ✅ FirstOrDefault는 조건이 없으면 0을 반환하므로, Where()로 필터링한 후 실제 값이 있는지 확인
+                            var filteredFrames = manuallyAdjustedFrames[key].Where(f => f > aFrame).ToList();
+                            if (filteredFrames.Count > 0)
+                            {
+                                bFrame = filteredFrames.First();
+                            }
+                        }
+                        
+                        if (!bFrame.HasValue)
+                        {
+                            MessageBox.Show(
+                                $"a프레임({aFrame}) 이후에 수정된 프레임이 없습니다.\n\n" +
+                                $"먼저 나중 프레임(b프레임)에서 박스를 수동으로 수정한 후\n" +
+                                $"Shift+T를 사용할 수 있습니다.\n\n" +
+                                $"또는 R키로 a프레임을 먼저 설정하세요.",
+                                "알림",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Information);
+                            e.Handled = true;
+                            return;
+                        }
+                        
+                        // b 프레임이 waypoint 범위를 넘지 않도록 제한
+                        if (bFrame.Value > waypoint.ExitFrame)
+                        {
+                            bFrame = waypoint.ExitFrame;
+                        }
+                        
+                        // ✅ 프레임 범위 유효성 검증
+                        // aFrame이 waypoint 범위를 벗어나는 경우
+                        if (aFrame < waypoint.EntryFrame || aFrame > waypoint.ExitFrame)
+                        {
+                            MessageBox.Show(
+                                $"a프레임({aFrame})이 waypoint 범위({waypoint.EntryFrame}~{waypoint.ExitFrame})를 벗어났습니다.\n\n" +
+                                $"a프레임은 waypoint Entry~Exit 범위 내에 있어야 합니다.",
+                                "오류",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+                            e.Handled = true;
+                            return;
+                        }
+                        
+                        // bFrame이 waypoint 범위를 벗어나는 경우
+                        if (bFrame.Value < waypoint.EntryFrame || bFrame.Value > waypoint.ExitFrame)
+                        {
+                            MessageBox.Show(
+                                $"b프레임({bFrame.Value})이 waypoint 범위({waypoint.EntryFrame}~{waypoint.ExitFrame})를 벗어났습니다.\n\n" +
+                                $"b프레임은 waypoint Entry~Exit 범위 내에 있어야 합니다.",
+                                "오류",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+                            e.Handled = true;
+                            return;
+                        }
+                        
+                        // aFrame >= bFrame인 경우 (보간 불가)
+                        if (aFrame >= bFrame.Value)
+                        {
+                            MessageBox.Show(
+                                $"프레임 범위가 유효하지 않습니다.\n\n" +
+                                $"a프레임: {aFrame}\n" +
+                                $"b프레임: {bFrame.Value}\n" +
+                                $"waypoint 범위: {waypoint.EntryFrame}~{waypoint.ExitFrame}\n\n" +
+                                $"a프레임은 b프레임보다 작아야 합니다.\n" +
+                                $"현재 b프레임이 a프레임과 같거나 작습니다.\n\n" +
+                                $"해결 방법:\n" +
+                                $"1. a프레임보다 큰 프레임에서 박스를 수동으로 수정하세요.\n" +
+                                $"2. 또는 Shift+E로 더 작은 a프레임을 설정하세요.",
+                                "오류",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+                            e.Handled = true;
+                            return;
+                        }
+                        
+                        // a프레임이 현재 선택된 박스의 프레임과 다르면 해당 프레임의 박스로 전환
+                        BoundingBox boxForTracking = selectedBox;
+                        if (aFrame != currentFrameIndex)
+                        {
+                            boxForTracking = boundingBoxes.FirstOrDefault(b =>
+                                b.FrameIndex == aFrame &&
+                                b.Label == selectedBox.Label &&
+                                GetBoxId(b) == boxId &&
+                                !b.IsDeleted);
+                            
+                            if (boxForTracking == null)
+                            {
+                                MessageBox.Show(
+                                    $"a프레임({aFrame})에서 해당 박스를 찾을 수 없습니다.",
+                                    "오류",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Error);
+                                e.Handled = true;
+                                return;
+                            }
+                        }
+                        
+                        // 강제 관성 추적 실행
+                        PerformForcedInertiaTracking(boxForTracking, aFrame, bFrame.Value);
+                        e.Handled = true;
+                    }
+                    else
+                    {
+                        MessageBox.Show("현재 박스에 해당하는 Waypoint를 찾을 수 없습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        e.Handled = true;
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("추적할 박스를 먼저 선택해주세요.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    e.Handled = true;
+                }
+            }
             else if (e.Control && e.KeyCode == Keys.T)
             {
-                // ✅ selectedBox가 있으면 부분 재추적, 없으면 selectedWaypoint 전체 재추적
+                // ✅ Ctrl+T: 부분 재추적 (기존 로직)
                 if (selectedBox != null)
                 {
                     // selectedBox의 waypoint 찾기
