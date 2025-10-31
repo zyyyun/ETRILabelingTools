@@ -619,6 +619,11 @@ namespace WinFormsApp1
 
         private float timelineProgress = 0.25f;
         private bool isDarkMode = false;
+
+        // JSON 로드 시 프레임 → timestamp 매핑 (images[].timestamp)
+        private Dictionary<int, string> frameTimestampMap = new Dictionary<int, string>();
+
+        
         private double playbackSpeed = 1.0;
         private long lastFrameTime = 0;
         private double msPerFrame = 0;
@@ -1427,6 +1432,8 @@ namespace WinFormsApp1
                 // Entry 프레임의 Person 또는 Vehicle 박스 찾기
                 var entryPersonBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "person").ToList();
                 var entryVehicleBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "vehicle").ToList();
+
+                // 선택만 추적 기능 롤백: 항상 Entry 프레임의 모든 person/vehicle 대상으로 생성
                 
                 if (entryPersonBoxes.Count == 0 && entryVehicleBoxes.Count == 0)
                 {
@@ -1501,7 +1508,7 @@ namespace WinFormsApp1
                         ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                         ObjectId = evBox.EventId,
                         Label = "event",
-                        InteractingObject = ShowInputDialog("객체(P/V) 입력", "해당 event와 상호작용하는 객체를 입력하세요 (예: person/vehicle 세부명)")
+                        InteractingObject = ""
                     };
                     waypointMarkers.Add(evWp);
 
@@ -1627,7 +1634,7 @@ namespace WinFormsApp1
             }
         }
 
-        // 리스트뷰 항목 좌우 절반 클릭에 따라 Entry/Exit로 이동
+        // 리스트뷰 항목 컬럼 기반 클릭에 따라 Entry/Exit로 이동
         private void listViewWaypoints_MouseDown(object sender, MouseEventArgs e)
         {
             var listView = sender as ListView;
@@ -1641,16 +1648,142 @@ namespace WinFormsApp1
                 selectedWaypoint = waypoint;
                 panelTimeline.Invalidate();
 
-                // 아이템 영역의 좌우 절반 기준으로 분기
-                int left = hit.Item.Bounds.Left;
-                int width = hit.Item.Bounds.Width;
-                bool goExit = e.X >= left + (width / 2);
-
-                int targetFrame = goExit ? waypoint.ExitFrame : waypoint.EntryFrame;
+                // 컬럼 기반 클릭: SubItem 인덱스로 Entry/Exit 구분
+                int targetFrame = waypoint.EntryFrame;
+                if (hit.SubItem != null)
+                {
+                    int subIndex = hit.Item.SubItems.IndexOf(hit.SubItem);
+                    
+                    // Person/Vehicle: 컬럼0(Entry)=Entry, 컬럼1(Exit)=Exit
+                    if (listView == listViewPersonWaypoints || listView == listViewVehicleWaypoints)
+                    {
+                        if (subIndex == 0) // Entry 컬럼
+                            targetFrame = waypoint.EntryFrame;
+                        else if (subIndex == 1) // Exit 컬럼
+                            targetFrame = waypoint.ExitFrame;
+                        // subIndex == 2 (객체 컬럼)는 이동 없음
+                    }
+                    // Event: 어떤 컬럼이든 Entry로만 이동
+                    else if (listView == listViewEventWaypoints)
+                    {
+                        targetFrame = waypoint.EntryFrame;
+                    }
+                }
+                
                 LoadFrame(targetFrame);
                 // 클릭 이벤트 1회 무시
                 suppressWaypointClickOnce = true;
             }
+        }
+
+        // Event waypoint의 객체(P/V) 컬럼(3번째) 더블클릭 시 인라인 편집
+        private TextBox eventListEditBox;
+        private void listViewEventWaypoints_DoubleClick(object sender, EventArgs e)
+        {
+            var mouse = listViewEventWaypoints.PointToClient(Control.MousePosition);
+            var hit = listViewEventWaypoints.HitTest(mouse);
+            if (hit.Item == null || hit.SubItem == null) return;
+
+            int subIndex = hit.Item.SubItems.IndexOf(hit.SubItem);
+            if (subIndex != 2) return; // 객체(P/V) 컬럼만 편집 허용
+
+            var waypoint = hit.Item.Tag as WaypointMarker;
+            if (waypoint == null) return;
+
+            if (eventListEditBox == null || eventListEditBox.IsDisposed)
+            {
+                eventListEditBox = new TextBox();
+                eventListEditBox.Leave += (s, ev) => CommitEventListEdit();
+                eventListEditBox.KeyDown += (s, ev) =>
+                {
+                    if (ev.KeyCode == Keys.Enter)
+                    {
+                        CommitEventListEdit();
+                        ev.Handled = true;
+                    }
+                    else if (ev.KeyCode == Keys.Escape)
+                    {
+                        CancelEventListEdit();
+                        ev.Handled = true;
+                    }
+                };
+            }
+
+            eventListEditBox.Tag = hit.Item; // ListViewItem 보관 (Waypoint는 Item.Tag에 있음)
+            eventListEditBox.Bounds = hit.SubItem.Bounds;
+            eventListEditBox.Text = waypoint.InteractingObject ?? string.Empty;
+            listViewEventWaypoints.Controls.Add(eventListEditBox);
+            eventListEditBox.Focus();
+            eventListEditBox.SelectAll();
+        }
+
+        private void CommitEventListEdit()
+        {
+            if (eventListEditBox == null || eventListEditBox.Tag == null) return;
+            var item = eventListEditBox.Tag as ListViewItem;
+            if (item == null) { CancelEventListEdit(); return; }
+            var waypoint = item.Tag as WaypointMarker;
+            if (waypoint == null) { CancelEventListEdit(); return; }
+
+            waypoint.InteractingObject = eventListEditBox.Text ?? string.Empty;
+            if (item.SubItems.Count >= 3)
+            {
+                item.SubItems[2].Text = waypoint.InteractingObject;
+            }
+            listViewEventWaypoints.Controls.Remove(eventListEditBox);
+            eventListEditBox.Tag = null;
+
+            // 수정 즉시 저장
+            SaveCurrentLabelingData();
+        }
+
+        private void CancelEventListEdit()
+        {
+            if (eventListEditBox == null) return;
+            listViewEventWaypoints.Controls.Remove(eventListEditBox);
+            eventListEditBox.Tag = null;
+        }
+
+        private void listViewEventWaypoints_MouseUp(object sender, MouseEventArgs e)
+        {
+            // 단일 클릭으로도 3번째 컬럼을 누르면 편집 시작
+            var hit = listViewEventWaypoints.HitTest(e.Location);
+            if (hit.Item == null || hit.SubItem == null) return;
+            int subIndex = hit.Item.SubItems.IndexOf(hit.SubItem);
+            if (subIndex != 2) return;
+
+            // 이미 편집 중이면 무시
+            if (eventListEditBox != null && eventListEditBox.Tag != null) return;
+
+            // 편집 시작
+            var waypoint = hit.Item.Tag as WaypointMarker;
+            if (waypoint == null) return;
+
+            if (eventListEditBox == null || eventListEditBox.IsDisposed)
+            {
+                eventListEditBox = new TextBox();
+                eventListEditBox.Leave += (s, ev) => CommitEventListEdit();
+                eventListEditBox.KeyDown += (s, ev) =>
+                {
+                    if (ev.KeyCode == Keys.Enter)
+                    {
+                        CommitEventListEdit();
+                        ev.Handled = true;
+                    }
+                    else if (ev.KeyCode == Keys.Escape)
+                    {
+                        CancelEventListEdit();
+                        ev.Handled = true;
+                    }
+                };
+            }
+
+            eventListEditBox.Tag = hit.Item;
+            eventListEditBox.Bounds = hit.SubItem.Bounds;
+            eventListEditBox.Text = waypoint.InteractingObject ?? string.Empty;
+            listViewEventWaypoints.Controls.Add(eventListEditBox);
+            eventListEditBox.Focus();
+            eventListEditBox.SelectAll();
         }
 
         private void btnDeletePersonWaypoint_Click(object sender, EventArgs e)
@@ -1864,6 +1997,8 @@ namespace WinFormsApp1
                 HighlightSelectedBoxInSidebar();
             }
         }
+
+        
 
         private void pictureBoxVideo_MouseDown(object sender, MouseEventArgs e)
         {
@@ -2876,8 +3011,13 @@ namespace WinFormsApp1
 
                     // 첫 컬럼: Event 이름
                     item = new ListViewItem(eventName);
-                    // 두 번째: 프레임 시간 (Entry 기준)
-                    item.SubItems.Add(waypoint.EntryTime);
+                    // 두 번째: timestamp (JSON images[].timestamp에서 복원, 없으면 자막/EntryTime)
+                    string ts = null;
+                    if (frameTimestampMap.TryGetValue(waypoint.EntryFrame, out var jsonTs))
+                        ts = jsonTs;
+                    if (string.IsNullOrEmpty(ts))
+                        ts = GetSubtitleTimestampForFrame(waypoint.EntryFrame);
+                    item.SubItems.Add(!string.IsNullOrEmpty(ts) ? ts : waypoint.EntryTime);
                     // 세 번째: 객체(P/V) 텍스트
                     item.SubItems.Add(waypoint.InteractingObject ?? "");
 
@@ -4409,8 +4549,7 @@ namespace WinFormsApp1
                 EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                 ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                 ObjectId = box.EventId,
-                Label = "event",
-                InteractingObject = ShowInputDialog("객체(P/V) 입력", "해당 event와 상호작용하는 객체를 입력하세요 (예: person/vehicle 세부명)")
+                Label = "event"
             };
 
             waypointMarkers.Add(waypoint);
@@ -5392,13 +5531,18 @@ namespace WinFormsApp1
                     System.Diagnostics.Debug.WriteLine($"[JSON 로드] 실패 구간 정보 복원됨: {waypointFailureRanges.Count}개 객체");
                 }
 
-                // ImageId → FrameNumber 매핑 생성
+                // ImageId → FrameNumber 매핑 생성 및 FrameNumber → Timestamp 매핑 생성
                 var imageIdToFrameNumber = new Dictionary<int, int>();
+                frameTimestampMap.Clear();
                 if (labelingData.Images != null)
                 {
                     foreach (var image in labelingData.Images)
                     {
                         imageIdToFrameNumber[image.Id] = image.FrameNumber;
+                        if (!string.IsNullOrEmpty(image.Timestamp))
+                        {
+                            frameTimestampMap[image.FrameNumber] = image.Timestamp;
+                        }
                     }
                 }
 
@@ -5541,10 +5685,25 @@ namespace WinFormsApp1
                                 ExitFrame = exitFrame,
                                 EntryTime = FormatFrameTime(entryFrame),
                                 ExitTime = FormatFrameTime(exitFrame),
-                                MarkerColor = waypointColor
+                                MarkerColor = waypointColor,
+                                InteractingObject = (box.Label == "event") ? (annotation.InteractingObject ?? "") : null
                             };
 
                             waypointMarkers.Add(waypoint);
+                        }
+                        else
+                        {
+                            // 이미 있는 웨이포인트에 대해, event라면 비어있을 때만 interacting_object를 보완
+                            if (box.Label == "event" && !string.IsNullOrWhiteSpace(annotation.InteractingObject))
+                            {
+                                var existing = waypointMarkers.First(w =>
+                                    w.Label == box.Label && w.ObjectId == objectId &&
+                                    w.EntryFrame == entryFrame && w.ExitFrame == exitFrame);
+                                if (string.IsNullOrWhiteSpace(existing.InteractingObject))
+                                {
+                                    existing.InteractingObject = annotation.InteractingObject;
+                                }
+                            }
                         }
                     }
                 }

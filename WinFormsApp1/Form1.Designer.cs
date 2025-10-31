@@ -96,6 +96,8 @@
             this.panelHeader.Controls.Add(this.btnExportJson);
             this.panelHeader.Controls.Add(this.btnDeleteJson);
             this.panelHeader.Controls.Add(this.labelBoxCount);
+            // Track Selected Only Toggle Button
+            // 선택만 추적 버튼 제거 (롤백)
             this.panelHeader.Controls.Add(this.btnMinimize);
             this.panelHeader.Controls.Add(this.btnMaximize);
             this.panelHeader.Controls.Add(this.btnClose);
@@ -148,6 +150,7 @@
             this.labelBoxCount.Text = "박스 개수:";
             this.labelBoxCount.Location = new System.Drawing.Point(560, 15);
             this.labelBoxCount.Size = new System.Drawing.Size(80, 25);
+            this.labelBoxCount.Visible = false; // 표시 숨김
 
             // Window Control Buttons (Right side)
             this.btnClose.Text = "✕";
@@ -505,10 +508,11 @@
             this.listViewEventWaypoints.TabStop = false;
             this.listViewEventWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 255, 224); // 연한 초록
             this.listViewEventWaypoints.Columns.Add("Event", 80);
-            this.listViewEventWaypoints.Columns.Add("Frame Time", 90);
+            this.listViewEventWaypoints.Columns.Add("timestamp", 110);
             this.listViewEventWaypoints.Columns.Add("객체(P/V)", 80);
             this.listViewEventWaypoints.Click += new System.EventHandler(this.listViewEventWaypoints_Click);
             this.listViewEventWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
+            this.listViewEventWaypoints.MouseUp += new System.Windows.Forms.MouseEventHandler(this.listViewEventWaypoints_MouseUp);
 
             this.btnDeleteEventWaypoint = new System.Windows.Forms.Button();
             this.btnDeleteEventWaypoint.Text = "선택 삭제";
@@ -727,6 +731,7 @@
         private System.Windows.Forms.Button btnMinimize;
         private System.Windows.Forms.Button btnMaximize;
         private System.Windows.Forms.Button btnClose;
+        
 
         // Main Container
         private System.Windows.Forms.Panel panelMainContainer;
