@@ -12,7 +12,6 @@ using OpenCvSharp.Tracking;
 using Compunet.YoloSharp;
 using Compunet.YoloSharp.Data;
 using Compunet.YoloSharp.Plotting;
-using System.CodeDom;
 using FFMpegCore;
 using FFMpegCore.Enums;
 using System.Diagnostics;
@@ -1410,6 +1409,112 @@ namespace WinFormsApp1
 
         private async Task SetExitMarkerAndCreateWaypoint()
         {
+            // ✅ EntryFrame이 설정되어 있지 않지만, 선택된 박스가 기존 waypoint에 속하는 경우
+            if (!entryFrameIndex.HasValue && selectedBox != null)
+            {
+                var existingWaypoint = FindWaypointForBox(selectedBox);
+                if (existingWaypoint != null)
+                {
+                    // 기존 waypoint의 ExitFrame만 갱신
+                    if (currentFrameIndex <= existingWaypoint.EntryFrame)
+                    {
+                        TimeSpan currentTimeCheck = TimeSpan.FromSeconds(currentFrameIndex / fps);
+                        TimeSpan entryTimeCheck = TimeSpan.FromSeconds(existingWaypoint.EntryFrame / fps);
+                        
+                        MessageBox.Show(
+                            $"Exit 프레임은 Entry 프레임보다 뒤에 있어야 합니다.\n\n" +
+                            $"Entry: {entryTimeCheck:hh\\:mm\\:ss} (프레임 {existingWaypoint.EntryFrame})\n" +
+                            $"현재: {currentTimeCheck:hh\\:mm\\:ss} (프레임 {currentFrameIndex})\n\n" +
+                            $"Entry 프레임 이후로 이동한 후 Exit를 설정해주세요.",
+                            "Warning",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                        return;
+                    }
+                    
+                    // 기존 ExitFrame 저장
+                    int oldExitFrame = existingWaypoint.ExitFrame;
+                    
+                    // ✅ ExitFrame이 짧아진 경우 (새로운 ExitFrame이 기존보다 작음)
+                    if (currentFrameIndex < oldExitFrame)
+                    {
+                        // 새로운 ExitFrame 이후부터 기존 ExitFrame까지의 해당 ID 박스 삭제
+                        int boxId = GetBoxId(selectedBox);
+                        var boxesToDelete = boundingBoxes
+                            .Where(b => 
+                                b.Label == selectedBox.Label &&
+                                GetBoxId(b) == boxId &&
+                                b.FrameIndex > currentFrameIndex &&
+                                b.FrameIndex <= oldExitFrame &&
+                                !b.IsDeleted)
+                            .ToList();
+                        
+                        if (boxesToDelete.Count > 0)
+                        {
+                            foreach (var box in boxesToDelete)
+                            {
+                                AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(box) });
+                                boundingBoxes.Remove(box);
+                            }
+                            
+                            InvalidateBoxCache();
+                            UpdateBoxCount();
+                            UpdateBboxListDisplay();
+                            
+                            System.Diagnostics.Debug.WriteLine($"[ExitFrame 갱신] {boxesToDelete.Count}개 박스 삭제됨 (프레임 {currentFrameIndex + 1}~{oldExitFrame})");
+                        }
+                    }
+                    
+                    // ExitFrame 갱신
+                    existingWaypoint.ExitFrame = currentFrameIndex;
+                    TimeSpan exitTime = TimeSpan.FromSeconds(currentFrameIndex / fps);
+                    existingWaypoint.ExitTime = exitTime.ToString(@"hh\:mm\:ss");
+                    
+                    // Event 박스 전파 (Event인 경우)
+                    if (selectedBox.Label == "event")
+                    {
+                        var eventBoxes = boundingBoxes
+                            .Where(b => b.Label == "event" &&
+                                       b.EventId == selectedBox.EventId &&
+                                       b.FrameIndex >= existingWaypoint.EntryFrame &&
+                                       b.FrameIndex <= existingWaypoint.ExitFrame)
+                            .ToList();
+                        
+                        if (eventBoxes.Count > 0)
+                        {
+                            var entryEventBox = eventBoxes.OrderBy(b => b.FrameIndex).First();
+                            PropagateEventBoxWithinRange(entryEventBox, existingWaypoint.ExitFrame);
+                        }
+                    }
+                    
+                    // JSON 저장
+                    SaveCurrentLabelingData();
+                    
+                    // UI 업데이트
+                    UpdateWaypointListView();
+                    btnExit.Text = "Exit";
+                    panelTimeline.Invalidate();
+                    
+                    // 추적 진행 여부 확인
+                    var result = MessageBox.Show(
+                        $"기존 Waypoint의 Exit 프레임이 갱신되었습니다.\n\n" +
+                        $"객체: {GetCategoryName(selectedBox.Label, GetBoxId(selectedBox))}\n" +
+                        $"Entry: {existingWaypoint.EntryTime} (프레임 {existingWaypoint.EntryFrame})\n" +
+                        $"Exit: {existingWaypoint.ExitTime} (프레임 {existingWaypoint.ExitFrame})\n\n" +
+                        $"추적을 수행하시겠습니까?",
+                        "Exit 갱신 완료",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+                    
+                    if (result == DialogResult.Yes)
+                    {
+                        await PerformTrackingForWaypointAsync(existingWaypoint);
+                    }
+                    
+                    return;
+                }
+            }
+            
             if (entryFrameIndex.HasValue)
             {
                 // ✅ Exit 프레임이 Entry 프레임보다 앞에 있으면 막기
@@ -1491,28 +1596,53 @@ namespace WinFormsApp1
                 }
 
                 // ✅ 2.5. Entry~Exit 범위 내 Event 박스 처리 (추적 없음)
+                // EventId별로 그룹화하여 각 EventId당 하나의 Waypoint만 생성
                 var eventBoxesInRange = boundingBoxes
                     .Where(b => b.Label == "event" &&
                                 b.FrameIndex >= entryFrameIndex.Value &&
                                 b.FrameIndex <= exitFrameIndex.Value)
                     .ToList();
 
-                foreach (var evBox in eventBoxesInRange)
-                {
-                    var evWp = new WaypointMarker
-                    {
-                        EntryFrame = evBox.FrameIndex,
-                        ExitFrame = exitFrameIndex.Value,
-                        MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107),
-                        EntryTime = TimeSpan.FromSeconds(evBox.FrameIndex / fps).ToString(@"hh\:mm\:ss"),
-                        ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                        ObjectId = evBox.EventId,
-                        Label = "event",
-                        InteractingObject = ""
-                    };
-                    waypointMarkers.Add(evWp);
+                // EventId별로 그룹화하여 가장 작은 FrameIndex를 EntryFrame으로 사용
+                var eventGroups = eventBoxesInRange
+                    .GroupBy(b => b.EventId)
+                    .ToList();
 
-                    PropagateEventBoxWithinRange(evBox, exitFrameIndex.Value);
+                foreach (var eventGroup in eventGroups)
+                {
+                    int eventId = eventGroup.Key;
+                    // 같은 EventId를 가진 박스 중 가장 작은 FrameIndex를 EntryFrame으로 사용
+                    int minFrameIndex = eventGroup.Min(b => b.FrameIndex);
+                    
+                    // 이미 해당 EventId에 대한 Waypoint가 있는지 확인 (중복 방지)
+                    bool waypointExists = waypointMarkers.Any(w =>
+                        w.Label == "event" &&
+                        w.ObjectId == eventId &&
+                        w.EntryFrame == minFrameIndex &&
+                        w.ExitFrame == exitFrameIndex.Value);
+                    
+                    if (!waypointExists)
+                    {
+                        // Entry 프레임의 Event 박스 찾기 (가장 작은 FrameIndex)
+                        var entryEventBox = eventGroup.FirstOrDefault(b => b.FrameIndex == minFrameIndex);
+                        if (entryEventBox != null)
+                        {
+                            var evWp = new WaypointMarker
+                            {
+                                EntryFrame = minFrameIndex,
+                                ExitFrame = exitFrameIndex.Value,
+                                MarkerColor = System.Drawing.Color.FromArgb(107, 255, 107),
+                                EntryTime = TimeSpan.FromSeconds(minFrameIndex / fps).ToString(@"hh\:mm\:ss"),
+                                ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                                ObjectId = eventId,
+                                Label = "event",
+                                InteractingObject = "" // BoundingBox에는 InteractingObject 속성이 없으므로 빈 문자열로 설정
+                            };
+                            waypointMarkers.Add(evWp);
+
+                            PropagateEventBoxWithinRange(entryEventBox, exitFrameIndex.Value);
+                        }
+                    }
                 }
 
                 // ✅ 이벤트 Exit 확정 시 자동 JSON 저장
@@ -1634,7 +1764,7 @@ namespace WinFormsApp1
             }
         }
 
-        // 리스트뷰 항목 컬럼 기반 클릭에 따라 Entry/Exit로 이동
+        // 리스트뷰 항목 컬럼 기반 클릭에 따라 Entry/Exit로 이동 또는 객체 박스 선택
         private void listViewWaypoints_MouseDown(object sender, MouseEventArgs e)
         {
             var listView = sender as ListView;
@@ -1650,29 +1780,89 @@ namespace WinFormsApp1
 
                 // 컬럼 기반 클릭: SubItem 인덱스로 Entry/Exit 구분
                 int targetFrame = waypoint.EntryFrame;
+                bool shouldSelectBox = false;
+                
                 if (hit.SubItem != null)
                 {
                     int subIndex = hit.Item.SubItems.IndexOf(hit.SubItem);
                     
-                    // Person/Vehicle: 컬럼0(Entry)=Entry, 컬럼1(Exit)=Exit
+                    // Person/Vehicle: 컬럼0(Entry)=Entry, 컬럼1(Exit)=Exit, 컬럼2(객체)=박스 선택
                     if (listView == listViewPersonWaypoints || listView == listViewVehicleWaypoints)
                     {
                         if (subIndex == 0) // Entry 컬럼
                             targetFrame = waypoint.EntryFrame;
                         else if (subIndex == 1) // Exit 컬럼
                             targetFrame = waypoint.ExitFrame;
-                        // subIndex == 2 (객체 컬럼)는 이동 없음
+                        else if (subIndex == 2) // 객체 컬럼: EntryFrame으로 이동 후 박스 선택
+                        {
+                            targetFrame = waypoint.EntryFrame;
+                            shouldSelectBox = true;
+                        }
                     }
-                    // Event: 어떤 컬럼이든 Entry로만 이동
+                    // Event: 컬럼0(Event)=Entry, 컬럼1(시간)=Entry, 컬럼2(객체)=박스 선택
                     else if (listView == listViewEventWaypoints)
                     {
-                        targetFrame = waypoint.EntryFrame;
+                        if (subIndex == 2) // 객체 컬럼: EntryFrame으로 이동 후 박스 선택
+                        {
+                            targetFrame = waypoint.EntryFrame;
+                            shouldSelectBox = true;
+                        }
+                        else // 다른 컬럼은 Entry로 이동
+                            targetFrame = waypoint.EntryFrame;
                     }
                 }
                 
                 LoadFrame(targetFrame);
+                
+                // 객체 컬럼 클릭 시 해당 객체의 박스 선택
+                if (shouldSelectBox)
+                {
+                    SelectBoxForWaypoint(waypoint);
+                }
+                
                 // 클릭 이벤트 1회 무시
                 suppressWaypointClickOnce = true;
+            }
+        }
+        
+        // Waypoint에 해당하는 객체 박스 선택
+        private void SelectBoxForWaypoint(WaypointMarker waypoint)
+        {
+            // 현재 프레임에서 waypoint의 ObjectId와 Label에 해당하는 박스 찾기
+            BoundingBox targetBox = null;
+            
+            if (waypoint.Label == "person")
+            {
+                targetBox = boundingBoxes
+                    .FirstOrDefault(b => b.FrameIndex == currentFrameIndex &&
+                                       b.Label == "person" &&
+                                       b.PersonId == waypoint.ObjectId &&
+                                       !b.IsDeleted);
+            }
+            else if (waypoint.Label == "vehicle")
+            {
+                targetBox = boundingBoxes
+                    .FirstOrDefault(b => b.FrameIndex == currentFrameIndex &&
+                                       b.Label == "vehicle" &&
+                                       b.VehicleId == waypoint.ObjectId &&
+                                       !b.IsDeleted);
+            }
+            else if (waypoint.Label == "event")
+            {
+                targetBox = boundingBoxes
+                    .FirstOrDefault(b => b.FrameIndex == currentFrameIndex &&
+                                       b.Label == "event" &&
+                                       b.EventId == waypoint.ObjectId &&
+                                       !b.IsDeleted);
+            }
+            
+            if (targetBox != null)
+            {
+                selectedBox = targetBox;
+                UpdateObjectInfo(selectedBox);
+                UpdateBboxListDisplay();
+                HighlightSelectedBoxInSidebar();
+                pictureBoxVideo.Invalidate();
             }
         }
 
@@ -2449,8 +2639,6 @@ namespace WinFormsApp1
             }
         }
         
-        // 선택 디버그 로깅 플래그
-        private bool enableSelectionDebugLog = false;
         private System.Drawing.Point lastClickViewPoint;
         private List<BoundingBox> lastHitCandidates = new List<BoundingBox>();
         private int lastHitIndex = -1;
@@ -2511,18 +2699,6 @@ namespace WinFormsApp1
                 .ThenBy(c => c.area)
                 .ThenByDescending(c => c.zIndex)
                 .ToList();
-
-            // 디버그 로그
-            if (enableSelectionDebugLog)
-            {
-                System.Diagnostics.Debug.WriteLine($"[선택 후보] 클릭=({location.X},{location.Y}) 프레임={currentFrameIndex} 후보={ordered.Count}");
-                int idx = 0;
-                foreach (var c in ordered)
-                {
-                    var r = c.box.Rectangle;
-                    System.Diagnostics.Debug.WriteLine($"  #{idx++}: {c.box.Label} id={GetBoxId(c.box)} rect=({r.X},{r.Y},{r.Width},{r.Height}) activeWp={c.inActiveWaypoint} pri={c.labelPri} dist={c.dist:F1} area={c.area} z={c.zIndex}");
-                }
-            }
 
             // 선택 사이클링을 위해 후보 및 클릭 위치 저장
             lastHitCandidates = ordered.Select(c => c.box).ToList();
@@ -2962,24 +3138,9 @@ namespace WinFormsApp1
                 // Label별로 category name 표시
                 if (waypoint.Label == "person")
                 {
-                    // Person: Entry~Exit 구간의 Person 박스 category name 수집
-                    var personBoxes = boundingBoxes
-                        .Where(b => b.Label == "person" && 
-                                   b.FrameIndex >= waypoint.EntryFrame && 
-                                   b.FrameIndex <= waypoint.ExitFrame)
-                        .ToList();
-                    
-                    if (personBoxes.Count > 0)
-                    {
-                        var firstBox = personBoxes.First();
-                        // ✅ 고유 번호 형식으로 표시 (person_03, person_05 등)
-                        string categoryName = GetCategoryName("person", firstBox.PersonId);
-                        item.SubItems.Add(categoryName);
-                    }
-                    else
-                    {
-                        item.SubItems.Add("person_00");
-                    }
+                    // ✅ waypoint의 ObjectId를 직접 사용 (PersonId가 이미 저장되어 있음)
+                    string categoryName = GetCategoryName("person", waypoint.ObjectId);
+                    item.SubItems.Add(categoryName);
                 
                 item.ForeColor = waypoint.MarkerColor;
                 item.Tag = waypoint;
@@ -3037,33 +3198,6 @@ namespace WinFormsApp1
                     listViewEventWaypoints.Items.Add(item);
                 }
             }
-        }
-
-        private string GetPersonCategoryName(int personId)
-        {
-            string[] personTypes = { "person_standing", "person_sitting", "person_lying_down", "person_moving", 
-                                    "person_moving_slowly", "person_unspecified_position", "person_running", 
-                                    "person_squatting", "person_running_toward_camera", "person_etc_standing", 
-                                    "person_etc_lying", "person_etc_sitting", "person_etc_moving", "person_etc_posture" };
-            if (personId > 0 && personId <= personTypes.Length)
-                return personTypes[personId - 1];
-            return $"person_{personId:D2}";
-        }
-
-        private string GetVehicleCategoryName(int vehicleId)
-        {
-            string[] vehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
-            if (vehicleId > 0 && vehicleId <= vehicleTypes.Length)
-                return vehicleTypes[vehicleId - 1];
-            return $"vehicle_{vehicleId}";
-        }
-
-        private string GetEventCategoryName(int eventId)
-        {
-            string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
-            if (eventId > 0 && eventId <= eventTypes.Length)
-                return eventTypes[eventId - 1];
-            return $"event_{eventId}";
         }
 
         private void UpdateObjectInfo(BoundingBox box)
@@ -3976,6 +4110,25 @@ namespace WinFormsApp1
             if (box.Label == "vehicle") return box.VehicleId;
             if (box.Label == "event") return box.EventId;
             return 0;
+        }
+        
+        // 선택된 박스가 속한 기존 Waypoint 찾기
+        private WaypointMarker FindWaypointForBox(BoundingBox box)
+        {
+            if (box == null) return null;
+            
+            int boxId = GetBoxId(box);
+            
+            // 현재 프레임에 해당하는 waypoint 찾기
+            // 같은 Label과 ObjectId를 가진 waypoint 중에서
+            // 현재 프레임이 EntryFrame과 ExitFrame 사이에 있는 경우
+            var waypoint = waypointMarkers.FirstOrDefault(w =>
+                w.Label == box.Label &&
+                w.ObjectId == boxId &&
+                box.FrameIndex >= w.EntryFrame &&
+                box.FrameIndex <= w.ExitFrame);
+            
+            return waypoint;
         }
         
         // 박스의 특정 라벨 타입에 ID 설정
