@@ -2160,8 +2160,19 @@ namespace WinFormsApp1
             }
             else
             {
-                // 기본 커서
-                pictureBoxVideo.Cursor = Cursors.Default;
+                // ✅ 모드에 맞는 커서 유지: DrawMode.Select는 Hand, DrawMode.Draw는 Cross
+                if (currentMode == DrawMode.Select)
+                {
+                    pictureBoxVideo.Cursor = Cursors.Hand;
+                }
+                else if (currentMode == DrawMode.Draw)
+                {
+                    pictureBoxVideo.Cursor = Cursors.Cross;
+                }
+                else
+                {
+                    pictureBoxVideo.Cursor = Cursors.Default;
+                }
             }
         }
 
@@ -3261,8 +3272,25 @@ namespace WinFormsApp1
         // 라벨 타입 선택 버튼 핸들러
         private void btnLabelPerson_Click(object sender, EventArgs e)
         {
+            // 토글: 같은 버튼이 이미 선택되어 있으면 선택 해제
+            if (currentSelectedLabel == "person")
+            {
+                currentSelectedLabel = "";
+                btnLabelPerson.BackColor = System.Drawing.Color.FromArgb(252, 231, 243);
+                btnLabelPerson.FlatAppearance.BorderSize = 2;
+                return;
+            }
+            
             currentSelectedLabel = "person";
             currentAssignedId = 1; // 기본값 person_01
+            
+            // 버튼 시각적 상태 업데이트: person 선택, 나머지 해제
+            btnLabelPerson.BackColor = System.Drawing.Color.FromArgb(236, 72, 153);
+            btnLabelPerson.FlatAppearance.BorderSize = 3;
+            btnLabelVehicle.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
+            btnLabelVehicle.FlatAppearance.BorderSize = 2;
+            btnLabelEvent.BackColor = System.Drawing.Color.FromArgb(220, 252, 231);
+            btnLabelEvent.FlatAppearance.BorderSize = 2;
             
             // 선택된 bbox가 있으면 해당 박스를 person으로 변경
             if (selectedBox != null)
@@ -3294,8 +3322,25 @@ namespace WinFormsApp1
 
         private void btnLabelVehicle_Click(object sender, EventArgs e)
         {
+            // 토글: 같은 버튼이 이미 선택되어 있으면 선택 해제
+            if (currentSelectedLabel == "vehicle")
+            {
+                currentSelectedLabel = "";
+                btnLabelVehicle.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
+                btnLabelVehicle.FlatAppearance.BorderSize = 2;
+                return;
+            }
+            
             currentSelectedLabel = "vehicle";
             currentAssignedId = 1; // 기본값 vehicle_car
+            
+            // 버튼 시각적 상태 업데이트: vehicle 선택, 나머지 해제
+            btnLabelPerson.BackColor = System.Drawing.Color.FromArgb(252, 231, 243);
+            btnLabelPerson.FlatAppearance.BorderSize = 2;
+            btnLabelVehicle.BackColor = System.Drawing.Color.FromArgb(59, 130, 246);
+            btnLabelVehicle.FlatAppearance.BorderSize = 3;
+            btnLabelEvent.BackColor = System.Drawing.Color.FromArgb(220, 252, 231);
+            btnLabelEvent.FlatAppearance.BorderSize = 2;
             
             // 선택된 bbox가 있으면 해당 박스를 vehicle로 변경
             if (selectedBox != null)
@@ -3327,8 +3372,25 @@ namespace WinFormsApp1
 
         private void btnLabelEvent_Click(object sender, EventArgs e)
         {
+            // 토글: 같은 버튼이 이미 선택되어 있으면 선택 해제
+            if (currentSelectedLabel == "event")
+            {
+                currentSelectedLabel = "";
+                btnLabelEvent.BackColor = System.Drawing.Color.FromArgb(220, 252, 231);
+                btnLabelEvent.FlatAppearance.BorderSize = 2;
+                return;
+            }
+            
             currentSelectedLabel = "event";
             currentAssignedId = 1; // 기본값 event_contact
+            
+            // 버튼 시각적 상태 업데이트: event 선택, 나머지 해제
+            btnLabelPerson.BackColor = System.Drawing.Color.FromArgb(252, 231, 243);
+            btnLabelPerson.FlatAppearance.BorderSize = 2;
+            btnLabelVehicle.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
+            btnLabelVehicle.FlatAppearance.BorderSize = 2;
+            btnLabelEvent.BackColor = System.Drawing.Color.FromArgb(34, 197, 94);
+            btnLabelEvent.FlatAppearance.BorderSize = 3;
             
             // 선택된 bbox가 있으면 해당 박스를 event로 변경
             if (selectedBox != null)
