@@ -3141,39 +3141,91 @@ namespace WinFormsApp1
             eventListEditBox.SelectAll();
         }
 
-        private void btnDeletePersonWaypoint_Click(object sender, EventArgs e)
+        // ✅ 통합 waypoint 삭제 함수 (모든 타입 지원)
+        private void btnDeleteSelectedWaypoint_Click(object sender, EventArgs e)
         {
-            if (listViewPersonWaypoints.SelectedItems.Count == 0)
+            try
             {
-                MessageBox.Show("삭제할 Person Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
+                // 선택된 waypoint 확인 (Person, Vehicle, Event 모두 확인)
+                WaypointMarker waypoint = null;
+                ListViewItem selectedItem = null;
+                string waypointType = "";
 
-            var selectedItem = listViewPersonWaypoints.SelectedItems[0];
-            var waypoint = selectedItem.Tag as WaypointMarker;
+                if (listViewPersonWaypoints.SelectedItems.Count > 0)
+                {
+                    selectedItem = listViewPersonWaypoints.SelectedItems[0];
+                    waypoint = selectedItem.Tag as WaypointMarker;
+                    waypointType = "Person";
+                }
+                else if (listViewVehicleWaypoints.SelectedItems.Count > 0)
+                {
+                    selectedItem = listViewVehicleWaypoints.SelectedItems[0];
+                    waypoint = selectedItem.Tag as WaypointMarker;
+                    waypointType = "Vehicle";
+                }
+                else if (listViewEventWaypoints.SelectedItems.Count > 0)
+                {
+                    selectedItem = listViewEventWaypoints.SelectedItems[0];
+                    waypoint = selectedItem.Tag as WaypointMarker;
+                    waypointType = "Event";
+                }
+                else
+                {
+                    MessageBox.Show("삭제할 Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
 
-            if (waypoint != null)
-            {
+                if (waypoint == null)
+                {
+                    MessageBox.Show("선택한 Waypoint 정보를 찾을 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
                 var result = MessageBox.Show(
-                    $"선택한 Person Waypoint를 삭제하시겠습니까?\n\n" +
+                    $"선택한 {waypointType} Waypoint를 삭제하시겠습니까?\n\n" +
                     $"Entry: {waypoint.EntryTime}\n" +
                     $"Exit: {waypoint.ExitTime}\n\n" +
-                    $"⚠️ 주의: 해당 구간의 Person 박스가 삭제됩니다.",
-                    "Person Waypoint 삭제 확인",
+                    $"⚠️ 주의: 해당 구간의 {waypointType} 박스가 삭제됩니다.",
+                    $"{waypointType} Waypoint 삭제 확인",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
 
                 if (result != DialogResult.Yes)
                     return;
 
-                // ✅ Person 박스만 삭제 (ObjectId로 정확히 필터링)
-                var boxesToDelete = boundingBoxes
-                    .Where(b => 
-                        b.Label == "person" &&
-                        b.PersonId == waypoint.ObjectId &&
-                        b.FrameIndex >= waypoint.EntryFrame && 
-                        b.FrameIndex <= waypoint.ExitFrame)
-                    .ToList();
+                // ✅ 해당 타입의 박스만 삭제 (ObjectId로 정확히 필터링)
+                List<BoundingBox> boxesToDelete = new List<BoundingBox>();
+                
+                if (waypoint.Label == "person")
+                {
+                    boxesToDelete = boundingBoxes
+                        .Where(b => 
+                            b.Label == "person" &&
+                            b.PersonId == waypoint.ObjectId &&
+                            b.FrameIndex >= waypoint.EntryFrame && 
+                            b.FrameIndex <= waypoint.ExitFrame)
+                        .ToList();
+                }
+                else if (waypoint.Label == "vehicle")
+                {
+                    boxesToDelete = boundingBoxes
+                        .Where(b => 
+                            b.Label == "vehicle" &&
+                            b.VehicleId == waypoint.ObjectId &&
+                            b.FrameIndex >= waypoint.EntryFrame && 
+                            b.FrameIndex <= waypoint.ExitFrame)
+                        .ToList();
+                }
+                else if (waypoint.Label == "event")
+                {
+                    boxesToDelete = boundingBoxes
+                        .Where(b => 
+                            b.Label == "event" &&
+                            b.EventId == waypoint.ObjectId &&
+                            b.FrameIndex >= waypoint.EntryFrame && 
+                            b.FrameIndex <= waypoint.ExitFrame)
+                        .ToList();
+                }
 
                 foreach (var box in boxesToDelete)
                 {
@@ -3185,7 +3237,15 @@ namespace WinFormsApp1
                     selectedBox = null;
 
                 waypointMarkers.Remove(waypoint);
-                listViewPersonWaypoints.Items.Remove(selectedItem);
+                
+                // 해당 타입의 ListView에서 항목 제거
+                if (waypoint.Label == "person")
+                    listViewPersonWaypoints.Items.Remove(selectedItem);
+                else if (waypoint.Label == "vehicle")
+                    listViewVehicleWaypoints.Items.Remove(selectedItem);
+                else if (waypoint.Label == "event")
+                    listViewEventWaypoints.Items.Remove(selectedItem);
+
                 InvalidateBoxCache();
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
@@ -3193,132 +3253,37 @@ namespace WinFormsApp1
                 pictureBoxVideo.Invalidate();
 
                 MessageBox.Show(
-                    "✅ Person Waypoint가 삭제되었습니다.\n\n" +
+                    $"✅ {waypointType} Waypoint가 삭제되었습니다.\n\n" +
                     $"삭제된 박스: {boxesToDelete.Count}개",
                     "삭제 완료",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Waypoint 삭제 오류] {ex.Message}\n{ex.StackTrace}");
+                MessageBox.Show(
+                    $"Waypoint 삭제 중 오류 발생:\n{ex.Message}",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        // 기존 삭제 함수들은 통합 함수로 대체됨 (하위 호환성 유지)
+        private void btnDeletePersonWaypoint_Click(object sender, EventArgs e)
+        {
+            btnDeleteSelectedWaypoint_Click(sender, e);
         }
 
         private void btnDeleteVehicleWaypoint_Click(object sender, EventArgs e)
         {
-            if (listViewVehicleWaypoints.SelectedItems.Count == 0)
-            {
-                MessageBox.Show("삭제할 Vehicle Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var selectedItem = listViewVehicleWaypoints.SelectedItems[0];
-            var waypoint = selectedItem.Tag as WaypointMarker;
-
-            if (waypoint != null)
-            {
-                var result = MessageBox.Show(
-                    $"선택한 Vehicle Waypoint를 삭제하시겠습니까?\n\n" +
-                    $"Entry: {waypoint.EntryTime}\n" +
-                    $"Exit: {waypoint.ExitTime}\n\n" +
-                    $"⚠️ 주의: 해당 구간의 Vehicle 박스가 삭제됩니다.",
-                    "Vehicle Waypoint 삭제 확인",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
-
-                if (result != DialogResult.Yes)
-                    return;
-
-                // ✅ Vehicle 박스만 삭제 (ObjectId로 정확히 필터링)
-                var boxesToDelete = boundingBoxes
-                    .Where(b => 
-                        b.Label == "vehicle" &&
-                        b.VehicleId == waypoint.ObjectId &&
-                        b.FrameIndex >= waypoint.EntryFrame && 
-                        b.FrameIndex <= waypoint.ExitFrame)
-                    .ToList();
-
-                foreach (var box in boxesToDelete)
-                {
-                    AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(box) });
-                    boundingBoxes.Remove(box);
-                }
-
-                if (selectedBox != null && boxesToDelete.Contains(selectedBox))
-                    selectedBox = null;
-
-                waypointMarkers.Remove(waypoint);
-                listViewVehicleWaypoints.Items.Remove(selectedItem);
-                InvalidateBoxCache();
-                UpdateBoxCount();
-                UpdateBboxListDisplay();
-                panelTimeline.Invalidate();
-                pictureBoxVideo.Invalidate();
-
-                MessageBox.Show(
-                    "✅ Vehicle Waypoint가 삭제되었습니다.\n\n" +
-                    $"삭제된 박스: {boxesToDelete.Count}개",
-                    "삭제 완료",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
+            btnDeleteSelectedWaypoint_Click(sender, e);
         }
 
         private void btnDeleteEventWaypoint_Click(object sender, EventArgs e)
         {
-            if (listViewEventWaypoints.SelectedItems.Count == 0)
-            {
-                MessageBox.Show("삭제할 Event Waypoint를 선택해주세요.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var selectedItem = listViewEventWaypoints.SelectedItems[0];
-            var waypoint = selectedItem.Tag as WaypointMarker;
-
-            if (waypoint != null)
-            {
-                var result = MessageBox.Show(
-                    $"선택한 Event Waypoint를 삭제하시겠습니까?\n\n" +
-                    $"Entry: {waypoint.EntryTime}\n" +
-                    $"Exit: {waypoint.ExitTime}\n\n" +
-                    $"⚠️ 주의: 해당 구간의 Event 박스가 삭제됩니다.",
-                    "Event Waypoint 삭제 확인",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
-
-                if (result != DialogResult.Yes)
-                    return;
-
-                // ✅ Event 박스만 삭제 (ObjectId로 정확히 필터링)
-                var boxesToDelete = boundingBoxes
-                    .Where(b => 
-                        b.Label == "event" &&
-                        b.EventId == waypoint.ObjectId &&
-                        b.FrameIndex >= waypoint.EntryFrame && 
-                        b.FrameIndex <= waypoint.ExitFrame)
-                    .ToList();
-
-                foreach (var box in boxesToDelete)
-                {
-                    AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(box) });
-                    boundingBoxes.Remove(box);
-                }
-
-                if (selectedBox != null && boxesToDelete.Contains(selectedBox))
-                    selectedBox = null;
-
-                waypointMarkers.Remove(waypoint);
-                listViewEventWaypoints.Items.Remove(selectedItem);
-                InvalidateBoxCache();
-                UpdateBoxCount();
-                UpdateBboxListDisplay();
-                panelTimeline.Invalidate();
-                pictureBoxVideo.Invalidate();
-
-                MessageBox.Show(
-                    "✅ Event Waypoint가 삭제되었습니다.\n\n" +
-                    $"삭제된 박스: {boxesToDelete.Count}개",
-                    "삭제 완료",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
+            btnDeleteSelectedWaypoint_Click(sender, e);
         }
         #endregion
 
@@ -8597,20 +8562,34 @@ namespace WinFormsApp1
                 pictureBoxVideo.Invalidate();
                 e.Handled = true;
             }
-            else if (e.KeyCode == Keys.Delete && selectedBox != null)
+            else if (e.KeyCode == Keys.Delete)
             {
-                AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
+                // ✅ waypoint가 선택되어 있으면 waypoint 삭제 우선
+                if (listViewPersonWaypoints.SelectedItems.Count > 0 || 
+                    listViewVehicleWaypoints.SelectedItems.Count > 0 || 
+                    listViewEventWaypoints.SelectedItems.Count > 0)
+                {
+                    btnDeleteSelectedWaypoint_Click(sender, e);
+                    e.Handled = true;
+                    return;
+                }
                 
-                // ✅ 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
-                selectedBox.IsDeleted = true;
+                // 그렇지 않으면 기존 로직대로 selectedBox 삭제
+                if (selectedBox != null)
+                {
+                    AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
+                    
+                    // ✅ 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
+                    selectedBox.IsDeleted = true;
                 
-                // ✅ 사라짐 의도 기록
-                RecordDisappearanceIntent(selectedBox);
-                
-                selectedBox = null;
-                UpdateBoxCount();
-                UpdateBboxListDisplay();
-                pictureBoxVideo.Invalidate();
+                    // ✅ 사라짐 의도 기록
+                    RecordDisappearanceIntent(selectedBox);
+                    
+                    selectedBox = null;
+                    UpdateBoxCount();
+                    UpdateBboxListDisplay();
+                    pictureBoxVideo.Invalidate();
+                }
                 e.Handled = true;
             }
             else if (e.Control && e.KeyCode == Keys.Z)
