@@ -413,21 +413,21 @@
             this.groupBoxObjectInfo.Controls.Add(this.labelPrevWaypoint);
             this.groupBoxObjectInfo.Controls.Add(this.labelNextWaypoint);
 
-            this.labelObjectLabel.Text = "Label: person_01";
+            this.labelObjectLabel.Text = "Label: -";
             this.labelObjectLabel.Location = new System.Drawing.Point(8, 18);
             this.labelObjectLabel.Size = new System.Drawing.Size(264, 18);
             this.labelObjectLabel.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold);
             this.labelObjectLabel.ForeColor = System.Drawing.Color.FromArgb(55, 65, 81);
             this.labelObjectLabel.AutoSize = false;
 
-            this.labelPrevWaypoint.Text = "Previous Waypoint: C0001.mp4, 00:10:32 - 00:11:05";
+            this.labelPrevWaypoint.Text = "Previous Waypoint: -";
             this.labelPrevWaypoint.Location = new System.Drawing.Point(8, 38);
             this.labelPrevWaypoint.Size = new System.Drawing.Size(264, 20);
             this.labelPrevWaypoint.Font = new System.Drawing.Font("Segoe UI", 7F);
             this.labelPrevWaypoint.ForeColor = System.Drawing.Color.Gray;
             this.labelPrevWaypoint.AutoSize = false;
 
-            this.labelNextWaypoint.Text = "Next Waypoint: C0003.mp4, 00:15:21 - 00:16:01";
+            this.labelNextWaypoint.Text = "Next Waypoint: -";
             this.labelNextWaypoint.Location = new System.Drawing.Point(8, 58);
             this.labelNextWaypoint.Size = new System.Drawing.Size(264, 20);
             this.labelNextWaypoint.Font = new System.Drawing.Font("Segoe UI", 7F);
@@ -453,7 +453,7 @@
             this.listViewPersonWaypoints.BackColor = System.Drawing.Color.FromArgb(255, 224, 224); // 연한 빨강
             this.listViewPersonWaypoints.Columns.Add("Entry", 80);
             this.listViewPersonWaypoints.Columns.Add("Exit", 80);
-            this.listViewPersonWaypoints.Columns.Add("객체", 100);
+            this.listViewPersonWaypoints.Columns.Add("객체", 95);
             this.listViewPersonWaypoints.Click += new System.EventHandler(this.listViewPersonWaypoints_Click);
             this.listViewPersonWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
 
@@ -480,7 +480,7 @@
             this.listViewVehicleWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 232, 255); // 연한 파랑
             this.listViewVehicleWaypoints.Columns.Add("Entry", 80);
             this.listViewVehicleWaypoints.Columns.Add("Exit", 80);
-            this.listViewVehicleWaypoints.Columns.Add("객체", 100);
+            this.listViewVehicleWaypoints.Columns.Add("객체", 95);
             this.listViewVehicleWaypoints.Click += new System.EventHandler(this.listViewVehicleWaypoints_Click);
             this.listViewVehicleWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
 
@@ -506,7 +506,7 @@
             this.listViewEventWaypoints.TabStop = false;
             this.listViewEventWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 255, 224); // 연한 초록
             this.listViewEventWaypoints.Columns.Add("Event", 80);
-            this.listViewEventWaypoints.Columns.Add("timestamp", 110);
+            this.listViewEventWaypoints.Columns.Add("timestamp", 100);
             this.listViewEventWaypoints.Columns.Add("객체(P/V)", 80);
             this.listViewEventWaypoints.Click += new System.EventHandler(this.listViewEventWaypoints_Click);
             this.listViewEventWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
