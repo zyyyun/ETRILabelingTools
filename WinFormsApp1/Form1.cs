@@ -785,9 +785,13 @@ namespace WinFormsApp1
         private CancellationTokenSource yoloDetectionCancellationToken = null;
         private Task yoloDetectionTask = null;
         private readonly object yoloDetectionCacheLock = new object();
+        private readonly object yoloDetectionTaskLock = new object(); // ✅ 탐지 작업 동기화용 락 추가
         private const int YOLO_DETECTION_RANGE = 100; // 현재 프레임 기준 앞뒤 탐지 범위
         private System.Threading.Timer detectionDebounceTimer = null; // 프레임 이동 디바운스 타이머
         private const int DETECTION_DEBOUNCE_MS = 300; // 프레임 이동 후 탐지 대기 시간 (ms) - 0.3초
+        private int pendingDetectionFrame = -1; // ✅ 대기 중인 탐지 프레임 추적
+        private SemaphoreSlim detectionSemaphore = new SemaphoreSlim(1, 1); // ✅ 동시 탐지 작업 제한 (최대 1개)
+        private volatile bool isFormDisposed = false; // ✅ Form이 Dispose되었는지 확인
         
         // YOLO 탐지 결과 저장용 클래스
         private class YoloDetectionBox
@@ -1412,6 +1416,35 @@ namespace WinFormsApp1
                     return;
                 }
                 
+                // ✅ 프레임이 실제로 이동하는지 확인
+                bool frameChanged = (currentFrameIndex != frameIndex);
+                
+                // ✅ YOLO 탐지 토글이 ON이고 프레임이 이동하면 자동으로 OFF로 변경
+                if (showYoloDetections && frameChanged)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 토글] 프레임 이동 감지 ({currentFrameIndex} -> {frameIndex}), 탐지 토글 자동 OFF");
+                    showYoloDetections = false;
+                    StopYoloDetection();
+                    
+                    // 디바운스 타이머도 정리
+                    detectionDebounceTimer?.Dispose();
+                    detectionDebounceTimer = null;
+                    
+                    // 캐시 정리
+                    lock (yoloDetectionCacheLock)
+                    {
+                        yoloDetectionCache.Clear();
+                    }
+                    
+                    // UI 업데이트
+                    if (btnToggleYoloDetections != null)
+                    {
+                        btnToggleYoloDetections.Text = "YOLO 탐지";
+                        btnToggleYoloDetections.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
+                    }
+                    pictureBoxVideo?.Invalidate();
+                }
+                
                 if (videoCapture == null || !videoCapture.IsOpened())
                     return;
 
@@ -1435,6 +1468,7 @@ namespace WinFormsApp1
             currentFrameIndex = frameIndex;
             
             // ✅ YOLO 탐지 토글이 ON일 경우 프레임 이동 시 자동으로 탐지 수행 (300ms 디바운싱)
+            // (프레임이 이동하지 않았거나 이미 OFF로 변경되었을 수 있으므로 재확인)
             if (showYoloDetections && isYoloAvailable)
             {
                 try
@@ -1449,30 +1483,66 @@ namespace WinFormsApp1
                         else
                         {
                             // 탐지 결과가 없으면 디바운스 타이머로 지연 탐지
-                            // 기존 타이머 취소
-                            detectionDebounceTimer?.Dispose();
-                            
-                            // 새 타이머 시작 (디바운싱 - 300ms)
-                            int targetFrame = frameIndex; // 프레임 인덱스 캡처
-                            detectionDebounceTimer = new System.Threading.Timer((state) =>
+                            // ✅ 기존 타이머 안전하게 취소
+                            System.Threading.Timer oldTimer = detectionDebounceTimer;
+                            detectionDebounceTimer = null;
+                            if (oldTimer != null)
                             {
                                 try
                                 {
-                                    lock (yoloDetectionCacheLock)
-                                    {
-                                        // 타이머가 실행될 때 다시 한번 확인 (프레임이 또 변경되었을 수 있음)
-                                        if (!yoloDetectionCache.ContainsKey(targetFrame) && 
-                                            targetFrame == currentFrameIndex) // 현재 프레임과 일치하는지 확인
-                                        {
-                                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 디바운스(300ms) 후 탐지: 프레임 {targetFrame}");
-                                            DetectCurrentFrameOnly();
-                                        }
-                                    }
+                                    oldTimer.Change(Timeout.Infinite, Timeout.Infinite); // 타이머 중지
+                                    oldTimer.Dispose();
                                 }
-                                catch (Exception timerEx)
+                                catch (Exception timerDisposeEx)
                                 {
-                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 디바운스 타이머 오류: {timerEx.Message}");
+                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 기존 타이머 해제 오류: {timerDisposeEx.Message}");
                                 }
+                            }
+                            
+                            // 새 타이머 시작 (디바운싱 - 300ms)
+                            int targetFrame = frameIndex; // 프레임 인덱스 캡처
+                            pendingDetectionFrame = targetFrame;
+                            
+                            // ✅ 타이머 콜백에서는 Task.Run으로 비동기 실행 (async void 방지)
+                            detectionDebounceTimer = new System.Threading.Timer((state) =>
+                            {
+                                int checkFrame = targetFrame;
+                                
+                                // ✅ Task.Run으로 비동기 실행 (예외 처리 가능)
+                                _ = Task.Run(async () =>
+                                {
+                                    try
+                                    {
+                                        // ✅ 빠른 체크 (락 없이)
+                                        if (checkFrame != currentFrameIndex || checkFrame != pendingDetectionFrame)
+                                        {
+                                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 디바운스 타이머: 프레임 {checkFrame} 탐지 취소 (프레임 변경됨)");
+                                            return;
+                                        }
+                                        
+                                        // ✅ 캐시 확인 (락 사용)
+                                        bool needsDetection = false;
+                                        lock (yoloDetectionCacheLock)
+                                        {
+                                            needsDetection = !yoloDetectionCache.ContainsKey(checkFrame);
+                                        }
+                                        
+                                        if (!needsDetection)
+                                        {
+                                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 디바운스 타이머: 프레임 {checkFrame}은 이미 캐시에 있음");
+                                            return;
+                                        }
+                                        
+                                        // ✅ 비동기로 탐지 시작
+                                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 디바운스(300ms) 후 탐지: 프레임 {checkFrame}");
+                                        pendingDetectionFrame = -1; // 대기 프레임 초기화
+                                        await DetectCurrentFrameOnlyAsync(); // ✅ 비동기 버전 사용
+                                    }
+                                    catch (Exception timerEx)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 디바운스 타이머 오류: {timerEx.Message}\n{timerEx.StackTrace}");
+                                    }
+                                });
                             }, null, DETECTION_DEBOUNCE_MS, Timeout.Infinite);
                         }
                     }
@@ -1861,211 +1931,374 @@ namespace WinFormsApp1
             }
         }
 
-        // ✅ 현재 프레임만 YOLO 탐지 수행
+        // ✅ 현재 프레임만 YOLO 탐지 수행 (동기 래퍼)
         private void DetectCurrentFrameOnly()
         {
+            _ = DetectCurrentFrameOnlyAsync(); // 비동기로 실행 (fire-and-forget)
+        }
+        
+        // ✅ 비동기 버전 (실제 작업 수행)
+        private async Task DetectCurrentFrameOnlyAsync()
+        {
+            // ✅ Semaphore로 동시 실행 제한 (최대 1개, 블로킹 없이)
+            if (!await detectionSemaphore.WaitAsync(0))
+            {
+                System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 이미 탐지 작업이 진행 중이므로 스킵");
+                return;
+            }
+            
             try
             {
-                // 기존 탐지 작업이 있으면 중지
-                StopYoloDetection();
+                int targetFrame;
+                bool shouldReturn = false;
                 
-                if (string.IsNullOrEmpty(currentVideoFile) || !File.Exists(currentVideoFile))
+                // ✅ 빠른 체크 (최소한의 락)
+                lock (yoloDetectionTaskLock)
                 {
-                    System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 비디오 파일이 없거나 유효하지 않음");
+                    targetFrame = currentFrameIndex;
+                    
+                    if (string.IsNullOrEmpty(currentVideoFile) || !File.Exists(currentVideoFile))
+                    {
+                        System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 비디오 파일이 없거나 유효하지 않음");
+                        shouldReturn = true;
+                    }
+                    
+                    if (!shouldReturn && (videoCapture == null || !videoCapture.IsOpened()))
+                    {
+                        System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 비디오 캡처가 열려있지 않음");
+                        shouldReturn = true;
+                    }
+                }
+                
+                if (shouldReturn)
+                    return;
+                
+                // ✅ 캐시 확인
+                lock (yoloDetectionCacheLock)
+                {
+                    if (yoloDetectionCache.ContainsKey(targetFrame))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 {targetFrame}은 이미 캐시에 있음");
+                        SafeInvoke(() => pictureBoxVideo?.Invalidate());
+                        return;
+                    }
+                }
+                
+                // ✅ 기존 작업 비동기 취소 (블로킹 없이)
+                if (yoloDetectionTask != null && !yoloDetectionTask.IsCompleted)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 기존 탐지 작업 취소 중... (프레임 {targetFrame} 탐지 대기)");
+                    StopYoloDetection();
+                    
+                    // ✅ 비동기로 대기 (블로킹 없음)
+                    try
+                    {
+                        await yoloDetectionTask.ContinueWith(t => { }, TaskContinuationOptions.OnlyOnRanToCompletion);
+                    }
+                    catch (Exception waitEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 기존 작업 대기 오류: {waitEx.Message}");
+                    }
+                }
+                
+                // ✅ 다시 한번 확인 (취소 대기 중에 프레임이 변경되었을 수 있음)
+                if (targetFrame != currentFrameIndex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임이 변경됨 ({targetFrame} -> {currentFrameIndex}), 탐지 취소");
                     return;
                 }
                 
-                if (videoCapture == null || !videoCapture.IsOpened())
+                // ✅ 다시 캐시 확인
+                lock (yoloDetectionCacheLock)
                 {
-                    System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 비디오 캡처가 열려있지 않음");
-                    return;
+                    if (yoloDetectionCache.ContainsKey(targetFrame))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 {targetFrame}은 이미 캐시에 있음 (대기 중 추가됨)");
+                        SafeInvoke(() => pictureBoxVideo?.Invalidate());
+                        return;
+                    }
                 }
                 
-                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 현재 프레임({currentFrameIndex})만 탐지 시작");
+                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 현재 프레임({targetFrame})만 탐지 시작");
                 
                 yoloDetectionCancellationToken = new CancellationTokenSource();
                 var token = yoloDetectionCancellationToken.Token;
                 
+                // ✅ Task.Run으로 실행 (비동기 작업)
                 yoloDetectionTask = Task.Run(async () =>
-                {
-                    YoloPredictor predictor = null;
-                    Mat frame = null;
-                    string tempImagePath = null;
-                    
-                    try
                     {
-                        // YOLO Predictor 생성
-                        try
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 모델 로드 시작: {yoloModelPath}");
-                            predictor = new YoloPredictor(yoloModelPath);
-                            System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 모델 로드 완료");
-                        }
-                        catch (Exception ex)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 오류] 모델 로드 실패: {ex.Message}\n{ex.StackTrace}");
-                            this.Invoke((MethodInvoker)(() =>
-                            {
-                                MessageBox.Show(
-                                    $"YOLO 모델 로드 실패:\n{ex.Message}",
-                                    "YOLO 오류",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Error);
-                            }));
-                            return;
-                        }
-                        
-                        tempImagePath = Path.Combine(Path.GetTempPath(), "yolo_detection_frame.jpg");
-                        frame = new Mat();
+                        YoloPredictor predictor = null;
+                        Mat frame = null;
+                        string tempImagePath = null;
                         
                         try
                         {
-                            // 현재 프레임 읽기
-                            videoCapture.Set(VideoCaptureProperties.PosFrames, currentFrameIndex);
-                            if (!videoCapture.Read(frame) || frame.Empty())
+                            // ✅ 취소 토큰 확인
+                            token.ThrowIfCancellationRequested();
+                            
+                            // ✅ 프레임이 변경되었는지 확인
+                            if (targetFrame != currentFrameIndex)
                             {
-                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 {currentFrameIndex} 읽기 실패");
+                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 작업 시작 시 프레임이 변경됨 ({targetFrame} -> {currentFrameIndex})");
                                 return;
                             }
                             
-                            // Mat을 임시 파일로 저장
-                            if (!Cv2.ImWrite(tempImagePath, frame))
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 {currentFrameIndex} 임시 파일 저장 실패");
-                                return;
-                            }
-                            
-                            // YOLO 탐지 수행
-                            var detections = predictor.Detect(tempImagePath);
-                            
-                            // 탐지 결과를 YoloDetectionBox 리스트로 변환
-                            var detectionBoxes = new List<YoloDetectionBox>();
-                            foreach (var d in detections)
-                            {
-                                try
-                                {
-                                    // YOLO 라이브러리가 "0: 'person'" 형식의 이름을 반환하므로 파싱
-                                    string rawDetectionName = d?.Name?.ToString() ?? "";
-                                    string detectionName = rawDetectionName;
-                                    
-                                    if (!string.IsNullOrEmpty(rawDetectionName))
-                                    {
-                                        int firstQuote = rawDetectionName.IndexOf('\'');
-                                        int lastQuote = rawDetectionName.LastIndexOf('\'');
-                                        if (firstQuote != -1 && lastQuote > firstQuote)
-                                        {
-                                            detectionName = rawDetectionName.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
-                                        }
-                                    }
-                                    
-                                    if (!string.IsNullOrEmpty(detectionName) && d != null)
-                                    {
-                                        detectionBoxes.Add(new YoloDetectionBox
-                                        {
-                                            Rectangle = new Rectangle(
-                                                (int)d.Bounds.X,
-                                                (int)d.Bounds.Y,
-                                                Math.Max(1, (int)d.Bounds.Width),
-                                                Math.Max(1, (int)d.Bounds.Height)
-                                            ),
-                                            Label = detectionName,
-                                            Confidence = d.Confidence
-                                        });
-                                    }
-                                }
-                                catch (Exception detEx)
-                                {
-                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 탐지 객체 변환 오류: {detEx.Message}");
-                                }
-                            }
-                            
-                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 완료] 프레임 {currentFrameIndex}: {detectionBoxes.Count}개 객체 탐지");
-                            
-                            // 캐시에 저장
-                            lock (yoloDetectionCacheLock)
-                            {
-                                yoloDetectionCache[currentFrameIndex] = detectionBoxes;
-                            }
-                            
-                            // UI 업데이트
-                            this.Invoke((MethodInvoker)(() =>
-                            {
-                                try
-                                {
-                                    pictureBoxVideo?.Invalidate();
-                                }
-                                catch (Exception invEx)
-                                {
-                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] UI 업데이트 오류: {invEx.Message}");
-                                }
-                            }));
-                        }
-                        finally
-                        {
-                            // 리소스 정리
+                            // YOLO Predictor 생성
                             try
                             {
-                                frame?.Dispose();
+                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 모델 로드 시작: {yoloModelPath}");
+                                predictor = new YoloPredictor(yoloModelPath);
+                                System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 모델 로드 완료");
+                            }
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 오류] 모델 로드 실패: {ex.Message}\n{ex.StackTrace}");
+                                SafeInvoke(() =>
+                                {
+                                    MessageBox.Show(
+                                        $"YOLO 모델 로드 실패:\n{ex.Message}",
+                                        "YOLO 오류",
+                                        MessageBoxButtons.OK,
+                                        MessageBoxIcon.Error);
+                                });
+                                return;
+                            }
+                            
+                            // ✅ 취소 토큰 재확인
+                            token.ThrowIfCancellationRequested();
+                            
+                            tempImagePath = Path.Combine(Path.GetTempPath(), $"yolo_detection_frame_{targetFrame}_{DateTime.Now.Ticks}.jpg");
+                            frame = new Mat();
+                            
+                            try
+                            {
+                                // ✅ 프레임 읽기 전 취소 확인
+                                token.ThrowIfCancellationRequested();
                                 
-                                if (!string.IsNullOrEmpty(tempImagePath) && File.Exists(tempImagePath))
+                                // 현재 프레임 읽기
+                                lock (yoloDetectionTaskLock)
+                                {
+                                    if (videoCapture == null || !videoCapture.IsOpened())
+                                    {
+                                        System.Diagnostics.Debug.WriteLine("[YOLO 탐지] 비디오 캡처가 닫힘");
+                                        return;
+                                    }
+                                    videoCapture.Set(VideoCaptureProperties.PosFrames, targetFrame);
+                                    if (!videoCapture.Read(frame) || frame.Empty())
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 {targetFrame} 읽기 실패");
+                                        return;
+                                    }
+                                }
+                                
+                                // ✅ 프레임이 여전히 유효한지 확인
+                                if (targetFrame != currentFrameIndex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 읽기 후 변경 확인 ({targetFrame} -> {currentFrameIndex})");
+                                    return;
+                                }
+                                
+                                token.ThrowIfCancellationRequested();
+                                
+                                // Mat을 임시 파일로 저장
+                                if (!Cv2.ImWrite(tempImagePath, frame))
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 {targetFrame} 임시 파일 저장 실패");
+                                    return;
+                                }
+                                
+                                token.ThrowIfCancellationRequested();
+                                
+                                // ✅ 프레임이 여전히 유효한지 재확인
+                                if (targetFrame != currentFrameIndex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 탐지 전 프레임 변경 확인 ({targetFrame} -> {currentFrameIndex})");
+                                    return;
+                                }
+                                
+                                // YOLO 탐지 수행
+                                var detections = predictor.Detect(tempImagePath);
+                                
+                                token.ThrowIfCancellationRequested();
+                                
+                                // ✅ 최종 프레임 확인
+                                if (targetFrame != currentFrameIndex)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 탐지 후 프레임 변경 확인 ({targetFrame} -> {currentFrameIndex})");
+                                    return;
+                                }
+                                
+                                // 탐지 결과를 YoloDetectionBox 리스트로 변환
+                                var detectionBoxes = new List<YoloDetectionBox>();
+                                foreach (var d in detections)
                                 {
                                     try
                                     {
-                                        File.Delete(tempImagePath);
+                                        // YOLO 라이브러리가 "0: 'person'" 형식의 이름을 반환하므로 파싱
+                                        string rawDetectionName = d?.Name?.ToString() ?? "";
+                                        string detectionName = rawDetectionName;
+                                        
+                                        if (!string.IsNullOrEmpty(rawDetectionName))
+                                        {
+                                            int firstQuote = rawDetectionName.IndexOf('\'');
+                                            int lastQuote = rawDetectionName.LastIndexOf('\'');
+                                            if (firstQuote != -1 && lastQuote > firstQuote)
+                                            {
+                                                detectionName = rawDetectionName.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
+                                            }
+                                        }
+                                        
+                                        if (!string.IsNullOrEmpty(detectionName) && d != null)
+                                        {
+                                            detectionBoxes.Add(new YoloDetectionBox
+                                            {
+                                                Rectangle = new Rectangle(
+                                                    (int)d.Bounds.X,
+                                                    (int)d.Bounds.Y,
+                                                    Math.Max(1, (int)d.Bounds.Width),
+                                                    Math.Max(1, (int)d.Bounds.Height)
+                                                ),
+                                                Label = detectionName,
+                                                Confidence = d.Confidence
+                                            });
+                                        }
                                     }
-                                    catch (Exception delEx)
+                                    catch (Exception detEx)
                                     {
-                                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 임시 파일 삭제 오류: {delEx.Message}");
+                                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 탐지 객체 변환 오류: {detEx.Message}");
+                                    }
+                                }
+                                
+                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 완료] 프레임 {targetFrame}: {detectionBoxes.Count}개 객체 탐지");
+                                
+                                // ✅ 최종 프레임 확인 후 캐시 저장
+                                if (targetFrame == currentFrameIndex)
+                                {
+                                    lock (yoloDetectionCacheLock)
+                                    {
+                                        // 한 번 더 확인 (다른 스레드에서 이미 캐시에 추가했을 수 있음)
+                                        if (!yoloDetectionCache.ContainsKey(targetFrame))
+                                        {
+                                            yoloDetectionCache[targetFrame] = detectionBoxes;
+                                        }
+                                    }
+                                    
+                                    // ✅ UI 업데이트 (프레임이 여전히 유효할 때만, SafeInvoke 사용)
+                                    SafeInvoke(() => pictureBoxVideo?.Invalidate());
+                                }
+                            }
+                            finally
+                                {
+                                    // 리소스 정리
+                                    try
+                                    {
+                                        frame?.Dispose();
+                                        
+                                        if (!string.IsNullOrEmpty(tempImagePath) && File.Exists(tempImagePath))
+                                        {
+                                            try
+                                            {
+                                                File.Delete(tempImagePath);
+                                            }
+                                            catch (Exception delEx)
+                                            {
+                                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 임시 파일 삭제 오류: {delEx.Message}");
+                                            }
+                                        }
+                                    }
+                                    catch (Exception cleanupEx)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 리소스 정리 오류: {cleanupEx.Message}");
                                     }
                                 }
                             }
-                            catch (Exception cleanupEx)
+                            catch (OperationCanceledException)
                             {
-                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 리소스 정리 오류: {cleanupEx.Message}");
+                                // ✅ 취소는 정상적인 상황이므로 로그만 남김
+                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 프레임 {targetFrame} 탐지 취소됨");
                             }
-                        }
-                    }
-                    catch (Exception ex)
+                            catch (Exception ex)
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 오류] 백그라운드 작업 전체 오류: {ex.Message}\n{ex.StackTrace}");
+                                // ✅ UI 스레드에서만 메시지 박스 표시 (취소 오류 제외, SafeInvoke 사용)
+                                if (!(ex is OperationCanceledException))
+                                {
+                                    SafeInvoke(() =>
+                                    {
+                                        MessageBox.Show(
+                                            $"YOLO 탐지 중 오류 발생:\n{ex.Message}",
+                                            "YOLO 탐지 오류",
+                                            MessageBoxButtons.OK,
+                                            MessageBoxIcon.Error);
+                                    });
+                                }
+                            }
+                            finally
+                            {
+                                // Predictor 정리
+                                try
+                                {
+                                    predictor?.Dispose();
+                                    predictor = null;
+                                }
+                                catch (Exception predEx)
+                                {
+                                    System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] Predictor 정리 오류: {predEx.Message}");
+                                }
+                            }
+                        }, token);
+            }
+            finally
+            {
+                // ✅ Semaphore 해제 (항상 해제)
+                detectionSemaphore.Release();
+            }
+        }
+        
+        // ✅ 안전한 Invoke 헬퍼 (Form이 Dispose되지 않았는지 확인)
+        private void SafeInvoke(Action action)
+        {
+            try
+            {
+                if (isFormDisposed || this.IsDisposed || this.Disposing)
+                    return;
+                    
+                if (this.InvokeRequired)
+                {
+                    this.Invoke((MethodInvoker)(() =>
                     {
-                        System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 오류] 백그라운드 작업 전체 오류: {ex.Message}\n{ex.StackTrace}");
-                        this.Invoke((MethodInvoker)(() =>
-                        {
-                            try
-                            {
-                                MessageBox.Show(
-                                    $"YOLO 탐지 중 오류 발생:\n{ex.Message}",
-                                    "YOLO 탐지 오류",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Error);
-                            }
-                            catch (Exception msgEx)
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] 메시지 박스 표시 오류: {msgEx.Message}");
-                            }
-                        }));
-                    }
-                    finally
-                    {
-                        // Predictor 정리
                         try
                         {
-                            predictor?.Dispose();
+                            if (!isFormDisposed && !this.IsDisposed && !this.Disposing)
+                                action?.Invoke();
                         }
-                        catch (Exception predEx)
+                        catch (ObjectDisposedException)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지] Predictor 정리 오류: {predEx.Message}");
+                            // Form이 Dispose된 경우 무시
                         }
-                    }
-                }, token);
+                        catch (InvalidOperationException)
+                        {
+                            // 핸들이 없는 경우 무시
+                        }
+                    }));
+                }
+                else
+                {
+                    if (!isFormDisposed && !this.IsDisposed && !this.Disposing)
+                        action?.Invoke();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Form이 Dispose된 경우 무시
+            }
+            catch (InvalidOperationException)
+            {
+                // 핸들이 없는 경우 무시
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 시작 오류] {ex.Message}\n{ex.StackTrace}");
-                MessageBox.Show(
-                    $"YOLO 탐지 시작 중 오류 발생:\n{ex.Message}",
-                    "YOLO 탐지 오류",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                System.Diagnostics.Debug.WriteLine($"[SafeInvoke 오류] {ex.Message}");
             }
         }
 
@@ -2862,6 +3095,7 @@ namespace WinFormsApp1
                 if (waypoint != null)
                 {
                     selectedWaypoint = waypoint; // ✅ 선택된 waypoint 저장
+                    UpdateWaypointInfo(waypoint); // ✅ Waypoint 정보 표시
                     panelTimeline.Invalidate(); // ✅ Timeline 다시 그리기
                     LoadFrame(waypoint.EntryFrame);
                 }
@@ -2869,6 +3103,7 @@ namespace WinFormsApp1
             else
             {
                 selectedWaypoint = null; // ✅ 선택 해제
+                UpdateWaypointInfo(null); // ✅ Waypoint 정보 초기화
                 panelTimeline.Invalidate();
             }
         }
@@ -2896,6 +3131,7 @@ namespace WinFormsApp1
             else
             {
                 selectedWaypoint = null; // ✅ 선택 해제
+                UpdateWaypointInfo(null); // ✅ Waypoint 정보 초기화
                 panelTimeline.Invalidate();
             }
         }
@@ -2916,6 +3152,7 @@ namespace WinFormsApp1
                 if (waypoint != null)
                 {
                     selectedWaypoint = waypoint; // ✅ 선택된 waypoint 저장
+                    UpdateWaypointInfo(waypoint); // ✅ Waypoint 정보 표시
                     panelTimeline.Invalidate(); // ✅ Timeline 다시 그리기
                     LoadFrame(waypoint.EntryFrame);
                 }
@@ -2923,6 +3160,7 @@ namespace WinFormsApp1
             else
             {
                 selectedWaypoint = null; // ✅ 선택 해제
+                UpdateWaypointInfo(null); // ✅ Waypoint 정보 초기화
                 panelTimeline.Invalidate();
             }
         }
@@ -2939,6 +3177,7 @@ namespace WinFormsApp1
             if (hit.Item.Tag is WaypointMarker waypoint)
             {
                 selectedWaypoint = waypoint;
+                UpdateWaypointInfo(waypoint); // ✅ Waypoint 정보 표시
                 panelTimeline.Invalidate();
 
                 // 컬럼 기반 클릭: SubItem 인덱스로 Entry/Exit 구분
@@ -3235,6 +3474,13 @@ namespace WinFormsApp1
 
                 if (selectedBox != null && boxesToDelete.Contains(selectedBox))
                     selectedBox = null;
+
+                // ✅ 선택된 waypoint가 삭제되면 선택 해제
+                if (selectedWaypoint == waypoint)
+                {
+                    selectedWaypoint = null;
+                    UpdateWaypointInfo(null);
+                }
 
                 waypointMarkers.Remove(waypoint);
                 
@@ -4403,8 +4649,8 @@ namespace WinFormsApp1
                     string categoryName = GetCategoryName("person", waypoint.ObjectId);
                     item.SubItems.Add(categoryName);
                 
-                item.ForeColor = waypoint.MarkerColor;
-                item.Tag = waypoint;
+                    item.ForeColor = waypoint.MarkerColor;
+                    item.Tag = waypoint;
                     listViewPersonWaypoints.Items.Add(item);
                 }
                 else if (waypoint.Label == "vehicle")
@@ -4465,10 +4711,17 @@ namespace WinFormsApp1
         {
             if (box == null)
             {
-                // ✅ 박스가 null일 때 정보 초기화
-                labelObjectLabel.Text = "Label: -";
-                labelPrevWaypoint.Text = "Previous Waypoint: -";
-                labelNextWaypoint.Text = "Next Waypoint: -";
+                // ✅ 박스가 null일 때 waypoint 정보 확인
+                if (selectedWaypoint != null)
+                {
+                    UpdateWaypointInfo(selectedWaypoint);
+                }
+                else
+                {
+                    labelObjectLabel.Text = "Label: -";
+                    labelPrevWaypoint.Text = "Previous Waypoint: -";
+                    labelNextWaypoint.Text = "Next Waypoint: -";
+                }
                 return;
             }
             
@@ -4495,8 +4748,79 @@ namespace WinFormsApp1
             }
             
             labelObjectLabel.Text = labelText;
-            labelPrevWaypoint.Text = "Previous Waypoint: C0001.mp4, 00:10:32 - 00:11:05";
-            labelNextWaypoint.Text = "Next Waypoint: C0003.mp4, 00:15:21 - 00:16:01";
+            
+            // ✅ 선택된 박스가 속한 waypoint 정보 표시
+            if (selectedWaypoint != null)
+            {
+                UpdateWaypointInfo(selectedWaypoint);
+            }
+            else
+            {
+                // 박스가 있지만 waypoint가 선택되지 않은 경우 이전/다음 waypoint만 표시
+                UpdateWaypointInfo(null);
+            }
+        }
+        
+        // ✅ Waypoint 정보 표시 함수 (이전/다음 waypoint 포함)
+        private void UpdateWaypointInfo(WaypointMarker waypoint)
+        {
+            if (waypoint == null)
+            {
+                // Waypoint가 선택되지 않은 경우 이전/다음 waypoint 정보만 표시
+                labelPrevWaypoint.Text = "Previous Waypoint: -";
+                labelNextWaypoint.Text = "Next Waypoint: -";
+                return;
+            }
+            
+            // ✅ 현재 waypoint의 라벨 표시 (이미 labelObjectLabel에 표시되어 있으면 그대로 유지)
+            string categoryName = GetCategoryName(waypoint.Label, waypoint.ObjectId);
+            if (selectedBox == null)
+            {
+                // 박스가 선택되지 않은 경우 waypoint 라벨 표시
+                labelObjectLabel.Text = $"Label: {categoryName}";
+            }
+            
+            // ✅ 같은 타입의 waypoint들 중에서 이전/다음 waypoint 찾기
+            var sameTypeWaypoints = waypointMarkers
+                .Where(w => w.Label == waypoint.Label && w.ObjectId == waypoint.ObjectId)
+                .OrderBy(w => w.EntryFrame)
+                .ToList();
+            
+            int currentIndex = sameTypeWaypoints.FindIndex(w => 
+                w.EntryFrame == waypoint.EntryFrame && 
+                w.ExitFrame == waypoint.ExitFrame);
+            
+            if (currentIndex >= 0)
+            {
+                // 이전 waypoint 찾기
+                if (currentIndex > 0)
+                {
+                    var prevWaypoint = sameTypeWaypoints[currentIndex - 1];
+                    string prevCategoryName = GetCategoryName(prevWaypoint.Label, prevWaypoint.ObjectId);
+                    labelPrevWaypoint.Text = $"Previous Waypoint: {prevCategoryName}, {prevWaypoint.EntryTime} - {prevWaypoint.ExitTime}";
+                }
+                else
+                {
+                    labelPrevWaypoint.Text = "Previous Waypoint: -";
+                }
+                
+                // 다음 waypoint 찾기
+                if (currentIndex < sameTypeWaypoints.Count - 1)
+                {
+                    var nextWaypoint = sameTypeWaypoints[currentIndex + 1];
+                    string nextCategoryName = GetCategoryName(nextWaypoint.Label, nextWaypoint.ObjectId);
+                    labelNextWaypoint.Text = $"Next Waypoint: {nextCategoryName}, {nextWaypoint.EntryTime} - {nextWaypoint.ExitTime}";
+                }
+                else
+                {
+                    labelNextWaypoint.Text = "Next Waypoint: -";
+                }
+            }
+            else
+            {
+                labelPrevWaypoint.Text = "Previous Waypoint: -";
+                labelNextWaypoint.Text = "Next Waypoint: -";
+            }
         }
 
         private void ShowVideoListForm()
