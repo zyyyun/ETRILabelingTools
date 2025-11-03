@@ -51,6 +51,7 @@
             this.btnEntry = new System.Windows.Forms.Button();
             this.btnExit = new System.Windows.Forms.Button();
             this.btnToggleSubtitle = new System.Windows.Forms.Button();
+            this.btnToggleYoloDetections = new System.Windows.Forms.Button();
             this.trackBarVolume = new System.Windows.Forms.TrackBar();
             this.panelTimeline = new System.Windows.Forms.Panel();
 
@@ -285,6 +286,7 @@
             this.panelVideoControls.Controls.Add(this.btnEntry);
             this.panelVideoControls.Controls.Add(this.btnExit);
             this.panelVideoControls.Controls.Add(this.btnToggleSubtitle);
+            this.panelVideoControls.Controls.Add(this.btnToggleYoloDetections);
             this.panelVideoControls.Controls.Add(this.trackBarVolume);
             this.panelVideoControls.Controls.Add(this.panelTimeline);
             this.panelVideoControls.Resize += new System.EventHandler(this.panelVideoControls_Resize);
@@ -353,6 +355,18 @@
             this.btnToggleSubtitle.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.btnToggleSubtitle.TabStop = false;
             this.btnToggleSubtitle.Click += new System.EventHandler(this.btnToggleSubtitle_Click);
+
+            // btnToggleYoloDetections (YOLO 탐지 박스 표시/숨기기)
+            this.btnToggleYoloDetections.Text = "YOLO 탐지";
+            this.btnToggleYoloDetections.Location = new System.Drawing.Point(370, 16);
+            this.btnToggleYoloDetections.Size = new System.Drawing.Size(100, 40);
+            this.btnToggleYoloDetections.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
+            this.btnToggleYoloDetections.ForeColor = System.Drawing.Color.White;
+            this.btnToggleYoloDetections.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnToggleYoloDetections.FlatAppearance.BorderSize = 0;
+            this.btnToggleYoloDetections.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.btnToggleYoloDetections.TabStop = false;
+            this.btnToggleYoloDetections.Click += new System.EventHandler(this.btnToggleYoloDetections_Click);
 
             // Volume control
             this.trackBarVolume.Location = new System.Drawing.Point(920, 20);
@@ -756,6 +770,7 @@
         private System.Windows.Forms.Button btnEntry;
         private System.Windows.Forms.Button btnExit;
         private System.Windows.Forms.Button btnToggleSubtitle;
+        private System.Windows.Forms.Button btnToggleYoloDetections;
         private System.Windows.Forms.TrackBar trackBarVolume;
         private System.Windows.Forms.Panel panelTimeline;
 
