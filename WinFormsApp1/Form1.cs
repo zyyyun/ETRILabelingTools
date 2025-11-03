@@ -187,6 +187,48 @@ namespace WinFormsApp1
             return appLabel; // Fallback
         }
 
+        // ✅ BoundingBox에서 실제 COCO 카테고리 이름을 추출하는 메서드
+        private static string GetBaseCategoryFromBox(BoundingBox box)
+        {
+            if (box == null) return "";
+
+            switch (box.Label)
+            {
+                case "person":
+                    return "person";
+                case "vehicle":
+                    // VehicleName이 있으면 사용, 없으면 VehicleId로 매핑
+                    if (!string.IsNullOrEmpty(box.VehicleName))
+                    {
+                        // VehicleName은 "car", "motorcycle", "e_scooter", "bicycle" 중 하나
+                        // COCO 데이터셋 매핑: COCO에는 car, motorcycle, bus, truck, bicycle만 있음
+                        // e_scooter는 COCO에 없으므로 motorcycle로 매핑
+                        if (box.VehicleName == "e_scooter")
+                            return "motorcycle"; // e_scooter -> motorcycle (COCO에 scooter 없음)
+                        // 다른 vehicle 이름들(car, motorcycle, bicycle)은 그대로 사용
+                        return box.VehicleName;
+                    }
+                    else if (box.VehicleId > 0)
+                    {
+                        // VehicleId로 매핑
+                        switch (box.VehicleId)
+                        {
+                            case 1: return "car";
+                            case 2: return "motorcycle";
+                            case 3: return "motorcycle"; // e_scooter -> motorcycle
+                            case 4: return "bicycle";
+                            default: return "car";
+                        }
+                    }
+                    return "car"; // 기본값
+                case "event":
+                    // event는 추적하지 않으므로 필요 없음
+                    return "event";
+                default:
+                    return box.Label;
+            }
+        }
+
         public YoloTrackingEngine(string modelPath)
         {
             _predictor = new YoloPredictor(modelPath);
@@ -208,7 +250,8 @@ namespace WinFormsApp1
             double fps)
         {
             int _inertiaCount;
-            return TrackObjectsWithFailures(videoCapture, startBox, startFrame, endFrame, fps, out _, out _inertiaCount);
+            Dictionary<string, int> _detectionCount;
+            return TrackObjectsWithFailures(videoCapture, startBox, startFrame, endFrame, fps, out _, out _inertiaCount, out _detectionCount);
         }
 
         // ✅ 실패 구간을 반환하는 오버로드 메서드
@@ -219,17 +262,16 @@ namespace WinFormsApp1
             int endFrame,
             double fps,
             out List<(int start, int end)> failureRanges,
-            out int inertiaAppliedCount)
+            out int inertiaAppliedCount,
+            out Dictionary<string, int> detectionCountByCategory)
         {
             failureRanges = new List<(int, int)>();
             inertiaAppliedCount = 0;
+            detectionCountByCategory = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             
             var trackedBoxes = new List<BoundingBox>();
             videoCapture.Set(VideoCaptureProperties.PosFrames, startFrame);
             Mat frame = new Mat();
-
-            // ✅ 추적 구간 동안 탐지된 객체 수를 카테고리별로 집계
-            var detectionCountByCategory = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             // 이전 프레임 박스 초기화: 사용자 지정 startBox로 시작
             Rectangle previousRect = startBox.Rectangle;
@@ -238,8 +280,9 @@ namespace WinFormsApp1
             int fixedIdVehicle = startBox.VehicleId;
             int fixedIdEvent = startBox.EventId;
 
-            // 추적 대상의 기본 카테고리를 미리 추출합니다. (예: "person_1" -> "person")
-            string targetCategory = GetBaseCategory(fixedLabel);
+            // ✅ 추적 대상의 기본 카테고리를 미리 추출합니다. 
+            // vehicle의 경우 실제 종류(car, motorcycle 등)를 반환하여 COCO 데이터셋과 매칭
+            string targetCategory = GetBaseCategoryFromBox(startBox);
 
             // ✅ 추적 실패 분석을 위한 통계 변수
             int totalFrames = endFrame - startFrame + 1;
@@ -257,6 +300,11 @@ namespace WinFormsApp1
             
             // ✅ 성공 프레임 추적 (보간용)
             var successfulFrames = new Dictionary<int, Rectangle>(); // FrameIndex -> Rectangle
+            
+            // ✅ 고유 객체 추적: 카테고리별로 추적 중인 객체들의 마지막 위치를 저장
+            // Key: 카테고리명, Value: List<(마지막 위치, 마지막 프레임)>
+            var trackedObjectsByCategory = new Dictionary<string, List<(Rectangle lastRect, int lastFrame)>>(StringComparer.OrdinalIgnoreCase);
+            const double OBJECT_MATCH_IOU_THRESHOLD = 0.5; // 같은 객체로 판단하는 IoU 임계값
             
 
             for (int i = startFrame; i <= endFrame; i++)
@@ -295,12 +343,46 @@ namespace WinFormsApp1
                             detectionName = rawDetectionName.Substring(firstQuote + 1, lastQuote - firstQuote - 1);
                         }
 
-                        // ✅ 전체 탐지 수 집계 (카테고리별)
+                        // ✅ 고유 객체 카운트: 같은 객체가 여러 프레임에 걸쳐 추적되는 경우 1번만 카운트
                         if (!string.IsNullOrEmpty(detectionName))
                         {
-                            if (!detectionCountByCategory.ContainsKey(detectionName))
-                                detectionCountByCategory[detectionName] = 0;
-                            detectionCountByCategory[detectionName]++;
+                            var detectionRect = new Rectangle((int)d.Bounds.X, (int)d.Bounds.Y, (int)d.Bounds.Width, (int)d.Bounds.Height);
+                            
+                            // 해당 카테고리의 추적 중인 객체 목록 가져오기
+                            if (!trackedObjectsByCategory.ContainsKey(detectionName))
+                            {
+                                trackedObjectsByCategory[detectionName] = new List<(Rectangle, int)>();
+                            }
+                            
+                            var trackedObjects = trackedObjectsByCategory[detectionName];
+                            bool isExistingObject = false;
+                            
+                            // 기존 추적 중인 객체와 IoU 계산하여 같은 객체인지 확인
+                            for (int objIdx = 0; objIdx < trackedObjects.Count; objIdx++)
+                            {
+                                var (lastRect, lastFrame) = trackedObjects[objIdx];
+                                double iou = ComputeIoU(lastRect, detectionRect);
+                                
+                                // IoU가 임계값보다 높으면 같은 객체로 판단
+                                if (iou > OBJECT_MATCH_IOU_THRESHOLD)
+                                {
+                                    // 기존 객체의 위치 업데이트 (프레임 번호도 업데이트)
+                                    trackedObjects[objIdx] = (detectionRect, i);
+                                    isExistingObject = true;
+                                    break;
+                                }
+                            }
+                            
+                            // 새로운 객체인 경우에만 카운트
+                            if (!isExistingObject)
+                            {
+                                if (!detectionCountByCategory.ContainsKey(detectionName))
+                                    detectionCountByCategory[detectionName] = 0;
+                                detectionCountByCategory[detectionName]++;
+                                
+                                // 새로운 객체를 추적 목록에 추가
+                                trackedObjects.Add((detectionRect, i));
+                            }
                         }
 
                         if (detectionName.Equals(targetCategory, StringComparison.OrdinalIgnoreCase))
@@ -1448,8 +1530,27 @@ namespace WinFormsApp1
                     // 기존 ExitFrame 저장
                     int oldExitFrame = existingWaypoint.ExitFrame;
                     
+                    // ✅ ExitFrame이 늘어난 경우 차단 (기존 ExitFrame보다 뒤로 확장 불가)
+                    if (currentFrameIndex > oldExitFrame)
+                    {
+                        TimeSpan currentTimeCheck = TimeSpan.FromSeconds(currentFrameIndex / fps);
+                        TimeSpan oldExitTimeCheck = TimeSpan.FromSeconds(oldExitFrame / fps);
+                        
+                        MessageBox.Show(
+                            $"ExitFrame을 기존 ExitFrame보다 뒤로 연장할 수 없습니다.\n\n" +
+                            $"기존 Exit: {oldExitTimeCheck:hh\\:mm\\:ss} (프레임 {oldExitFrame})\n" +
+                            $"현재: {currentTimeCheck:hh\\:mm\\:ss} (프레임 {currentFrameIndex})\n\n" +
+                            $"ExitFrame은 기존 ExitFrame보다 앞이거나 같아야 합니다.",
+                            "Warning",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                        return;
+                    }
+                    
+                    bool exitFrameShortened = currentFrameIndex < oldExitFrame; // ExitFrame이 짧아진 경우
+                    
                     // ✅ ExitFrame이 짧아진 경우 (새로운 ExitFrame이 기존보다 작음)
-                    if (currentFrameIndex < oldExitFrame)
+                    if (exitFrameShortened)
                     {
                         // 새로운 ExitFrame 이후부터 기존 ExitFrame까지의 해당 ID 박스 삭제
                         int boxId = GetBoxId(selectedBox);
@@ -1567,19 +1668,59 @@ namespace WinFormsApp1
 
                 // ✅ 생성된 Waypoint 리스트
                 List<WaypointMarker> createdWaypoints = new List<WaypointMarker>();
+                
+                int currentEntryFrame = entryFrameIndex.Value;
+                int currentExitFrame = exitFrameIndex.Value;
 
                 // ✅ 1. Person 박스들에 대해 각각 개별 Waypoint 생성
                 foreach (var personBox in entryPersonBoxes)
                 {
                     int personId = personBox.PersonId;
                     
-            var waypoint = new WaypointMarker
-            {
-                EntryFrame = entryFrameIndex.Value,
-                ExitFrame = exitFrameIndex.Value,
+                    // ✅ 현재 Entry~Exit 범위와 겹치거나 포함되는 기존 waypoint 확인
+                    var overlappingWaypoint = waypointMarkers.FirstOrDefault(w =>
+                        w.Label == "person" &&
+                        w.ObjectId == personId &&
+                        // 범위가 겹치는 경우: 
+                        // 1. 현재 Entry가 기존 Entry~Exit 범위 내에 있음
+                        // 2. 현재 Exit가 기존 Entry~Exit 범위 내에 있음
+                        // 3. 현재 범위가 기존 범위를 완전히 포함
+                        ((currentEntryFrame >= w.EntryFrame && currentEntryFrame <= w.ExitFrame) ||
+                         (currentExitFrame >= w.EntryFrame && currentExitFrame <= w.ExitFrame) ||
+                         (currentEntryFrame <= w.EntryFrame && currentExitFrame >= w.ExitFrame)));
+                    
+                    if (overlappingWaypoint != null)
+                    {
+                        // ✅ ExitFrame 확장 차단: 새로운 ExitFrame이 기존 waypoint의 ExitFrame보다 뒤인 경우 차단
+                        if (currentExitFrame > overlappingWaypoint.ExitFrame)
+                        {
+                            TimeSpan currentExitTime = TimeSpan.FromSeconds(currentExitFrame / fps);
+                            TimeSpan oldExitTime = TimeSpan.FromSeconds(overlappingWaypoint.ExitFrame / fps);
+                            
+                            MessageBox.Show(
+                                $"ExitFrame을 기존 ExitFrame보다 뒤로 연장할 수 없습니다.\n\n" +
+                                $"객체: {GetCategoryName("person", personId)}\n" +
+                                $"기존 Waypoint: Entry={TimeSpan.FromSeconds(overlappingWaypoint.EntryFrame / fps):hh\\:mm\\:ss}, Exit={oldExitTime:hh\\:mm\\:ss}\n" +
+                                $"현재 Exit: {currentExitTime:hh\\:mm\\:ss}\n\n" +
+                                $"ExitFrame은 기존 ExitFrame보다 앞이거나 같아야 합니다.",
+                                "Warning",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Warning);
+                            continue;
+                        }
+                        
+                        // 이미 같은 PersonId의 waypoint가 현재 Entry~Exit 범위와 겹치면 중복 생성하지 않음
+                        System.Diagnostics.Debug.WriteLine($"[Person Waypoint 중복 방지] PersonId={personId}: 기존 waypoint({overlappingWaypoint.EntryFrame}~{overlappingWaypoint.ExitFrame})와 겹치는 범위({currentEntryFrame}~{currentExitFrame})여서 새로 생성하지 않음");
+                        continue;
+                    }
+                    
+                    var waypoint = new WaypointMarker
+                    {
+                        EntryFrame = entryFrameIndex.Value,
+                        ExitFrame = exitFrameIndex.Value,
                         MarkerColor = System.Drawing.Color.FromArgb(255, 107, 107), // 빨강
-                EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
-                ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
+                        EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
+                        ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                         ObjectId = personId,
                         Label = "person"
                     };
@@ -1593,6 +1734,43 @@ namespace WinFormsApp1
                 {
                     int vehicleId = vehicleBox.VehicleId;
                     
+                    // ✅ 현재 Entry~Exit 범위와 겹치거나 포함되는 기존 waypoint 확인
+                    var overlappingWaypoint = waypointMarkers.FirstOrDefault(w =>
+                        w.Label == "vehicle" &&
+                        w.ObjectId == vehicleId &&
+                        // 범위가 겹치는 경우: 
+                        // 1. 현재 Entry가 기존 Entry~Exit 범위 내에 있음
+                        // 2. 현재 Exit가 기존 Entry~Exit 범위 내에 있음
+                        // 3. 현재 범위가 기존 범위를 완전히 포함
+                        ((currentEntryFrame >= w.EntryFrame && currentEntryFrame <= w.ExitFrame) ||
+                         (currentExitFrame >= w.EntryFrame && currentExitFrame <= w.ExitFrame) ||
+                         (currentEntryFrame <= w.EntryFrame && currentExitFrame >= w.ExitFrame)));
+                    
+                    if (overlappingWaypoint != null)
+                    {
+                        // ✅ ExitFrame 확장 차단: 새로운 ExitFrame이 기존 waypoint의 ExitFrame보다 뒤인 경우 차단
+                        if (currentExitFrame > overlappingWaypoint.ExitFrame)
+                        {
+                            TimeSpan currentExitTime = TimeSpan.FromSeconds(currentExitFrame / fps);
+                            TimeSpan oldExitTime = TimeSpan.FromSeconds(overlappingWaypoint.ExitFrame / fps);
+                            
+                            MessageBox.Show(
+                                $"ExitFrame을 기존 ExitFrame보다 뒤로 연장할 수 없습니다.\n\n" +
+                                $"객체: {GetCategoryName("vehicle", vehicleId)}\n" +
+                                $"기존 Waypoint: Entry={TimeSpan.FromSeconds(overlappingWaypoint.EntryFrame / fps):hh\\:mm\\:ss}, Exit={oldExitTime:hh\\:mm\\:ss}\n" +
+                                $"현재 Exit: {currentExitTime:hh\\:mm\\:ss}\n\n" +
+                                $"ExitFrame은 기존 ExitFrame보다 앞이거나 같아야 합니다.",
+                                "Warning",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Warning);
+                            continue;
+                        }
+                        
+                        // 이미 같은 VehicleId의 waypoint가 현재 Entry~Exit 범위와 겹치면 중복 생성하지 않음
+                        System.Diagnostics.Debug.WriteLine($"[Vehicle Waypoint 중복 방지] VehicleId={vehicleId}: 기존 waypoint({overlappingWaypoint.EntryFrame}~{overlappingWaypoint.ExitFrame})와 겹치는 범위({currentEntryFrame}~{currentExitFrame})여서 새로 생성하지 않음");
+                        continue;
+                    }
+                    
                     var waypoint = new WaypointMarker
                     {
                         EntryFrame = entryFrameIndex.Value,
@@ -1604,7 +1782,7 @@ namespace WinFormsApp1
                         Label = "vehicle"
                     };
 
-            waypointMarkers.Add(waypoint);
+                    waypointMarkers.Add(waypoint);
                     createdWaypoints.Add(waypoint);
                 }
 
@@ -1626,8 +1804,6 @@ namespace WinFormsApp1
                     int eventId = eventGroup.Key;
                     // 같은 EventId를 가진 박스 중 가장 작은 FrameIndex를 EntryFrame으로 사용
                     int minFrameIndex = eventGroup.Min(b => b.FrameIndex);
-                    int currentEntryFrame = entryFrameIndex.Value;
-                    int currentExitFrame = exitFrameIndex.Value;
                     
                     // ✅ 현재 Entry~Exit 범위와 겹치거나 포함되는 기존 waypoint 확인
                     // 같은 EventId를 가진 waypoint 중에서 현재 Entry~Exit 범위가 기존 waypoint 범위와 겹치는 경우
@@ -1635,9 +1811,9 @@ namespace WinFormsApp1
                         w.Label == "event" &&
                         w.ObjectId == eventId &&
                         // 범위가 겹치는 경우: 
-                        // 1. 현재 Entry가 기존 Entry~Exit 범위 내에 있음 (currentEntry >= w.Entry && currentEntry <= w.Exit)
-                        // 2. 현재 Exit가 기존 Entry~Exit 범위 내에 있음 (currentExit >= w.Entry && currentExit <= w.Exit)
-                        // 3. 현재 범위가 기존 범위를 완전히 포함 (currentEntry <= w.Entry && currentExit >= w.Exit)
+                        // 1. 현재 Entry가 기존 Entry~Exit 범위 내에 있음
+                        // 2. 현재 Exit가 기존 Entry~Exit 범위 내에 있음
+                        // 3. 현재 범위가 기존 범위를 완전히 포함
                         ((currentEntryFrame >= w.EntryFrame && currentEntryFrame <= w.ExitFrame) ||
                          (currentExitFrame >= w.EntryFrame && currentExitFrame <= w.ExitFrame) ||
                          (currentEntryFrame <= w.EntryFrame && currentExitFrame >= w.ExitFrame)));
@@ -5825,8 +6001,9 @@ namespace WinFormsApp1
                                     waypoint.ExitFrame,
                                     fps,
                                     out List<(int start, int end)> failures,
-                                    out int inertiaCount);
-                                return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount };
+                                    out int inertiaCount,
+                                    out Dictionary<string, int> detectionCount);
+                                return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount, DetectionCount = detectionCount };
                             });
                             
                             allTrackedBoxes.AddRange(result.Boxes);
@@ -5837,6 +6014,16 @@ namespace WinFormsApp1
                             {
                                 waypointFailureRanges[key] = result.Failures;
                                 System.Diagnostics.Debug.WriteLine($"[실패 구간 저장] {key}: {result.Failures.Count}개 구간");
+                            }
+                            
+                            // ✅ YOLO 추적 완료 시 waypoint 구간 동안 탐지한 객체 종류별 로그 출력
+                            if (result.DetectionCount != null && result.DetectionCount.Count > 0)
+                            {
+                                var detectionSummary = string.Join(", ", result.DetectionCount
+                                    .OrderBy(kv => kv.Key)
+                                    .Select(kv => $"{kv.Key}: {kv.Value}"));
+                                System.Diagnostics.Debug.WriteLine(
+                                    $"[YOLO 탐지 통계] Waypoint ({waypoint.Label} ID={waypoint.ObjectId}, 프레임 {waypoint.EntryFrame}~{waypoint.ExitFrame}): {detectionSummary}");
                             }
                         }
                         else
@@ -6032,8 +6219,9 @@ namespace WinFormsApp1
                             waypoint.ExitFrame,
                             fps,
                             out List<(int start, int end)> failures,
-                            out int inertiaCount);
-                        return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount };
+                            out int inertiaCount,
+                            out Dictionary<string, int> detectionCount);
+                        return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount, DetectionCount = detectionCount };
                     });
 
                     newTrackedBoxes = result.Boxes;
@@ -6044,6 +6232,16 @@ namespace WinFormsApp1
                     {
                         waypointFailureRanges[key] = result.Failures;
                         System.Diagnostics.Debug.WriteLine($"[재추적 실패 구간] {key}: {result.Failures.Count}개 구간");
+                    }
+                    
+                    // ✅ 재추적 완료 시 waypoint 구간 동안 탐지한 객체 종류별 로그 출력
+                    if (result.DetectionCount != null && result.DetectionCount.Count > 0)
+                    {
+                        var detectionSummary = string.Join(", ", result.DetectionCount
+                            .OrderBy(kv => kv.Key)
+                            .Select(kv => $"{kv.Key}: {kv.Value}"));
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[YOLO 탐지 통계] 재추적 Waypoint ({waypoint.Label} ID={waypoint.ObjectId}, 프레임 {startFrame}~{waypoint.ExitFrame}): {detectionSummary}");
                     }
                 }
 
@@ -7415,6 +7613,15 @@ namespace WinFormsApp1
             }
             else if (e.KeyCode == Keys.Escape)
             {
+                // ✅ Entry 설정 해제
+                if (entryFrameIndex.HasValue)
+                {
+                    entryFrameIndex = null;
+                    btnEntry.Text = "Entry";
+                    panelTimeline.Invalidate();
+                    System.Diagnostics.Debug.WriteLine("[Entry 해제] ESC 키로 Entry 설정이 해제되었습니다.");
+                }
+                
                 selectedBox = null;
                 ClearSidebarHighlights(); // ✅ 하이라이트 초기화
                 pictureBoxVideo.Invalidate();
