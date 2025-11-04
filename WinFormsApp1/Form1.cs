@@ -4705,6 +4705,114 @@ namespace WinFormsApp1
                     listViewEventWaypoints.Items.Add(item);
                 }
             }
+            
+            // ✅ Waypoint 수에 따라 패널 높이 동적 조정
+            UpdateWaypointPanelHeights();
+        }
+        
+        // ✅ Waypoint 패널 높이를 동적으로 조정
+        private void UpdateWaypointPanelHeights()
+        {
+            const int MAX_LISTVIEW_HEIGHT = 220; // 최대 ListView 높이
+            const int MAX_GROUPBOX_HEIGHT = 250; // 최대 GroupBox 높이
+            const int ITEM_HEIGHT = 23; // ListView 항목 높이 (대략)
+            const int HEADER_HEIGHT = 23; // ListView 헤더 높이 (항목 높이와 동일하게)
+            const int PADDING = 30; // GroupBox 내부 여백 (상단 25 + 하단 5)
+            const int MIN_VISIBLE_ITEMS = 3; // 최소 보여질 항목 수
+            
+            // Person Waypoint 패널 높이 조정
+            int personItemCount = listViewPersonWaypoints.Items.Count;
+            int personListViewHeight;
+            if (personItemCount == 0)
+            {
+                personListViewHeight = HEADER_HEIGHT + 5; // 빈 경우 최소 높이
+            }
+            else if (personItemCount < MIN_VISIBLE_ITEMS)
+            {
+                // 3개 미만일 때는 최소 3개가 보이는 크기로 설정 (헤더 + 3개 항목)
+                personListViewHeight = HEADER_HEIGHT + (MIN_VISIBLE_ITEMS * ITEM_HEIGHT);
+            }
+            else
+            {
+                // 3개 이상일 때는 실제 항목 수에 맞게 높이 설정, 최대값 제한
+                personListViewHeight = Math.Min(HEADER_HEIGHT + (personItemCount * ITEM_HEIGHT), MAX_LISTVIEW_HEIGHT);
+            }
+            
+            int personGroupBoxHeight = personListViewHeight + PADDING;
+            personGroupBoxHeight = Math.Min(personGroupBoxHeight, MAX_GROUPBOX_HEIGHT);
+            
+            listViewPersonWaypoints.Height = personListViewHeight;
+            groupBoxPersonWaypoint.Height = personGroupBoxHeight;
+            
+            // Vehicle Waypoint 패널 높이 조정
+            int vehicleItemCount = listViewVehicleWaypoints.Items.Count;
+            int vehicleListViewHeight;
+            if (vehicleItemCount == 0)
+            {
+                vehicleListViewHeight = HEADER_HEIGHT + 5; // 빈 경우 최소 높이
+            }
+            else if (vehicleItemCount < MIN_VISIBLE_ITEMS)
+            {
+                // 3개 미만일 때는 최소 3개가 보이는 크기로 설정 (헤더 + 3개 항목)
+                vehicleListViewHeight = HEADER_HEIGHT + (MIN_VISIBLE_ITEMS * ITEM_HEIGHT);
+            }
+            else
+            {
+                // 3개 이상일 때는 실제 항목 수에 맞게 높이 설정, 최대값 제한
+                vehicleListViewHeight = Math.Min(HEADER_HEIGHT + (vehicleItemCount * ITEM_HEIGHT), MAX_LISTVIEW_HEIGHT);
+            }
+            
+            int vehicleGroupBoxHeight = vehicleListViewHeight + PADDING;
+            vehicleGroupBoxHeight = Math.Min(vehicleGroupBoxHeight, MAX_GROUPBOX_HEIGHT);
+            
+            listViewVehicleWaypoints.Height = vehicleListViewHeight;
+            groupBoxVehicleWaypoint.Height = vehicleGroupBoxHeight;
+            
+            // Event Waypoint 패널 높이 조정
+            int eventItemCount = listViewEventWaypoints.Items.Count;
+            int eventListViewHeight;
+            if (eventItemCount == 0)
+            {
+                eventListViewHeight = HEADER_HEIGHT + 5; // 빈 경우 최소 높이
+            }
+            else if (eventItemCount < MIN_VISIBLE_ITEMS)
+            {
+                // 3개 미만일 때는 최소 3개가 보이는 크기로 설정 (헤더 + 3개 항목)
+                eventListViewHeight = HEADER_HEIGHT + (MIN_VISIBLE_ITEMS * ITEM_HEIGHT);
+            }
+            else
+            {
+                // 3개 이상일 때는 실제 항목 수에 맞게 높이 설정, 최대값 제한
+                eventListViewHeight = Math.Min(HEADER_HEIGHT + (eventItemCount * ITEM_HEIGHT), MAX_LISTVIEW_HEIGHT);
+            }
+            
+            int eventGroupBoxHeight = eventListViewHeight + PADDING;
+            eventGroupBoxHeight = Math.Min(eventGroupBoxHeight, MAX_GROUPBOX_HEIGHT);
+            
+            listViewEventWaypoints.Height = eventListViewHeight;
+            groupBoxEventWaypoint.Height = eventGroupBoxHeight;
+            
+            // ✅ 다음 패널들의 위치 업데이트
+            int currentY = 16; // 시작 Y 위치
+            
+            // Person Waypoint 위치
+            groupBoxPersonWaypoint.Location = new System.Drawing.Point(16, currentY);
+            currentY += groupBoxPersonWaypoint.Height + 20; // 패널 높이 + 여백
+            
+            // Vehicle Waypoint 위치
+            groupBoxVehicleWaypoint.Location = new System.Drawing.Point(16, currentY);
+            currentY += groupBoxVehicleWaypoint.Height + 20; // 패널 높이 + 여백
+            
+            // Event Waypoint 위치
+            groupBoxEventWaypoint.Location = new System.Drawing.Point(16, currentY);
+            currentY += groupBoxEventWaypoint.Height + 20; // 패널 높이 + 여백
+            
+            // 삭제 버튼 위치
+            btnDeleteEventWaypoint.Location = new System.Drawing.Point(16, currentY);
+            currentY += btnDeleteEventWaypoint.Height + 20; // 버튼 높이 + 여백
+            
+            // Labels 패널 위치
+            groupBoxLabels.Location = new System.Drawing.Point(16, currentY);
         }
 
         private void UpdateObjectInfo(BoundingBox box)
@@ -8888,17 +8996,7 @@ namespace WinFormsApp1
             }
             else if (e.KeyCode == Keys.Delete)
             {
-                // ✅ waypoint가 선택되어 있으면 waypoint 삭제 우선
-                if (listViewPersonWaypoints.SelectedItems.Count > 0 || 
-                    listViewVehicleWaypoints.SelectedItems.Count > 0 || 
-                    listViewEventWaypoints.SelectedItems.Count > 0)
-                {
-                    btnDeleteSelectedWaypoint_Click(sender, e);
-                    e.Handled = true;
-                    return;
-                }
-                
-                // 그렇지 않으면 기존 로직대로 selectedBox 삭제
+                // ✅ 박스가 선택되어 있으면 박스 삭제 우선
                 if (selectedBox != null)
                 {
                     AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
@@ -8913,7 +9011,20 @@ namespace WinFormsApp1
                     UpdateBoxCount();
                     UpdateBboxListDisplay();
                     pictureBoxVideo.Invalidate();
+                    e.Handled = true;
+                    return;
                 }
+                
+                // 박스가 선택되어 있지 않으면 waypoint 삭제
+                if (listViewPersonWaypoints.SelectedItems.Count > 0 || 
+                    listViewVehicleWaypoints.SelectedItems.Count > 0 || 
+                    listViewEventWaypoints.SelectedItems.Count > 0)
+                {
+                    btnDeleteSelectedWaypoint_Click(sender, e);
+                    e.Handled = true;
+                    return;
+                }
+                
                 e.Handled = true;
             }
             else if (e.Control && e.KeyCode == Keys.Z)
