@@ -881,6 +881,11 @@ namespace WinFormsApp1
             this.Focus();
             this.Activate();
 
+            // ✅ ListView에서 스페이스바가 Form1_KeyDown으로 전달되도록 KeyDown 설정
+            listViewPersonWaypoints.KeyDown += (s, ev) => HandleListViewKeyDown(s, ev);
+            listViewVehicleWaypoints.KeyDown += (s, ev) => HandleListViewKeyDown(s, ev);
+            listViewEventWaypoints.KeyDown += (s, ev) => HandleListViewKeyDown(s, ev);
+
             // YOLO 모델 초기화 시도
             InitializeYoloModel();
 
@@ -890,6 +895,22 @@ namespace WinFormsApp1
             // ✅ 창 상태 변경 시 최대화/복원 버튼 아이콘 업데이트
             this.Resize += Form1_Resize;
             UpdateMaximizeButtonIcon();
+        }
+
+        // ✅ ListView에서 키 이벤트를 Form1로 전달하는 핸들러
+        private void HandleListViewKeyDown(object sender, KeyEventArgs e)
+        {
+            // 스페이스바인 경우 Form1_KeyDown으로 전달
+            if (e.KeyCode == Keys.Space)
+            {
+                // Form1_KeyDown을 직접 호출
+                Form1_KeyDown(this, e);
+                // Form1_KeyDown에서 처리했다면 ListView가 처리하지 않도록
+                if (e.Handled)
+                {
+                    return;
+                }
+            }
         }
 
         private void Form1_Resize(object sender, EventArgs e)
@@ -3046,8 +3067,13 @@ namespace WinFormsApp1
                 // ✅ 4. 자동 추적 확인 (생성된 Waypoint가 있을 때만)
                 if (createdWaypoints.Count > 0)
                 {
+                    // ✅ 실제로 생성된 waypoint만 카운트
+                    int personWaypointCount = createdWaypoints.Count(w => w.Label == "person");
+                    int vehicleWaypointCount = createdWaypoints.Count(w => w.Label == "vehicle");
+                    int eventWaypointCount = createdWaypoints.Count(w => w.Label == "event");
+                    
                     string summary = $"{createdWaypoints.Count}개의 Waypoint가 생성되었습니다.\n" +
-                                    $"(Person: {entryPersonBoxes.Count}개, Vehicle: {entryVehicleBoxes.Count}개)";
+                                    $"(Person: {personWaypointCount}개, Vehicle: {vehicleWaypointCount}개, Event: {eventWaypointCount}개)";
 
             var result = MessageBox.Show(
                         $"{summary}\n\n자동 추적을 수행하시겠습니까?",
@@ -3484,13 +3510,8 @@ namespace WinFormsApp1
 
                 waypointMarkers.Remove(waypoint);
                 
-                // 해당 타입의 ListView에서 항목 제거
-                if (waypoint.Label == "person")
-                    listViewPersonWaypoints.Items.Remove(selectedItem);
-                else if (waypoint.Label == "vehicle")
-                    listViewVehicleWaypoints.Items.Remove(selectedItem);
-                else if (waypoint.Label == "event")
-                    listViewEventWaypoints.Items.Remove(selectedItem);
+                // ✅ ListView 업데이트 (모든 항목을 다시 그려서 동기화)
+                UpdateWaypointListView();
 
                 InvalidateBoxCache();
                 UpdateBoxCount();
@@ -4725,7 +4746,8 @@ namespace WinFormsApp1
             int personListViewHeight;
             if (personItemCount == 0)
             {
-                personListViewHeight = HEADER_HEIGHT + 5; // 빈 경우 최소 높이
+                // ✅ waypoint가 없어도 3개 항목이 보이는 공간 설정
+                personListViewHeight = HEADER_HEIGHT + (MIN_VISIBLE_ITEMS * ITEM_HEIGHT);
             }
             else if (personItemCount < MIN_VISIBLE_ITEMS)
             {
@@ -4749,7 +4771,8 @@ namespace WinFormsApp1
             int vehicleListViewHeight;
             if (vehicleItemCount == 0)
             {
-                vehicleListViewHeight = HEADER_HEIGHT + 5; // 빈 경우 최소 높이
+                // ✅ waypoint가 없어도 3개 항목이 보이는 공간 설정
+                vehicleListViewHeight = HEADER_HEIGHT + (MIN_VISIBLE_ITEMS * ITEM_HEIGHT);
             }
             else if (vehicleItemCount < MIN_VISIBLE_ITEMS)
             {
@@ -4773,7 +4796,8 @@ namespace WinFormsApp1
             int eventListViewHeight;
             if (eventItemCount == 0)
             {
-                eventListViewHeight = HEADER_HEIGHT + 5; // 빈 경우 최소 높이
+                // ✅ waypoint가 없어도 3개 항목이 보이는 공간 설정
+                eventListViewHeight = HEADER_HEIGHT + (MIN_VISIBLE_ITEMS * ITEM_HEIGHT);
             }
             else if (eventItemCount < MIN_VISIBLE_ITEMS)
             {
@@ -4792,27 +4816,27 @@ namespace WinFormsApp1
             listViewEventWaypoints.Height = eventListViewHeight;
             groupBoxEventWaypoint.Height = eventGroupBoxHeight;
             
-            // ✅ 다음 패널들의 위치 업데이트
-            int currentY = 16; // 시작 Y 위치
+            // ✅ 다음 패널들의 위치 업데이트 (상단 기준 정렬)
+            int currentY = 0; // 시작 Y 위치 (패널 Padding이 있으므로 0으로 시작)
             
             // Person Waypoint 위치
-            groupBoxPersonWaypoint.Location = new System.Drawing.Point(16, currentY);
+            groupBoxPersonWaypoint.Location = new System.Drawing.Point(12, currentY);
             currentY += groupBoxPersonWaypoint.Height + 20; // 패널 높이 + 여백
             
             // Vehicle Waypoint 위치
-            groupBoxVehicleWaypoint.Location = new System.Drawing.Point(16, currentY);
+            groupBoxVehicleWaypoint.Location = new System.Drawing.Point(12, currentY);
             currentY += groupBoxVehicleWaypoint.Height + 20; // 패널 높이 + 여백
             
             // Event Waypoint 위치
-            groupBoxEventWaypoint.Location = new System.Drawing.Point(16, currentY);
+            groupBoxEventWaypoint.Location = new System.Drawing.Point(12, currentY);
             currentY += groupBoxEventWaypoint.Height + 20; // 패널 높이 + 여백
             
             // 삭제 버튼 위치
-            btnDeleteEventWaypoint.Location = new System.Drawing.Point(16, currentY);
+            btnDeleteEventWaypoint.Location = new System.Drawing.Point(12, currentY);
             currentY += btnDeleteEventWaypoint.Height + 20; // 버튼 높이 + 여백
             
             // Labels 패널 위치
-            groupBoxLabels.Location = new System.Drawing.Point(16, currentY);
+            groupBoxLabels.Location = new System.Drawing.Point(12, currentY);
         }
 
         private void UpdateObjectInfo(BoundingBox box)
@@ -5570,7 +5594,53 @@ namespace WinFormsApp1
                         if (selected.StartsWith("person_"))
                         {
                             int newId = int.Parse(selected.Substring(7));
-                            SetBoxId(currentBox, "person", newId);
+                            int oldId = currentBox.PersonId;
+                            
+                            // ✅ 해당 박스가 속한 waypoint 찾기
+                            var waypoint = FindWaypointForBox(currentBox);
+                            
+                            if (waypoint != null && waypoint.Label == "person")
+                            {
+                                // ✅ waypoint 범위 내의 모든 person 박스의 PersonId 변경
+                                var boxesToUpdate = boundingBoxes
+                                    .Where(b => b.Label == "person" &&
+                                               b.PersonId == oldId &&
+                                               b.FrameIndex >= waypoint.EntryFrame &&
+                                               b.FrameIndex <= waypoint.ExitFrame &&
+                                               !b.IsDeleted)
+                                    .ToList();
+                                
+                                foreach (var box in boxesToUpdate)
+                                {
+                                    SetBoxId(box, "person", newId);
+                                    AddUndoAction(new UndoAction
+                                    {
+                                        Type = UndoActionType.ModifyBox,
+                                        Box = CloneBoundingBox(box),
+                                        OriginalLabel = "person",
+                                        OriginalObjectId = oldId
+                                    });
+                                }
+                                
+                                // ✅ waypoint의 ObjectId도 변경
+                                waypoint.ObjectId = newId;
+                                
+                                // ✅ waypoint 리스트 업데이트
+                                UpdateWaypointListView();
+                            }
+                            else
+                            {
+                                // waypoint에 속하지 않은 경우 현재 박스만 변경
+                                SetBoxId(currentBox, "person", newId);
+                                AddUndoAction(new UndoAction
+                                {
+                                    Type = UndoActionType.ModifyBox,
+                                    Box = CloneBoundingBox(currentBox),
+                                    OriginalLabel = "person",
+                                    OriginalObjectId = oldId
+                                });
+                            }
+                            
                             UpdateObjectInfo(currentBox);
                             UpdateBboxListDisplay();
                             pictureBoxVideo.Invalidate();
@@ -5680,10 +5750,56 @@ namespace WinFormsApp1
                         if (selected.StartsWith("vehicle_"))
                         {
                             string vType = selected.Substring(8);
-                            int vehicleId = Array.IndexOf(vehicleTypes, vType) + 1;
-                            if (vehicleId > 0)
+                            int newVehicleId = Array.IndexOf(vehicleTypes, vType) + 1;
+                            if (newVehicleId > 0)
                             {
-                                SetBoxId(currentBox, "vehicle", vehicleId);
+                                int oldVehicleId = currentBox.VehicleId;
+                                
+                                // ✅ 해당 박스가 속한 waypoint 찾기
+                                var waypoint = FindWaypointForBox(currentBox);
+                                
+                                if (waypoint != null && waypoint.Label == "vehicle")
+                                {
+                                    // ✅ waypoint 범위 내의 모든 vehicle 박스의 VehicleId 변경
+                                    var boxesToUpdate = boundingBoxes
+                                        .Where(b => b.Label == "vehicle" &&
+                                                   b.VehicleId == oldVehicleId &&
+                                                   b.FrameIndex >= waypoint.EntryFrame &&
+                                                   b.FrameIndex <= waypoint.ExitFrame &&
+                                                   !b.IsDeleted)
+                                        .ToList();
+                                    
+                                    foreach (var box in boxesToUpdate)
+                                    {
+                                        SetBoxId(box, "vehicle", newVehicleId);
+                                        AddUndoAction(new UndoAction
+                                        {
+                                            Type = UndoActionType.ModifyBox,
+                                            Box = CloneBoundingBox(box),
+                                            OriginalLabel = "vehicle",
+                                            OriginalObjectId = oldVehicleId
+                                        });
+                                    }
+                                    
+                                    // ✅ waypoint의 ObjectId도 변경
+                                    waypoint.ObjectId = newVehicleId;
+                                    
+                                    // ✅ waypoint 리스트 업데이트
+                                    UpdateWaypointListView();
+                                }
+                                else
+                                {
+                                    // waypoint에 속하지 않은 경우 현재 박스만 변경
+                                    SetBoxId(currentBox, "vehicle", newVehicleId);
+                                    AddUndoAction(new UndoAction
+                                    {
+                                        Type = UndoActionType.ModifyBox,
+                                        Box = CloneBoundingBox(currentBox),
+                                        OriginalLabel = "vehicle",
+                                        OriginalObjectId = oldVehicleId
+                                    });
+                                }
+                                
                                 UpdateObjectInfo(currentBox);
                                 UpdateBboxListDisplay();
                                 pictureBoxVideo.Invalidate();
@@ -6178,6 +6294,12 @@ namespace WinFormsApp1
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            
+            // ✅ Entry 마커가 위로 올라가도록 클리핑 영역 확장
+            Rectangle clipRect = e.ClipRectangle;
+            clipRect.Inflate(0, 15); // 위아래로 15픽셀 확장
+            g.SetClip(clipRect);
+            
             int width = panelTimeline.Width;
             int height = panelTimeline.Height;
 
@@ -6250,23 +6372,43 @@ namespace WinFormsApp1
                 }
             }
 
-            // ✅ Entry 설정 중일 때 빨간 선 표시
-            if (entryFrameIndex.HasValue && !exitFrameIndex.HasValue && totalFrames > 0)
-            {
-                int entryX = (int)(width * ((float)entryFrameIndex.Value / totalFrames));
-                using (Pen pen = new Pen(Color.Red, 3))
-                {
-                    g.DrawLine(pen, entryX, 0, entryX, height);
-                }
-            }
-
-            // ✅ 현재 재생 위치 표시 (흰색 선)
+            // ✅ 현재 재생 위치 표시 (흰색 선) - Entry 선보다 먼저 그려서 Entry가 위에 표시되도록
             if (totalFrames > 0)
             {
                 int currentX = (int)(width * timelineProgress);
                 using (Pen pen = new Pen(Color.White, 3))
                 {
                     g.DrawLine(pen, currentX, 0, currentX, height);
+                }
+            }
+
+            // ✅ Entry 설정 중일 때 빨간 선 표시 (위로 올라온 형태)
+            if (entryFrameIndex.HasValue && !exitFrameIndex.HasValue && totalFrames > 0)
+            {
+                int entryX = (int)(width * ((float)entryFrameIndex.Value / totalFrames));
+                int markerHeight = 8; // Entry 마커 높이
+                
+                // Entry 빨간 선 (전체 높이)
+                using (Pen pen = new Pen(Color.Red, 3))
+                {
+                    g.DrawLine(pen, entryX, 0, entryX, height);
+                }
+                
+                // Entry 마커 (위쪽 삼각형 - 패널 상단에 표시)
+                int triangleBase = 8; // 삼각형 밑변 너비
+                System.Drawing.Point[] trianglePoints = new System.Drawing.Point[]
+                {
+                    new System.Drawing.Point(entryX, 0), // 상단 꼭짓점
+                    new System.Drawing.Point(entryX - triangleBase / 2, markerHeight), // 왼쪽 밑변
+                    new System.Drawing.Point(entryX + triangleBase / 2, markerHeight) // 오른쪽 밑변
+                };
+                using (SolidBrush brush = new SolidBrush(Color.Red))
+                {
+                    g.FillPolygon(brush, trianglePoints);
+                }
+                using (Pen pen = new Pen(Color.DarkRed, 2))
+                {
+                    g.DrawPolygon(pen, trianglePoints);
                 }
             }
         }
@@ -6582,7 +6724,7 @@ namespace WinFormsApp1
                 MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255), // 파랑
                 EntryTime = timeString,
                 ExitTime = timeString,
-                ObjectId = 0,
+                ObjectId = box.VehicleId, // ✅ VehicleId를 ObjectId로 설정
                 Label = "vehicle"
             };
 
