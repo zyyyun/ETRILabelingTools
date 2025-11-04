@@ -506,7 +506,7 @@
             this.listViewEventWaypoints.TabStop = false;
             this.listViewEventWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 255, 224); // 연한 초록
             this.listViewEventWaypoints.Columns.Add("Event", 80);
-            this.listViewEventWaypoints.Columns.Add("timestamp", 100);
+            this.listViewEventWaypoints.Columns.Add("timestamp", 95);
             this.listViewEventWaypoints.Columns.Add("객체(P/V)", 80);
             this.listViewEventWaypoints.Click += new System.EventHandler(this.listViewEventWaypoints_Click);
             this.listViewEventWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
