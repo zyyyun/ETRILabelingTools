@@ -398,7 +398,7 @@
             this.panelRightSidebar.AutoScroll = true;
             this.panelRightSidebar.TabStop = false;
 
-            int rightY = 16;
+            int rightY = 0; // ✅ 상단 정렬 (Padding이 있으므로 0으로 시작)
 
             // 
             // groupBoxObjectInfo (하단 플레이바 - 우측에 고정 배치)
@@ -438,7 +438,7 @@
             // groupBoxPersonWaypoint (빨강 테마)
             // 
             this.groupBoxPersonWaypoint.Text = "■ Person Waypoint";
-            this.groupBoxPersonWaypoint.Location = new System.Drawing.Point(16, 16);
+            this.groupBoxPersonWaypoint.Location = new System.Drawing.Point(12, 0); // ✅ 상단 정렬 (Padding이 있으므로 0으로 설정)
             this.groupBoxPersonWaypoint.Size = new System.Drawing.Size(280, 250);
             this.groupBoxPersonWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.groupBoxPersonWaypoint.ForeColor = System.Drawing.Color.FromArgb(255, 107, 107); // 빨강
@@ -465,7 +465,7 @@
             // groupBoxVehicleWaypoint (파랑 테마)
             // 
             this.groupBoxVehicleWaypoint.Text = "■ Vehicle Waypoint";
-            this.groupBoxVehicleWaypoint.Location = new System.Drawing.Point(16, rightY);
+            this.groupBoxVehicleWaypoint.Location = new System.Drawing.Point(12, rightY);
             this.groupBoxVehicleWaypoint.Size = new System.Drawing.Size(280, 250);
             this.groupBoxVehicleWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.groupBoxVehicleWaypoint.ForeColor = System.Drawing.Color.FromArgb(107, 158, 255); // 파랑
@@ -492,7 +492,7 @@
             // groupBoxEventWaypoint (초록 테마)
             // 
             this.groupBoxEventWaypoint.Text = "■ Event Waypoint";
-            this.groupBoxEventWaypoint.Location = new System.Drawing.Point(16, rightY);
+            this.groupBoxEventWaypoint.Location = new System.Drawing.Point(12, rightY);
             this.groupBoxEventWaypoint.Size = new System.Drawing.Size(280, 250);
             this.groupBoxEventWaypoint.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.groupBoxEventWaypoint.ForeColor = System.Drawing.Color.FromArgb(107, 255, 107); // 초록
@@ -521,7 +521,7 @@
             // 
             this.btnDeleteEventWaypoint = new System.Windows.Forms.Button();
             this.btnDeleteEventWaypoint.Text = "선택한 Waypoint 삭제";
-            this.btnDeleteEventWaypoint.Location = new System.Drawing.Point(16, rightY);
+            this.btnDeleteEventWaypoint.Location = new System.Drawing.Point(12, rightY);
             this.btnDeleteEventWaypoint.Size = new System.Drawing.Size(280, 35);
             this.btnDeleteEventWaypoint.TabStop = false;
             this.btnDeleteEventWaypoint.BackColor = System.Drawing.Color.FromArgb(239, 68, 68); // 빨간색
@@ -537,7 +537,7 @@
             // groupBoxLabels
             // 
             this.groupBoxLabels.Text = "Labels";
-            this.groupBoxLabels.Location = new System.Drawing.Point(16, rightY);
+            this.groupBoxLabels.Location = new System.Drawing.Point(12, rightY);
             this.groupBoxLabels.Size = new System.Drawing.Size(288, 260);
             this.groupBoxLabels.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.groupBoxLabels.TabStop = false;
