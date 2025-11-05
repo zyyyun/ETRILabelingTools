@@ -8950,6 +8950,21 @@ namespace WinFormsApp1
         {
             try
             {
+                // ✅ 입력 컨트롤(TextBox, ComboBox 등)에 포커스가 있으면 단축키 무시
+                Control focusedControl = this.ActiveControl;
+                if (focusedControl != null)
+                {
+                    // TextBox나 ComboBox에 포커스가 있으면 단축키 처리하지 않음
+                    if (focusedControl is TextBox || focusedControl is ComboBox)
+                    {
+                        // Enter, Escape는 입력 컨트롤에서 처리하도록 허용
+                        if (e.KeyCode != Keys.Enter && e.KeyCode != Keys.Escape)
+                        {
+                            return;
+                        }
+                    }
+                }
+                
                 // ✅ YOLO 추적/탐지 중에는 모든 키 입력 무시 (작업 보호)
                 if (IsYoloOperationInProgress())
                 {
@@ -9015,9 +9030,67 @@ namespace WinFormsApp1
                 
                 if (assignedId.HasValue)
                 {
-                    currentAssignedId = assignedId.Value;
-                    MessageBox.Show($"Person ID를 {currentAssignedId}로 설정했습니다.", 
-                        "ID 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    // ✅ 선택된 person 박스가 있으면 현재 박스의 ID를 변경
+                    if (selectedBox != null && selectedBox.Label == "person")
+                    {
+                        int oldId = selectedBox.PersonId;
+                        int newId = assignedId.Value;
+                        
+                        // ✅ 해당 박스가 속한 waypoint 찾기
+                        var waypoint = FindWaypointForBox(selectedBox);
+                        
+                        if (waypoint != null && waypoint.Label == "person")
+                        {
+                            // ✅ waypoint 범위 내의 모든 person 박스의 PersonId 변경
+                            var boxesToUpdate = boundingBoxes
+                                .Where(b => b.Label == "person" &&
+                                           b.PersonId == oldId &&
+                                           b.FrameIndex >= waypoint.EntryFrame &&
+                                           b.FrameIndex <= waypoint.ExitFrame &&
+                                           !b.IsDeleted)
+                                .ToList();
+                            
+                            foreach (var box in boxesToUpdate)
+                            {
+                                SetBoxId(box, "person", newId);
+                                AddUndoAction(new UndoAction
+                                {
+                                    Type = UndoActionType.ModifyBox,
+                                    Box = CloneBoundingBox(box),
+                                    OriginalLabel = "person",
+                                    OriginalObjectId = oldId
+                                });
+                            }
+                            
+                            // ✅ waypoint의 ObjectId도 변경
+                            waypoint.ObjectId = newId;
+                            
+                            // ✅ waypoint 리스트 업데이트
+                            UpdateWaypointListView();
+                        }
+                        else
+                        {
+                            // waypoint에 속하지 않은 경우 현재 박스만 변경
+                            SetBoxId(selectedBox, "person", newId);
+                            AddUndoAction(new UndoAction
+                            {
+                                Type = UndoActionType.ModifyBox,
+                                Box = CloneBoundingBox(selectedBox),
+                                OriginalLabel = "person",
+                                OriginalObjectId = oldId
+                            });
+                        }
+                        
+                        UpdateObjectInfo(selectedBox);
+                        UpdateBboxListDisplay();
+                        pictureBoxVideo.Invalidate();
+                    }
+                    else
+                    {
+                        // 선택된 박스가 없으면 기존처럼 다음 ID 값만 설정
+                        currentAssignedId = assignedId.Value;
+                    }
+                    
                     e.Handled = true;
                     return;
                 }
@@ -9041,9 +9114,67 @@ namespace WinFormsApp1
                 
                 if (assignedId.HasValue)
                 {
-                    currentAssignedId = assignedId.Value;
-                    MessageBox.Show($"Person ID를 {currentAssignedId}로 설정했습니다.", 
-                        "ID 설정", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    // ✅ 선택된 person 박스가 있으면 현재 박스의 ID를 변경
+                    if (selectedBox != null && selectedBox.Label == "person")
+                    {
+                        int oldId = selectedBox.PersonId;
+                        int newId = assignedId.Value;
+                        
+                        // ✅ 해당 박스가 속한 waypoint 찾기
+                        var waypoint = FindWaypointForBox(selectedBox);
+                        
+                        if (waypoint != null && waypoint.Label == "person")
+                        {
+                            // ✅ waypoint 범위 내의 모든 person 박스의 PersonId 변경
+                            var boxesToUpdate = boundingBoxes
+                                .Where(b => b.Label == "person" &&
+                                           b.PersonId == oldId &&
+                                           b.FrameIndex >= waypoint.EntryFrame &&
+                                           b.FrameIndex <= waypoint.ExitFrame &&
+                                           !b.IsDeleted)
+                                .ToList();
+                            
+                            foreach (var box in boxesToUpdate)
+                            {
+                                SetBoxId(box, "person", newId);
+                                AddUndoAction(new UndoAction
+                                {
+                                    Type = UndoActionType.ModifyBox,
+                                    Box = CloneBoundingBox(box),
+                                    OriginalLabel = "person",
+                                    OriginalObjectId = oldId
+                                });
+                            }
+                            
+                            // ✅ waypoint의 ObjectId도 변경
+                            waypoint.ObjectId = newId;
+                            
+                            // ✅ waypoint 리스트 업데이트
+                            UpdateWaypointListView();
+                        }
+                        else
+                        {
+                            // waypoint에 속하지 않은 경우 현재 박스만 변경
+                            SetBoxId(selectedBox, "person", newId);
+                            AddUndoAction(new UndoAction
+                            {
+                                Type = UndoActionType.ModifyBox,
+                                Box = CloneBoundingBox(selectedBox),
+                                OriginalLabel = "person",
+                                OriginalObjectId = oldId
+                            });
+                        }
+                        
+                        UpdateObjectInfo(selectedBox);
+                        UpdateBboxListDisplay();
+                        pictureBoxVideo.Invalidate();
+                    }
+                    else
+                    {
+                        // 선택된 박스가 없으면 기존처럼 다음 ID 값만 설정
+                        currentAssignedId = assignedId.Value;
+                    }
+                    
                     e.Handled = true;
                     return;
                 }
@@ -9065,6 +9196,12 @@ namespace WinFormsApp1
             if (e.KeyCode == Keys.Space)
             {
                 btnPlay_Click(sender, e);
+                e.Handled = true;
+            }
+            // C 키 - 자막 토글
+            else if (e.KeyCode == Keys.C && !e.Control && !e.Shift && !e.Alt)
+            {
+                btnToggleSubtitle_Click(sender, e);
                 e.Handled = true;
             }
             else if (e.Shift && e.KeyCode == Keys.OemPeriod) // Shift + > (> 키)
