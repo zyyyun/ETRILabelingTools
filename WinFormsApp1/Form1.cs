@@ -793,6 +793,11 @@ namespace WinFormsApp1
         private SemaphoreSlim detectionSemaphore = new SemaphoreSlim(1, 1); // ✅ 동시 탐지 작업 제한 (최대 1개)
         private volatile bool isFormDisposed = false; // ✅ Form이 Dispose되었는지 확인
         
+        // ✅ 프레임 이동 연속 처리용 타이머
+        private System.Threading.Timer frameNavigationTimer = null;
+        private Keys currentNavigationKey = Keys.None; // 현재 눌린 프레임 이동 키
+        private const int FRAME_NAVIGATION_INTERVAL_MS = 200; // 연속 프레임 이동 간격 (ms) - 렉 방지를 위해 200ms로 증가
+        
         // YOLO 탐지 결과 저장용 클래스
         private class YoloDetectionBox
         {
@@ -895,6 +900,9 @@ namespace WinFormsApp1
             // ✅ 창 상태 변경 시 최대화/복원 버튼 아이콘 업데이트
             this.Resize += Form1_Resize;
             UpdateMaximizeButtonIcon();
+            
+            // ✅ KeyUp 이벤트 핸들러 등록 (키를 뗄 때 타이머 중지)
+            this.KeyUp += Form1_KeyUp;
         }
 
         // ✅ ListView에서 키 이벤트를 Form1로 전달하는 핸들러
@@ -7263,6 +7271,9 @@ namespace WinFormsApp1
                 "완료",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
+            
+            // ✅ 강제 관성추적 완료 후 a프레임(시작 프레임)으로 이동
+            LoadFrame(aFrame);
         }
         
         /// <summary>
@@ -7585,6 +7596,25 @@ namespace WinFormsApp1
                         
                         int afterCount = boundingBoxes.Count;
                         totalBoxesAdded += (afterCount - beforeCount);
+                        
+                        // ✅ 각 waypoint 추적 완료 후 해당 waypoint의 Entry 프레임으로 이동 (UI 스레드에서 실행)
+                        // PerformTrackingForWaypointAsync 내부에서도 LoadFrame을 호출하지만, 
+                        // 여기서도 호출하여 확실히 프레임 이동 보장
+                        // ⚠️ isTrackingInProgress가 true이면 LoadFrame이 차단되므로, 
+                        // 프레임 이동을 위해 임시로 플래그를 해제하고 LoadFrame 호출 후 다시 설정
+                        SafeInvoke(() =>
+                        {
+                            bool wasTracking = isTrackingInProgress;
+                            isTrackingInProgress = false; // 임시로 해제하여 LoadFrame이 실행되도록
+                            try
+                            {
+                                LoadFrame(waypoint.EntryFrame);
+                            }
+                            finally
+                            {
+                                isTrackingInProgress = wasTracking; // 원래 상태로 복원
+                            }
+                        });
                     }
                     catch (InvalidOperationException ex)
                     {
@@ -7854,6 +7884,23 @@ namespace WinFormsApp1
 
                 // ✅ 개별 waypoint 추적 완료 로그
                 System.Diagnostics.Debug.WriteLine($"[추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, BBox 추가={allTrackedBoxes.Count}개");
+                
+                // ✅ 각 waypoint 추적 완료 후 해당 waypoint의 Entry 프레임으로 이동 (UI 스레드에서 실행)
+                // ⚠️ isTrackingInProgress가 true이면 LoadFrame이 차단되므로, 
+                // 프레임 이동을 위해 임시로 플래그를 해제하고 LoadFrame 호출 후 다시 설정
+                SafeInvoke(() =>
+                {
+                    bool wasTracking = isTrackingInProgress;
+                    isTrackingInProgress = false; // 임시로 해제하여 LoadFrame이 실행되도록
+                    try
+                    {
+                        LoadFrame(waypoint.EntryFrame);
+                    }
+                    finally
+                    {
+                        isTrackingInProgress = wasTracking; // 원래 상태로 복원
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -8098,6 +8145,9 @@ namespace WinFormsApp1
                 DetectContinuousAbsence(waypoint);
                 
                 MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n관성 보간:\n- 재추적 범위: {inertiaAppliedFrames}개 프레임\n- 전체 범위 재보간: {additionalInterpolatedFrames}개 프레임\n- 총 보간: {totalInterpolated}개 프레임\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                
+                // ✅ 재추적 완료 후 재추적을 시작한 프레임으로 이동
+                LoadFrame(startFrame);
             }
             catch (Exception ex)
             {
@@ -8893,21 +8943,25 @@ namespace WinFormsApp1
                 // 방향키: 영상 로드된 경우만 처리
                 if (isVideoLoaded)
                 {
-                    if (keyData == Keys.Left)
+                    // KeyDown 이벤트 처리 (WM_KEYDOWN)
+                    if (msg.Msg == 0x100) // WM_KEYDOWN
                     {
-                        // 5초씩 뒤로 이동
-                        int framesToMove = (int)(fps * 5);
-                        int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
-                        LoadFrame(newFrame);
-                        return true; // 이벤트 처리 완료
+                        if (keyData == Keys.Left || keyData == Keys.Right)
+                        {
+                            // ✅ 키가 눌렸을 때 타이머 시작
+                            StartFrameNavigation(keyData);
+                            return true;
+                        }
                     }
-                    else if (keyData == Keys.Right)
+                    // KeyUp 이벤트 처리 (WM_KEYUP)
+                    else if (msg.Msg == 0x101) // WM_KEYUP
                     {
-                        // 5초씩 앞으로 이동
-                        int framesToMove = (int)(fps * 5);
-                        int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
-                        LoadFrame(newFrame);
-                        return true; // 이벤트 처리 완료
+                        if (keyData == Keys.Left || keyData == Keys.Right)
+                        {
+                            // ✅ 키가 떼어졌을 때 타이머 중지
+                            StopFrameNavigation();
+                            return true;
+                        }
                     }
                 }
             }
@@ -8919,6 +8973,159 @@ namespace WinFormsApp1
             
             // 처리하지 못한 키는 기본 동작 수행
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+        
+        // ✅ 프레임 이동 타이머 시작
+        private void StartFrameNavigation(Keys key)
+        {
+            try
+            {
+                // 이미 같은 키가 눌려있으면 무시
+                if (currentNavigationKey == key && frameNavigationTimer != null)
+                    return;
+                
+                // 기존 타이머 정리
+                StopFrameNavigation();
+                
+                currentNavigationKey = key;
+                
+                // 즉시 첫 프레임 이동 수행
+                PerformFrameNavigation(key);
+                
+                // 연속 프레임 이동을 위한 타이머 시작
+                frameNavigationTimer = new System.Threading.Timer((state) =>
+                {
+                    if (!isFormDisposed && this.IsHandleCreated)
+                    {
+                        this.Invoke((MethodInvoker)delegate
+                        {
+                            if (currentNavigationKey != Keys.None && !IsYoloOperationInProgress())
+                            {
+                                PerformFrameNavigation(currentNavigationKey);
+                            }
+                        });
+                    }
+                }, null, FRAME_NAVIGATION_INTERVAL_MS, FRAME_NAVIGATION_INTERVAL_MS);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[프레임 이동 타이머 시작 오류] {ex.Message}");
+            }
+        }
+        
+        // ✅ 프레임 이동 타이머 중지
+        private void StopFrameNavigation()
+        {
+            try
+            {
+                currentNavigationKey = Keys.None;
+                
+                if (frameNavigationTimer != null)
+                {
+                    frameNavigationTimer.Dispose();
+                    frameNavigationTimer = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[프레임 이동 타이머 중지 오류] {ex.Message}");
+            }
+        }
+        
+        // ✅ 실제 프레임 이동 수행
+        private void PerformFrameNavigation(Keys key)
+        {
+            try
+            {
+                bool isVideoLoaded = videoCapture != null && videoCapture.IsOpened();
+                if (!isVideoLoaded) return;
+                
+                if (key == Keys.Left)
+                {
+                    // 5초씩 뒤로 이동
+                    int framesToMove = (int)(fps * 5);
+                    int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
+                    LoadFrame(newFrame);
+                }
+                else if (key == Keys.Right)
+                {
+                    // 5초씩 앞으로 이동
+                    int framesToMove = (int)(fps * 5);
+                    int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
+                    LoadFrame(newFrame);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[프레임 이동 수행 오류] {ex.Message}");
+            }
+        }
+        
+        // ✅ 한 프레임 이동 타이머 시작 (',' 또는 '.' 키)
+        private void StartSingleFrameNavigation(Keys key)
+        {
+            try
+            {
+                // 이미 같은 키가 눌려있으면 무시
+                if (currentNavigationKey == key && frameNavigationTimer != null)
+                    return;
+                
+                // 기존 타이머 정리
+                StopFrameNavigation();
+                
+                currentNavigationKey = key;
+                
+                // 즉시 첫 프레임 이동 수행
+                PerformSingleFrameNavigation(key);
+                
+                // 연속 프레임 이동을 위한 타이머 시작
+                frameNavigationTimer = new System.Threading.Timer((state) =>
+                {
+                    if (!isFormDisposed && this.IsHandleCreated)
+                    {
+                        this.Invoke((MethodInvoker)delegate
+                        {
+                            if (currentNavigationKey != Keys.None && !IsYoloOperationInProgress())
+                            {
+                                PerformSingleFrameNavigation(currentNavigationKey);
+                            }
+                        });
+                    }
+                }, null, FRAME_NAVIGATION_INTERVAL_MS, FRAME_NAVIGATION_INTERVAL_MS);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[한 프레임 이동 타이머 시작 오류] {ex.Message}");
+            }
+        }
+        
+        // ✅ 한 프레임 이동 수행
+        private void PerformSingleFrameNavigation(Keys key)
+        {
+            try
+            {
+                bool isVideoLoaded = videoCapture != null && videoCapture.IsOpened();
+                if (!isVideoLoaded) return;
+                
+                if (key == Keys.Oemcomma) // ',' 키 - 이전 프레임
+                {
+                    if (currentFrameIndex > 0)
+                    {
+                        LoadFrame(currentFrameIndex - 1);
+                    }
+                }
+                else if (key == Keys.OemPeriod) // '.' 키 - 다음 프레임
+                {
+                    if (currentFrameIndex < totalFrames - 1)
+                    {
+                        LoadFrame(currentFrameIndex + 1);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[한 프레임 이동 수행 오류] {ex.Message}");
+            }
         }
         
         // ✅ YOLO 추적 중인지 확인하는 메서드
@@ -8950,21 +9157,6 @@ namespace WinFormsApp1
         {
             try
             {
-                // ✅ 입력 컨트롤(TextBox, ComboBox 등)에 포커스가 있으면 단축키 무시
-                Control focusedControl = this.ActiveControl;
-                if (focusedControl != null)
-                {
-                    // TextBox나 ComboBox에 포커스가 있으면 단축키 처리하지 않음
-                    if (focusedControl is TextBox || focusedControl is ComboBox)
-                    {
-                        // Enter, Escape는 입력 컨트롤에서 처리하도록 허용
-                        if (e.KeyCode != Keys.Enter && e.KeyCode != Keys.Escape)
-                        {
-                            return;
-                        }
-                    }
-                }
-                
                 // ✅ YOLO 추적/탐지 중에는 모든 키 입력 무시 (작업 보호)
                 if (IsYoloOperationInProgress())
                 {
@@ -8984,6 +9176,16 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[키 입력 처리 오류] {ex.Message}\n{ex.StackTrace}");
                 // 오류 발생 시에도 기본 동작 계속
+            }
+
+            // ✅ 텍스트 입력 중에는 단축키 무시 (Enter, Escape 제외)
+            if (this.ActiveControl is TextBox || this.ActiveControl is ComboBox)
+            {
+                // Enter와 Escape는 허용 (텍스트 입력 완료/취소)
+                if (e.KeyCode != Keys.Enter && e.KeyCode != Keys.Escape)
+                {
+                    return;
+                }
             }
 
             // F1/F2/F3: Person/Vehicle/Event 라벨 선택 (영상 로드 여부와 무관)
@@ -9196,12 +9398,6 @@ namespace WinFormsApp1
             if (e.KeyCode == Keys.Space)
             {
                 btnPlay_Click(sender, e);
-                e.Handled = true;
-            }
-            // C 키 - 자막 토글
-            else if (e.KeyCode == Keys.C && !e.Control && !e.Shift && !e.Alt)
-            {
-                btnToggleSubtitle_Click(sender, e);
                 e.Handled = true;
             }
             else if (e.Shift && e.KeyCode == Keys.OemPeriod) // Shift + > (> 키)
@@ -9613,6 +9809,15 @@ namespace WinFormsApp1
                     e.Handled = true;
                 }
             }
+            else if (e.KeyCode == Keys.C && !e.Control && !e.Shift && !e.Alt)
+            {
+                // ✅ C 키: 자막 토글
+                if (btnToggleSubtitle != null)
+                {
+                    btnToggleSubtitle_Click(sender, e);
+                    e.Handled = true;
+                }
+            }
             else if (e.KeyCode == Keys.Oemcomma) // ',' 키
             {
                 try
@@ -9630,12 +9835,9 @@ namespace WinFormsApp1
                         return;
                     }
                     
-                    // ✅ 이전 프레임으로 이동
-                    if (currentFrameIndex > 0)
-                    {
-                        LoadFrame(currentFrameIndex - 1);
-                        e.Handled = true;
-                    }
+                    // ✅ 키가 눌렸을 때 타이머 시작 (연속 이동)
+                    StartSingleFrameNavigation(Keys.Oemcomma);
+                    e.Handled = true;
                 }
                 catch (Exception ex)
                 {
@@ -9665,12 +9867,9 @@ namespace WinFormsApp1
                         return;
                     }
                     
-                    // ✅ 다음 프레임으로 이동
-                    if (currentFrameIndex < totalFrames - 1)
-                    {
-                        LoadFrame(currentFrameIndex + 1);
-                        e.Handled = true;
-                    }
+                    // ✅ 키가 눌렸을 때 타이머 시작 (연속 이동)
+                    StartSingleFrameNavigation(Keys.OemPeriod);
+                    e.Handled = true;
                 }
                 catch (Exception ex)
                 {
@@ -9682,6 +9881,25 @@ namespace WinFormsApp1
                         MessageBoxIcon.Error);
                     e.Handled = true;
                 }
+            }
+        }
+        
+        // ✅ KeyUp 이벤트 핸들러 - 키를 뗄 때 타이머 중지
+        private void Form1_KeyUp(object sender, KeyEventArgs e)
+        {
+            try
+            {
+                // 방향키 또는 ',' '.' 키를 뗄 때 타이머 중지
+                if (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || 
+                    e.KeyCode == Keys.Oemcomma || e.KeyCode == Keys.OemPeriod)
+                {
+                    StopFrameNavigation();
+                    e.Handled = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[KeyUp 처리 오류] {ex.Message}");
             }
         }
 
