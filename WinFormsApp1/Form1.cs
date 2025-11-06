@@ -793,11 +793,6 @@ namespace WinFormsApp1
         private SemaphoreSlim detectionSemaphore = new SemaphoreSlim(1, 1); // ✅ 동시 탐지 작업 제한 (최대 1개)
         private volatile bool isFormDisposed = false; // ✅ Form이 Dispose되었는지 확인
         
-        // ✅ 프레임 이동 연속 처리용 타이머
-        private System.Threading.Timer frameNavigationTimer = null;
-        private Keys currentNavigationKey = Keys.None; // 현재 눌린 프레임 이동 키
-        private const int FRAME_NAVIGATION_INTERVAL_MS = 200; // 연속 프레임 이동 간격 (ms) - 렉 방지를 위해 200ms로 증가
-        
         // YOLO 탐지 결과 저장용 클래스
         private class YoloDetectionBox
         {
@@ -900,9 +895,6 @@ namespace WinFormsApp1
             // ✅ 창 상태 변경 시 최대화/복원 버튼 아이콘 업데이트
             this.Resize += Form1_Resize;
             UpdateMaximizeButtonIcon();
-            
-            // ✅ KeyUp 이벤트 핸들러 등록 (키를 뗄 때 타이머 중지)
-            this.KeyUp += Form1_KeyUp;
         }
 
         // ✅ ListView에서 키 이벤트를 Form1로 전달하는 핸들러
@@ -1029,6 +1021,46 @@ namespace WinFormsApp1
             catch (Exception ex)
             {
                 string errorMessage = ex.Message;
+                string fullErrorDetails = $"에러 메시지: {ex.Message}\n\n스택 트레이스:\n{ex.StackTrace}";
+
+                var missingDlls = CudaEnvironmentHelper.GetMissingCudaDependencies();
+                if (missingDlls.Count > 0)
+                {
+                    errorMessage += "\n\n[누락된 CUDA DLL]\n - " + string.Join("\n - ", missingDlls);
+                    errorMessage += "\n\nMicrosoft.ML.OnnxRuntime.Gpu 1.22.1은 CUDA 12.x(예: 12.3/12.4)와 cuDNN 9.x 런타임 DLL을 요구합니다. " +
+                                    "NVIDIA CUDA Toolkit 12.x와 cuDNN 9.x를 설치한 뒤, 설치 경로의 bin 폴더를 PATH에 추가하거나 실행 폴더에 DLL을 복사하세요.";
+                }
+                
+                // ✅ CUDA 관련 에러 감지 및 상세 정보 제공
+                if (ex.Message.Contains("CUDA") || ex.Message.Contains("cuda") || 
+                    ex.Message.Contains("GPU") || ex.Message.Contains("gpu") ||
+                    ex.InnerException != null && (ex.InnerException.Message.Contains("CUDA") || 
+                                                   ex.InnerException.Message.Contains("cuda")))
+                {
+                    errorMessage += "\n\n[CUDA 관련 에러 해결 방법]\n\n" +
+                                  "1. NVIDIA 드라이버 확인:\n" +
+                                  "   - nvidia-smi 명령어로 GPU 인식 여부 확인\n" +
+                                  "   - 최신 드라이버 설치 권장\n\n" +
+                                  "2. CUDA Toolkit 확인:\n" +
+                                  "   - YoloSharp.Gpu 6.0.6은 일반적으로 CUDA 11.x 또는 12.x 필요\n" +
+                                  "   - 시스템에 설치된 CUDA 버전 확인\n\n" +
+                                  "3. cuDNN 확인:\n" +
+                                  "   - CUDA 버전에 맞는 cuDNN 설치 필요\n" +
+                                  "   - 환경 변수 PATH에 cuDNN 경로 추가\n\n" +
+                                  "4. 환경 변수 확인:\n" +
+                                  "   - CUDA_PATH 환경 변수 설정 확인\n" +
+                                  "   - PATH에 CUDA bin 폴더 경로 포함 확인\n\n" +
+                                  "5. 대안:\n" +
+                                  "   - CPU 모드로 작동 (YoloSharp.Gpu 대신 YoloSharp 사용)\n" +
+                                  "   - 또는 YOLO 기능 없이 계속 진행";
+                    
+                    // 내부 예외 정보도 포함
+                    if (ex.InnerException != null)
+                    {
+                        fullErrorDetails += $"\n\n내부 예외:\n{ex.InnerException.Message}\n{ex.InnerException.StackTrace}";
+                    }
+                }
+                
                 if (errorMessage.Contains("Opset 22"))
                 {
                     errorMessage += "\n\n해결 방법:\n" +
@@ -1037,8 +1069,11 @@ namespace WinFormsApp1
                                   "3. 또는 YOLO 기능 없이 계속 진행하세요";
                 }
                 
+                // 디버그 출력에 전체 에러 정보 기록
+                System.Diagnostics.Debug.WriteLine($"[YOLO 초기화 실패] {fullErrorDetails}");
+                
                 MessageBox.Show(
-                        $"YOLO 모델 로딩중 에러: {errorMessage}\n\n" +
+                        $"YOLO 모델 로딩중 에러:\n\n{errorMessage}\n\n" +
                         "YOLO 기능 없이 계속 진행합니다.",
                         "경고",
                         MessageBoxButtons.OK,
@@ -2081,11 +2116,29 @@ namespace WinFormsApp1
                             }
                             catch (Exception ex)
                             {
-                                System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 오류] 모델 로드 실패: {ex.Message}\n{ex.StackTrace}");
+                                string errorDetails = $"[YOLO 탐지 오류] 모델 로드 실패: {ex.Message}\n{ex.StackTrace}";
+                                if (ex.InnerException != null)
+                                {
+                                    errorDetails += $"\n\n내부 예외: {ex.InnerException.Message}\n{ex.InnerException.StackTrace}";
+                                }
+                                System.Diagnostics.Debug.WriteLine(errorDetails);
+                                
+                                // CUDA 관련 에러인지 확인
+                                string errorMessage = ex.Message;
+                                if (ex.Message.Contains("CUDA") || ex.Message.Contains("cuda") || 
+                                    ex.Message.Contains("GPU") || ex.Message.Contains("gpu") ||
+                                    ex.InnerException != null && (ex.InnerException.Message.Contains("CUDA") || 
+                                                                   ex.InnerException.Message.Contains("cuda")))
+                                {
+                                    errorMessage += "\n\n[CUDA 관련 에러]\n" +
+                                                  "NVIDIA 드라이버, CUDA Toolkit, cuDNN 버전을 확인하세요.\n" +
+                                                  "자세한 해결 방법은 프로그램 시작 시 표시된 에러 메시지를 참조하세요.";
+                                }
+                                
                                 SafeInvoke(() =>
                                 {
                                     MessageBox.Show(
-                                        $"YOLO 모델 로드 실패:\n{ex.Message}",
+                                        $"YOLO 모델 로드 실패:\n\n{errorMessage}",
                                         "YOLO 오류",
                                         MessageBoxButtons.OK,
                                         MessageBoxIcon.Error);
@@ -2372,11 +2425,29 @@ namespace WinFormsApp1
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 오류] 모델 로드 실패: {ex.Message}\n{ex.StackTrace}");
+                            string errorDetails = $"[YOLO 탐지 오류] 모델 로드 실패: {ex.Message}\n{ex.StackTrace}";
+                            if (ex.InnerException != null)
+                            {
+                                errorDetails += $"\n\n내부 예외: {ex.InnerException.Message}\n{ex.InnerException.StackTrace}";
+                            }
+                            System.Diagnostics.Debug.WriteLine(errorDetails);
+                            
+                            // CUDA 관련 에러인지 확인
+                            string errorMessage = ex.Message;
+                            if (ex.Message.Contains("CUDA") || ex.Message.Contains("cuda") || 
+                                ex.Message.Contains("GPU") || ex.Message.Contains("gpu") ||
+                                ex.InnerException != null && (ex.InnerException.Message.Contains("CUDA") || 
+                                                               ex.InnerException.Message.Contains("cuda")))
+                            {
+                                errorMessage += "\n\n[CUDA 관련 에러]\n" +
+                                              "NVIDIA 드라이버, CUDA Toolkit, cuDNN 버전을 확인하세요.\n" +
+                                              "자세한 해결 방법은 프로그램 시작 시 표시된 에러 메시지를 참조하세요.";
+                            }
+                            
                             this.Invoke((MethodInvoker)(() =>
                             {
                                 MessageBox.Show(
-                                    $"YOLO 모델 로드 실패:\n{ex.Message}",
+                                    $"YOLO 모델 로드 실패:\n\n{errorMessage}",
                                     "YOLO 오류",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Error);
@@ -7271,9 +7342,6 @@ namespace WinFormsApp1
                 "완료",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
-            
-            // ✅ 강제 관성추적 완료 후 a프레임(시작 프레임)으로 이동
-            LoadFrame(aFrame);
         }
         
         /// <summary>
@@ -7596,25 +7664,6 @@ namespace WinFormsApp1
                         
                         int afterCount = boundingBoxes.Count;
                         totalBoxesAdded += (afterCount - beforeCount);
-                        
-                        // ✅ 각 waypoint 추적 완료 후 해당 waypoint의 Entry 프레임으로 이동 (UI 스레드에서 실행)
-                        // PerformTrackingForWaypointAsync 내부에서도 LoadFrame을 호출하지만, 
-                        // 여기서도 호출하여 확실히 프레임 이동 보장
-                        // ⚠️ isTrackingInProgress가 true이면 LoadFrame이 차단되므로, 
-                        // 프레임 이동을 위해 임시로 플래그를 해제하고 LoadFrame 호출 후 다시 설정
-                        SafeInvoke(() =>
-                        {
-                            bool wasTracking = isTrackingInProgress;
-                            isTrackingInProgress = false; // 임시로 해제하여 LoadFrame이 실행되도록
-                            try
-                            {
-                                LoadFrame(waypoint.EntryFrame);
-                            }
-                            finally
-                            {
-                                isTrackingInProgress = wasTracking; // 원래 상태로 복원
-                            }
-                        });
                     }
                     catch (InvalidOperationException ex)
                     {
@@ -7884,23 +7933,6 @@ namespace WinFormsApp1
 
                 // ✅ 개별 waypoint 추적 완료 로그
                 System.Diagnostics.Debug.WriteLine($"[추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, BBox 추가={allTrackedBoxes.Count}개");
-                
-                // ✅ 각 waypoint 추적 완료 후 해당 waypoint의 Entry 프레임으로 이동 (UI 스레드에서 실행)
-                // ⚠️ isTrackingInProgress가 true이면 LoadFrame이 차단되므로, 
-                // 프레임 이동을 위해 임시로 플래그를 해제하고 LoadFrame 호출 후 다시 설정
-                SafeInvoke(() =>
-                {
-                    bool wasTracking = isTrackingInProgress;
-                    isTrackingInProgress = false; // 임시로 해제하여 LoadFrame이 실행되도록
-                    try
-                    {
-                        LoadFrame(waypoint.EntryFrame);
-                    }
-                    finally
-                    {
-                        isTrackingInProgress = wasTracking; // 원래 상태로 복원
-                    }
-                });
             }
             catch (Exception ex)
             {
@@ -8145,9 +8177,6 @@ namespace WinFormsApp1
                 DetectContinuousAbsence(waypoint);
                 
                 MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n관성 보간:\n- 재추적 범위: {inertiaAppliedFrames}개 프레임\n- 전체 범위 재보간: {additionalInterpolatedFrames}개 프레임\n- 총 보간: {totalInterpolated}개 프레임\n\n💾 JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                
-                // ✅ 재추적 완료 후 재추적을 시작한 프레임으로 이동
-                LoadFrame(startFrame);
             }
             catch (Exception ex)
             {
@@ -8943,25 +8972,21 @@ namespace WinFormsApp1
                 // 방향키: 영상 로드된 경우만 처리
                 if (isVideoLoaded)
                 {
-                    // KeyDown 이벤트 처리 (WM_KEYDOWN)
-                    if (msg.Msg == 0x100) // WM_KEYDOWN
+                    if (keyData == Keys.Left)
                     {
-                        if (keyData == Keys.Left || keyData == Keys.Right)
-                        {
-                            // ✅ 키가 눌렸을 때 타이머 시작
-                            StartFrameNavigation(keyData);
-                            return true;
-                        }
+                        // 5초씩 뒤로 이동
+                        int framesToMove = (int)(fps * 5);
+                        int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
+                        LoadFrame(newFrame);
+                        return true; // 이벤트 처리 완료
                     }
-                    // KeyUp 이벤트 처리 (WM_KEYUP)
-                    else if (msg.Msg == 0x101) // WM_KEYUP
+                    else if (keyData == Keys.Right)
                     {
-                        if (keyData == Keys.Left || keyData == Keys.Right)
-                        {
-                            // ✅ 키가 떼어졌을 때 타이머 중지
-                            StopFrameNavigation();
-                            return true;
-                        }
+                        // 5초씩 앞으로 이동
+                        int framesToMove = (int)(fps * 5);
+                        int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
+                        LoadFrame(newFrame);
+                        return true; // 이벤트 처리 완료
                     }
                 }
             }
@@ -8973,159 +8998,6 @@ namespace WinFormsApp1
             
             // 처리하지 못한 키는 기본 동작 수행
             return base.ProcessCmdKey(ref msg, keyData);
-        }
-        
-        // ✅ 프레임 이동 타이머 시작
-        private void StartFrameNavigation(Keys key)
-        {
-            try
-            {
-                // 이미 같은 키가 눌려있으면 무시
-                if (currentNavigationKey == key && frameNavigationTimer != null)
-                    return;
-                
-                // 기존 타이머 정리
-                StopFrameNavigation();
-                
-                currentNavigationKey = key;
-                
-                // 즉시 첫 프레임 이동 수행
-                PerformFrameNavigation(key);
-                
-                // 연속 프레임 이동을 위한 타이머 시작
-                frameNavigationTimer = new System.Threading.Timer((state) =>
-                {
-                    if (!isFormDisposed && this.IsHandleCreated)
-                    {
-                        this.Invoke((MethodInvoker)delegate
-                        {
-                            if (currentNavigationKey != Keys.None && !IsYoloOperationInProgress())
-                            {
-                                PerformFrameNavigation(currentNavigationKey);
-                            }
-                        });
-                    }
-                }, null, FRAME_NAVIGATION_INTERVAL_MS, FRAME_NAVIGATION_INTERVAL_MS);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[프레임 이동 타이머 시작 오류] {ex.Message}");
-            }
-        }
-        
-        // ✅ 프레임 이동 타이머 중지
-        private void StopFrameNavigation()
-        {
-            try
-            {
-                currentNavigationKey = Keys.None;
-                
-                if (frameNavigationTimer != null)
-                {
-                    frameNavigationTimer.Dispose();
-                    frameNavigationTimer = null;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[프레임 이동 타이머 중지 오류] {ex.Message}");
-            }
-        }
-        
-        // ✅ 실제 프레임 이동 수행
-        private void PerformFrameNavigation(Keys key)
-        {
-            try
-            {
-                bool isVideoLoaded = videoCapture != null && videoCapture.IsOpened();
-                if (!isVideoLoaded) return;
-                
-                if (key == Keys.Left)
-                {
-                    // 5초씩 뒤로 이동
-                    int framesToMove = (int)(fps * 5);
-                    int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
-                    LoadFrame(newFrame);
-                }
-                else if (key == Keys.Right)
-                {
-                    // 5초씩 앞으로 이동
-                    int framesToMove = (int)(fps * 5);
-                    int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
-                    LoadFrame(newFrame);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[프레임 이동 수행 오류] {ex.Message}");
-            }
-        }
-        
-        // ✅ 한 프레임 이동 타이머 시작 (',' 또는 '.' 키)
-        private void StartSingleFrameNavigation(Keys key)
-        {
-            try
-            {
-                // 이미 같은 키가 눌려있으면 무시
-                if (currentNavigationKey == key && frameNavigationTimer != null)
-                    return;
-                
-                // 기존 타이머 정리
-                StopFrameNavigation();
-                
-                currentNavigationKey = key;
-                
-                // 즉시 첫 프레임 이동 수행
-                PerformSingleFrameNavigation(key);
-                
-                // 연속 프레임 이동을 위한 타이머 시작
-                frameNavigationTimer = new System.Threading.Timer((state) =>
-                {
-                    if (!isFormDisposed && this.IsHandleCreated)
-                    {
-                        this.Invoke((MethodInvoker)delegate
-                        {
-                            if (currentNavigationKey != Keys.None && !IsYoloOperationInProgress())
-                            {
-                                PerformSingleFrameNavigation(currentNavigationKey);
-                            }
-                        });
-                    }
-                }, null, FRAME_NAVIGATION_INTERVAL_MS, FRAME_NAVIGATION_INTERVAL_MS);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[한 프레임 이동 타이머 시작 오류] {ex.Message}");
-            }
-        }
-        
-        // ✅ 한 프레임 이동 수행
-        private void PerformSingleFrameNavigation(Keys key)
-        {
-            try
-            {
-                bool isVideoLoaded = videoCapture != null && videoCapture.IsOpened();
-                if (!isVideoLoaded) return;
-                
-                if (key == Keys.Oemcomma) // ',' 키 - 이전 프레임
-                {
-                    if (currentFrameIndex > 0)
-                    {
-                        LoadFrame(currentFrameIndex - 1);
-                    }
-                }
-                else if (key == Keys.OemPeriod) // '.' 키 - 다음 프레임
-                {
-                    if (currentFrameIndex < totalFrames - 1)
-                    {
-                        LoadFrame(currentFrameIndex + 1);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[한 프레임 이동 수행 오류] {ex.Message}");
-            }
         }
         
         // ✅ YOLO 추적 중인지 확인하는 메서드
@@ -9157,6 +9029,21 @@ namespace WinFormsApp1
         {
             try
             {
+                // ✅ 입력 컨트롤(TextBox, ComboBox 등)에 포커스가 있으면 단축키 무시
+                Control focusedControl = this.ActiveControl;
+                if (focusedControl != null)
+                {
+                    // TextBox나 ComboBox에 포커스가 있으면 단축키 처리하지 않음
+                    if (focusedControl is TextBox || focusedControl is ComboBox)
+                    {
+                        // Enter, Escape는 입력 컨트롤에서 처리하도록 허용
+                        if (e.KeyCode != Keys.Enter && e.KeyCode != Keys.Escape)
+                        {
+                            return;
+                        }
+                    }
+                }
+                
                 // ✅ YOLO 추적/탐지 중에는 모든 키 입력 무시 (작업 보호)
                 if (IsYoloOperationInProgress())
                 {
@@ -9176,16 +9063,6 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[키 입력 처리 오류] {ex.Message}\n{ex.StackTrace}");
                 // 오류 발생 시에도 기본 동작 계속
-            }
-
-            // ✅ 텍스트 입력 중에는 단축키 무시 (Enter, Escape 제외)
-            if (this.ActiveControl is TextBox || this.ActiveControl is ComboBox)
-            {
-                // Enter와 Escape는 허용 (텍스트 입력 완료/취소)
-                if (e.KeyCode != Keys.Enter && e.KeyCode != Keys.Escape)
-                {
-                    return;
-                }
             }
 
             // F1/F2/F3: Person/Vehicle/Event 라벨 선택 (영상 로드 여부와 무관)
@@ -9398,6 +9275,12 @@ namespace WinFormsApp1
             if (e.KeyCode == Keys.Space)
             {
                 btnPlay_Click(sender, e);
+                e.Handled = true;
+            }
+            // C 키 - 자막 토글
+            else if (e.KeyCode == Keys.C && !e.Control && !e.Shift && !e.Alt)
+            {
+                btnToggleSubtitle_Click(sender, e);
                 e.Handled = true;
             }
             else if (e.Shift && e.KeyCode == Keys.OemPeriod) // Shift + > (> 키)
@@ -9809,15 +9692,6 @@ namespace WinFormsApp1
                     e.Handled = true;
                 }
             }
-            else if (e.KeyCode == Keys.C && !e.Control && !e.Shift && !e.Alt)
-            {
-                // ✅ C 키: 자막 토글
-                if (btnToggleSubtitle != null)
-                {
-                    btnToggleSubtitle_Click(sender, e);
-                    e.Handled = true;
-                }
-            }
             else if (e.KeyCode == Keys.Oemcomma) // ',' 키
             {
                 try
@@ -9835,9 +9709,12 @@ namespace WinFormsApp1
                         return;
                     }
                     
-                    // ✅ 키가 눌렸을 때 타이머 시작 (연속 이동)
-                    StartSingleFrameNavigation(Keys.Oemcomma);
-                    e.Handled = true;
+                    // ✅ 이전 프레임으로 이동
+                    if (currentFrameIndex > 0)
+                    {
+                        LoadFrame(currentFrameIndex - 1);
+                        e.Handled = true;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -9867,9 +9744,12 @@ namespace WinFormsApp1
                         return;
                     }
                     
-                    // ✅ 키가 눌렸을 때 타이머 시작 (연속 이동)
-                    StartSingleFrameNavigation(Keys.OemPeriod);
-                    e.Handled = true;
+                    // ✅ 다음 프레임으로 이동
+                    if (currentFrameIndex < totalFrames - 1)
+                    {
+                        LoadFrame(currentFrameIndex + 1);
+                        e.Handled = true;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -9881,25 +9761,6 @@ namespace WinFormsApp1
                         MessageBoxIcon.Error);
                     e.Handled = true;
                 }
-            }
-        }
-        
-        // ✅ KeyUp 이벤트 핸들러 - 키를 뗄 때 타이머 중지
-        private void Form1_KeyUp(object sender, KeyEventArgs e)
-        {
-            try
-            {
-                // 방향키 또는 ',' '.' 키를 뗄 때 타이머 중지
-                if (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right || 
-                    e.KeyCode == Keys.Oemcomma || e.KeyCode == Keys.OemPeriod)
-                {
-                    StopFrameNavigation();
-                    e.Handled = true;
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[KeyUp 처리 오류] {ex.Message}");
             }
         }
 
