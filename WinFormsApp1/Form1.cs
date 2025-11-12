@@ -5659,7 +5659,7 @@ namespace WinFormsApp1
                 // ComboBox 호버 시 스크롤 방지
                 comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
                 
-                for (int i = 1; i <= 20; i++)
+                for (int i = 1; i <= 30; i++)
                 {
                     comboBox.Items.Add($"person_{i:D2}");
                 }
@@ -9190,6 +9190,90 @@ namespace WinFormsApp1
                 else if (e.KeyCode == Keys.D8 || e.KeyCode == Keys.NumPad8) assignedId = 18;
                 else if (e.KeyCode == Keys.D9 || e.KeyCode == Keys.NumPad9) assignedId = 19;
                 else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0) assignedId = 20;
+                
+                if (assignedId.HasValue)
+                {
+                    // ✅ 선택된 person 박스가 있으면 현재 박스의 ID를 변경
+                    if (selectedBox != null && selectedBox.Label == "person")
+                    {
+                        int oldId = selectedBox.PersonId;
+                        int newId = assignedId.Value;
+                        
+                        // ✅ 해당 박스가 속한 waypoint 찾기
+                        var waypoint = FindWaypointForBox(selectedBox);
+                        
+                        if (waypoint != null && waypoint.Label == "person")
+                        {
+                            // ✅ waypoint 범위 내의 모든 person 박스의 PersonId 변경
+                            var boxesToUpdate = boundingBoxes
+                                .Where(b => b.Label == "person" &&
+                                           b.PersonId == oldId &&
+                                           b.FrameIndex >= waypoint.EntryFrame &&
+                                           b.FrameIndex <= waypoint.ExitFrame &&
+                                           !b.IsDeleted)
+                                .ToList();
+                            
+                            foreach (var box in boxesToUpdate)
+                            {
+                                SetBoxId(box, "person", newId);
+                                AddUndoAction(new UndoAction
+                                {
+                                    Type = UndoActionType.ModifyBox,
+                                    Box = CloneBoundingBox(box),
+                                    OriginalLabel = "person",
+                                    OriginalObjectId = oldId
+                                });
+                            }
+                            
+                            // ✅ waypoint의 ObjectId도 변경
+                            waypoint.ObjectId = newId;
+                            
+                            // ✅ waypoint 리스트 업데이트
+                            UpdateWaypointListView();
+                        }
+                        else
+                        {
+                            // waypoint에 속하지 않은 경우 현재 박스만 변경
+                            SetBoxId(selectedBox, "person", newId);
+                            AddUndoAction(new UndoAction
+                            {
+                                Type = UndoActionType.ModifyBox,
+                                Box = CloneBoundingBox(selectedBox),
+                                OriginalLabel = "person",
+                                OriginalObjectId = oldId
+                            });
+                        }
+                        
+                        UpdateObjectInfo(selectedBox);
+                        UpdateBboxListDisplay();
+                        pictureBoxVideo.Invalidate();
+                    }
+                    else
+                    {
+                        // 선택된 박스가 없으면 기존처럼 다음 ID 값만 설정
+                        currentAssignedId = assignedId.Value;
+                    }
+                    
+                    e.Handled = true;
+                    return;
+                }
+            }
+            
+            // Shift+1~0으로 21~30 지정 (Person만)
+            if (!e.Control && e.Shift && !e.Alt && currentSelectedLabel == "person")
+            {
+                int? assignedId = null;
+                
+                if (e.KeyCode == Keys.D1 || e.KeyCode == Keys.NumPad1) assignedId = 21;
+                else if (e.KeyCode == Keys.D2 || e.KeyCode == Keys.NumPad2) assignedId = 22;
+                else if (e.KeyCode == Keys.D3 || e.KeyCode == Keys.NumPad3) assignedId = 23;
+                else if (e.KeyCode == Keys.D4 || e.KeyCode == Keys.NumPad4) assignedId = 24;
+                else if (e.KeyCode == Keys.D5 || e.KeyCode == Keys.NumPad5) assignedId = 25;
+                else if (e.KeyCode == Keys.D6 || e.KeyCode == Keys.NumPad6) assignedId = 26;
+                else if (e.KeyCode == Keys.D7 || e.KeyCode == Keys.NumPad7) assignedId = 27;
+                else if (e.KeyCode == Keys.D8 || e.KeyCode == Keys.NumPad8) assignedId = 28;
+                else if (e.KeyCode == Keys.D9 || e.KeyCode == Keys.NumPad9) assignedId = 29;
+                else if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0) assignedId = 30;
                 
                 if (assignedId.HasValue)
                 {
