@@ -1205,7 +1205,7 @@ namespace WinFormsApp1
                 
                 if (File.Exists(jsonFilePath))
                 {
-                    LoadLabelingData(currentVideoFile); // JSON 재로드
+                    await LoadLabelingData(currentVideoFile); // JSON 재로드
                 }
                 
                 MessageBox.Show(
@@ -1367,7 +1367,7 @@ namespace WinFormsApp1
             try
             {
                 // 기존 비디오 로드
-                LoadVideo(filePath);
+                await LoadVideo(filePath);
 
                 // 1. 먼저 외부 SRT 파일이 있는지 확인
                 string videoDir = Path.GetDirectoryName(filePath);
@@ -1392,7 +1392,7 @@ namespace WinFormsApp1
             }
         }
 
-        private void LoadVideo(string filePath)
+        private async Task LoadVideo(string filePath)
         {
             try
             {
@@ -1455,7 +1455,7 @@ namespace WinFormsApp1
                 this.Activate();
 
                 // 동일 파일명의 JSON 자동 로드
-                LoadLabelingData(filePath);
+                await LoadLabelingData(filePath);
                 
                 // ✅ 영상 로드 후 자동 재생 시작
                 if (!isPlaying)
@@ -7701,7 +7701,7 @@ namespace WinFormsApp1
                     // JSON 재로드하여 추적 데이터 기반으로 표시
                     if (File.Exists(jsonFilePath))
                     {
-                        LoadLabelingData(jsonFilePath);
+                        await LoadLabelingData(jsonFilePath);
                     }
 
                     MessageBox.Show(
@@ -8322,8 +8322,12 @@ namespace WinFormsApp1
         #endregion
 
         #region JSON Load/Export
-        private void LoadLabelingData(string videoFilePath)
+        private async Task LoadLabelingData(string videoFilePath)
         {
+            Form loadingForm = null;
+            Label loadingLabel = null;
+            ProgressBar progressBar = null;
+            
             try
             {
                 string videoDir = Path.GetDirectoryName(videoFilePath);
@@ -8340,34 +8344,138 @@ namespace WinFormsApp1
                 if (!File.Exists(loadPath))
                     return;
 
-                string json = File.ReadAllText(loadPath);
-                var labelingData = JsonConvert.DeserializeObject<LabelingDataExtended>(json);
+                // ✅ 1. 파일 크기 체크 및 경고
+                FileInfo fileInfo = new FileInfo(loadPath);
+                long fileSizeMB = fileInfo.Length / (1024 * 1024);
+                const long WARNING_SIZE_MB = 100;
 
-                if (labelingData == null || labelingData.Annotations == null)
-                    return;
-
-                // ✅ JSON 로드 시 모든 기존 데이터 초기화
-                boundingBoxes.Clear();
-                waypointMarkers.Clear();
-                categoryMap.Clear();
-                selectedBox = null;
-                undoStack.Clear();
-                redoStack.Clear();
-                lastRenderedWaypoint = null;
-                nextAnnotationId = 1;
-                // ID는 수동 지정 방식으로 변경됨: 별도 초기화 불필요
-                
-                // ✅ 실패 구간 정보 복원
-                waypointFailureRanges.Clear();
-                if (labelingData.FailureRanges != null)
+                if (fileSizeMB > WARNING_SIZE_MB)
                 {
-                    waypointFailureRanges = labelingData.FailureRanges;
-                    System.Diagnostics.Debug.WriteLine($"[JSON 로드] 실패 구간 정보 복원됨: {waypointFailureRanges.Count}개 객체");
+                    var result = MessageBox.Show(
+                        $"대용량 JSON 파일을 로드하려고 합니다.\n\n" +
+                        $"파일 크기: {fileSizeMB:N0} MB\n" +
+                        $"권장 크기: {WARNING_SIZE_MB} MB 이하\n\n" +
+                        $"계속하시겠습니까?",
+                        "대용량 파일 경고",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning);
+
+                    if (result != DialogResult.Yes)
+                        return;
                 }
 
-                // ImageId → FrameNumber 매핑 생성 및 FrameNumber → Timestamp 매핑 생성
+                // ✅ 2. 백업 파일 생성
+                string backupPath = loadPath + ".backup";
+                try
+                {
+                    if (File.Exists(backupPath))
+                    {
+                        File.Delete(backupPath);
+                    }
+                    File.Copy(loadPath, backupPath);
+                    System.Diagnostics.Debug.WriteLine($"[JSON 로드] 백업 파일 생성: {backupPath}");
+                }
+                catch (Exception backupEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[JSON 로드] 백업 파일 생성 실패: {backupEx.Message}");
+                    // 백업 실패해도 로드는 계속 진행
+                }
+
+                // ✅ 3. 로딩 폼 생성 (진행률 표시)
+                loadingForm = new Form
+                {
+                    Width = 400,
+                    Height = 150,
+                    Text = "JSON 로드 중",
+                    StartPosition = FormStartPosition.CenterParent,
+                    FormBorderStyle = FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false,
+                    TopMost = true
+                };
+
+                loadingLabel = new Label
+                {
+                    Text = $"JSON 파일 로드 중... ({fileSizeMB:N0} MB)",
+                    AutoSize = true,
+                    Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
+                    Location = new System.Drawing.Point(20, 20)
+                };
+
+                progressBar = new ProgressBar
+                {
+                    Location = new System.Drawing.Point(20, 50),
+                    Size = new System.Drawing.Size(350, 23),
+                    Style = ProgressBarStyle.Marquee
+                };
+
+                loadingForm.Controls.Add(loadingLabel);
+                loadingForm.Controls.Add(progressBar);
+                loadingForm.Show();
+                loadingForm.Refresh();
+
+                // ✅ 4. FileStream + 버퍼링으로 메모리 효율적 로드
+                LabelingDataExtended labelingData = null;
+                
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        // FileStream을 사용하여 버퍼링된 읽기
+                        using (FileStream fileStream = new FileStream(loadPath, FileMode.Open, FileAccess.Read, FileShare.Read, 8192))
+                        using (StreamReader streamReader = new StreamReader(fileStream, System.Text.Encoding.UTF8, true, 8192))
+                        {
+                            string json = streamReader.ReadToEnd();
+                            
+                            // UI 스레드에서 진행률 업데이트
+                            if (loadingForm != null && loadingForm.InvokeRequired)
+                            {
+                                loadingForm.Invoke(new Action(() =>
+                                {
+                                    loadingLabel.Text = "JSON 파싱 중...";
+                                    progressBar.Style = ProgressBarStyle.Marquee;
+                                }));
+                            }
+
+                            labelingData = JsonConvert.DeserializeObject<LabelingDataExtended>(json);
+                        }
+                    }
+                    catch (OutOfMemoryException oomEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[JSON 로드] 메모리 부족: {oomEx.Message}");
+                        throw new Exception($"메모리 부족으로 파일을 로드할 수 없습니다.\n파일이 너무 큽니다 ({fileSizeMB:N0} MB).\n\n백업 파일에서 복구를 시도하시겠습니까?", oomEx);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[JSON 로드] 파일 읽기 오류: {ex.Message}");
+                        throw;
+                    }
+                });
+
+                if (labelingData == null || labelingData.Annotations == null)
+                {
+                    if (loadingForm != null)
+                        loadingForm.Close();
+                    return;
+                }
+
+                // ✅ 5. 트랜잭션 방식: 임시 변수에 데이터 저장 (로드 성공 시에만 반영)
+                var tempBoundingBoxes = new List<BoundingBox>();
+                var tempWaypointMarkers = new List<WaypointMarker>();
+                var tempCategoryMap = new Dictionary<int, CategoryData>();
+                var tempFrameTimestampMap = new Dictionary<int, string>();
+                var tempWaypointFailureRanges = new Dictionary<string, List<(int start, int end)>>();
+                int tempNextAnnotationId = 1;
+
+                // ✅ 실패 구간 정보 복원 (임시)
+                if (labelingData.FailureRanges != null)
+                {
+                    tempWaypointFailureRanges = labelingData.FailureRanges;
+                    System.Diagnostics.Debug.WriteLine($"[JSON 로드] 실패 구간 정보 복원됨: {tempWaypointFailureRanges.Count}개 객체");
+                }
+
+                // ImageId → FrameNumber 매핑 생성 및 FrameNumber → Timestamp 매핑 생성 (임시)
                 var imageIdToFrameNumber = new Dictionary<int, int>();
-                frameTimestampMap.Clear();
                 if (labelingData.Images != null)
                 {
                     foreach (var image in labelingData.Images)
@@ -8375,7 +8483,7 @@ namespace WinFormsApp1
                         imageIdToFrameNumber[image.Id] = image.FrameNumber;
                         if (!string.IsNullOrEmpty(image.Timestamp))
                         {
-                            frameTimestampMap[image.FrameNumber] = image.Timestamp;
+                            tempFrameTimestampMap[image.FrameNumber] = image.Timestamp;
                         }
                     }
                 }
@@ -8384,7 +8492,7 @@ namespace WinFormsApp1
                 {
                     foreach (var category in labelingData.Categories)
                     {
-                        categoryMap[category.Id] = category;
+                        tempCategoryMap[category.Id] = category;
                     }
                 }
 
@@ -8462,10 +8570,10 @@ namespace WinFormsApp1
                         Action = "waypoint"
                     };
 
-                    boundingBoxes.Add(box);
+                    tempBoundingBoxes.Add(box);
 
-                    if (annotation.Id >= nextAnnotationId)
-                        nextAnnotationId = annotation.Id + 1;
+                    if (annotation.Id >= tempNextAnnotationId)
+                        tempNextAnnotationId = annotation.Id + 1;
 
                     // ✅ 웨이포인트 정보 복원 (Label + ObjectId별로 분리)
                     if (annotation.TrackInfo != null && 
@@ -8481,9 +8589,8 @@ namespace WinFormsApp1
                         else if (box.Label == "vehicle") objectId = box.VehicleId;
                         else if (box.Label == "event") objectId = box.EventId;
 
-                        // ✅ 같은 Label, ObjectId, Entry, Exit를 가진 Waypoint가 이미 있는지 확인
-                        // → 이렇게 해야 같은 객체(예: person_01)의 여러 Waypoint가 통합되지 않음
-                        bool waypointExists = waypointMarkers.Any(w => 
+                        // ✅ 같은 Label, ObjectId, Entry, Exit를 가진 Waypoint가 이미 있는지 확인 (임시 리스트에서)
+                        bool waypointExists = tempWaypointMarkers.Any(w => 
                             w.Label == box.Label &&
                             w.ObjectId == objectId &&
                             w.EntryFrame == entryFrame && 
@@ -8508,7 +8615,7 @@ namespace WinFormsApp1
                             }
                             else
                             {
-                                waypointColor = markerColors[waypointMarkers.Count % markerColors.Length];
+                                waypointColor = markerColors[tempWaypointMarkers.Count % markerColors.Length];
                             }
                             
                             var waypoint = new WaypointMarker
@@ -8523,14 +8630,14 @@ namespace WinFormsApp1
                                 InteractingObject = (box.Label == "event") ? (annotation.InteractingObject ?? "") : null
                             };
 
-                            waypointMarkers.Add(waypoint);
+                            tempWaypointMarkers.Add(waypoint);
                         }
                         else
                         {
                             // 이미 있는 웨이포인트에 대해, event라면 비어있을 때만 interacting_object를 보완
                             if (box.Label == "event" && !string.IsNullOrWhiteSpace(annotation.InteractingObject))
                             {
-                                var existing = waypointMarkers.First(w =>
+                                var existing = tempWaypointMarkers.First(w =>
                                     w.Label == box.Label && w.ObjectId == objectId &&
                                     w.EntryFrame == entryFrame && w.ExitFrame == exitFrame);
                                 if (string.IsNullOrWhiteSpace(existing.InteractingObject))
@@ -8542,18 +8649,127 @@ namespace WinFormsApp1
                     }
                 }
 
-                // ✅ UI 전체 갱신: Waypoint, BboxList, BoxCount
-                UpdateWaypointListView();
-                UpdateBboxListDisplay(); // Labels 패널도 갱신
+                // ✅ 6. 트랜잭션 커밋: 모든 데이터가 성공적으로 로드되었으므로 실제 데이터 구조에 반영
+                // UI 스레드에서 실행되어야 함
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(new Action(() =>
+                    {
+                        // 기존 데이터 초기화
+                        boundingBoxes.Clear();
+                        waypointMarkers.Clear();
+                        categoryMap.Clear();
+                        selectedBox = null;
+                        undoStack.Clear();
+                        redoStack.Clear();
+                        lastRenderedWaypoint = null;
+                        nextAnnotationId = tempNextAnnotationId;
+
+                        // 임시 데이터를 실제 데이터 구조에 복사
+                        boundingBoxes.AddRange(tempBoundingBoxes);
+                        waypointMarkers.AddRange(tempWaypointMarkers);
+                        categoryMap = tempCategoryMap;
+                        frameTimestampMap = tempFrameTimestampMap;
+                        waypointFailureRanges = tempWaypointFailureRanges;
+
+                        // UI 전체 갱신
+                        UpdateWaypointListView();
+                        UpdateBboxListDisplay();
+                        InvalidateBoxCache();
+                        UpdateBoxCount();
+                        pictureBoxVideo.Invalidate();
+                    }));
+                }
+                else
+                {
+                    // 기존 데이터 초기화
+                    boundingBoxes.Clear();
+                    waypointMarkers.Clear();
+                    categoryMap.Clear();
+                    selectedBox = null;
+                    undoStack.Clear();
+                    redoStack.Clear();
+                    lastRenderedWaypoint = null;
+                    nextAnnotationId = tempNextAnnotationId;
+
+                    // 임시 데이터를 실제 데이터 구조에 복사
+                    boundingBoxes.AddRange(tempBoundingBoxes);
+                    waypointMarkers.AddRange(tempWaypointMarkers);
+                    categoryMap = tempCategoryMap;
+                    frameTimestampMap = tempFrameTimestampMap;
+                    waypointFailureRanges = tempWaypointFailureRanges;
+
+                    // UI 전체 갱신
+                    UpdateWaypointListView();
+                    UpdateBboxListDisplay();
+                    InvalidateBoxCache();
+                    UpdateBoxCount();
+                    pictureBoxVideo.Invalidate();
+                }
+
+                // 로딩 폼 닫기
+                if (loadingForm != null)
+                {
+                    loadingForm.Close();
+                    loadingForm.Dispose();
+                }
                 
-                InvalidateBoxCache();
-                UpdateBoxCount();
-                pictureBoxVideo.Invalidate();
-                
+            }
+            catch (OutOfMemoryException oomEx)
+            {
+                // 로딩 폼 닫기
+                if (loadingForm != null)
+                {
+                    loadingForm.Close();
+                    loadingForm.Dispose();
+                }
+
+                string videoDir = Path.GetDirectoryName(videoFilePath);
+                string saveDir = Path.Combine(videoDir, "labels");
+                string fileName = Path.GetFileNameWithoutExtension(videoFilePath) + "_labels.json.backup";
+                string backupPath = Path.Combine(saveDir, fileName);
+
+                var result = MessageBox.Show(
+                    $"메모리 부족으로 파일을 로드할 수 없습니다.\n\n" +
+                    $"오류: {oomEx.Message}\n\n" +
+                    $"백업 파일에서 복구를 시도하시겠습니까?\n" +
+                    $"(백업 파일: {backupPath})",
+                    "메모리 부족 오류",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Error);
+
+                if (result == DialogResult.Yes && File.Exists(backupPath))
+                {
+                    try
+                    {
+                        string originalPath = backupPath.Replace(".backup", "");
+                        File.Copy(backupPath, originalPath, true);
+                        MessageBox.Show("백업 파일에서 복구되었습니다. 다시 시도해주세요.", "복구 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    catch (Exception restoreEx)
+                    {
+                        MessageBox.Show($"백업 파일 복구 실패: {restoreEx.Message}", "복구 실패", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"라벨링 데이터 로드 오류: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // 로딩 폼 닫기
+                if (loadingForm != null)
+                {
+                    loadingForm.Close();
+                    loadingForm.Dispose();
+                }
+
+                string errorMessage = $"라벨링 데이터 로드 오류: {ex.Message}";
+                if (ex.InnerException != null)
+                {
+                    errorMessage += $"\n\n상세 정보: {ex.InnerException.Message}";
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[JSON 로드 오류] {errorMessage}\n{ex.StackTrace}");
+
+                MessageBox.Show(errorMessage, "로드 오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
