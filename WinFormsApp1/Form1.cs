@@ -75,6 +75,7 @@ namespace WinFormsApp1
         public string VehicleName { get; set; }
         public string EventName { get; set; }
         public bool IsDeleted { get; set; } // ✅ 삭제된 박스 표시 (흔적 유지)
+        public Dictionary<string, object> PersonAttributes { get; set; } // Person 전용: 속성 정보
     }
 
     public class SubtitleEntry
@@ -122,6 +123,9 @@ namespace WinFormsApp1
         // Event 전용: 상호작용 객체 텍스트 (person/vehicle 등)
         [JsonProperty("interacting_object", NullValueHandling = NullValueHandling.Ignore)]
         public string InteractingObject { get; set; }
+        // Person 전용: 속성 정보
+        [JsonProperty("attributes", NullValueHandling = NullValueHandling.Ignore)]
+        public Dictionary<string, object> Attributes { get; set; }
     }
 
     public class CategoryData
@@ -151,6 +155,228 @@ namespace WinFormsApp1
     }
 
     #endregion
+
+    // Person 속성 관리 클래스
+    public class PersonAttributeEntry
+    {
+        public string AttributeName { get; set; }
+        public object Value { get; set; }
+        public int WaypointEntryFrame { get; set; }
+        public int PersonId { get; set; }
+    }
+
+    public class PersonAttributeStore
+    {
+        // Global 속성: person_id -> attributes
+        private Dictionary<int, Dictionary<string, object>> globalAttributes = new Dictionary<int, Dictionary<string, object>>();
+        
+        // Waypoint-scoped 속성: person_id -> entries (EntryFrame 순으로 정렬)
+        private Dictionary<int, List<PersonAttributeEntry>> waypointScopedAttributes = new Dictionary<int, List<PersonAttributeEntry>>();
+
+        // 노란색 표시 속성 목록 (Waypoint-scoped)
+        private static readonly HashSet<string> waypointScopedAttributeNames = new HashSet<string>
+        {
+            "Occlusion",      // View 탭의 노란색 표시 속성
+            "BodyView"        // View 탭의 노란색 표시 속성
+        };
+
+        public static bool IsWaypointScoped(string attributeName)
+        {
+            return waypointScopedAttributeNames.Contains(attributeName);
+        }
+
+        // 속성 읽기: 현재 프레임에 적용되는 속성 값 반환
+        public object GetAttribute(int personId, int frameIndex, string attributeName, List<WaypointMarker> waypointMarkers)
+        {
+            // 먼저 waypoint-scoped 속성 확인 (Global 속성도 waypoint-scoped로 저장될 수 있음)
+            var personWaypoints = waypointMarkers
+                .Where(w => w.Label == "person" && w.ObjectId == personId)
+                .OrderByDescending(w => w.EntryFrame)
+                .ToList();
+
+            foreach (var waypoint in personWaypoints)
+            {
+                if (frameIndex >= waypoint.EntryFrame)
+                {
+                    // 이 waypoint부터 적용되는 속성 찾기
+                    if (waypointScopedAttributes.ContainsKey(personId))
+                    {
+                        var entry = waypointScopedAttributes[personId]
+                            .Where(e => e.AttributeName == attributeName && e.WaypointEntryFrame == waypoint.EntryFrame)
+                            .FirstOrDefault();
+                        
+                        if (entry != null)
+                        {
+                            return entry.Value;
+                        }
+                    }
+                }
+            }
+            
+            // Waypoint-scoped 항목이 없으면 Global 속성 확인
+            if (globalAttributes.ContainsKey(personId) && globalAttributes[personId].ContainsKey(attributeName))
+            {
+                return globalAttributes[personId][attributeName];
+            }
+            
+            return null;
+        }
+
+        // 속성 저장
+        public void SetAttribute(int personId, int waypointEntryFrame, string attributeName, object value)
+        {
+            bool isWaypointScoped = IsWaypointScoped(attributeName);
+            
+            if (value == null)
+            {
+                // null 값인 경우: 전역적으로 설정 (모든 waypoint-scoped 항목 제거)
+                if (!globalAttributes.ContainsKey(personId))
+                {
+                    globalAttributes[personId] = new Dictionary<string, object>();
+                }
+                globalAttributes[personId][attributeName] = null;
+                
+                // 모든 waypoint-scoped 항목에서 해당 속성 제거
+                if (waypointScopedAttributes.ContainsKey(personId))
+                {
+                    waypointScopedAttributes[personId].RemoveAll(e => 
+                        e.AttributeName == attributeName);
+                }
+            }
+            else
+            {
+                // null이 아닌 값인 경우
+                if (isWaypointScoped)
+                {
+                    // Waypoint-scoped 속성: 항상 waypoint-scoped로 저장
+                    if (!waypointScopedAttributes.ContainsKey(personId))
+                    {
+                        waypointScopedAttributes[personId] = new List<PersonAttributeEntry>();
+                    }
+                    
+                    // 기존 항목 제거 (같은 waypoint, 같은 속성)
+                    waypointScopedAttributes[personId].RemoveAll(e => 
+                        e.AttributeName == attributeName && e.WaypointEntryFrame == waypointEntryFrame);
+                    
+                    // 새 항목 추가
+                    waypointScopedAttributes[personId].Add(new PersonAttributeEntry
+                    {
+                        AttributeName = attributeName,
+                        Value = value,
+                        WaypointEntryFrame = waypointEntryFrame,
+                        PersonId = personId
+                    });
+                    
+                    // EntryFrame 순으로 정렬
+                    waypointScopedAttributes[personId].Sort((a, b) => a.WaypointEntryFrame.CompareTo(b.WaypointEntryFrame));
+                }
+                else
+                {
+                    // Global 속성인 경우
+                    // Global에 값이 없거나 null인 경우: Global로 저장
+                    // Global에 이미 값이 있는 경우: waypoint-scoped로 저장 (Global 값은 유지)
+                    
+                    bool hasExistingGlobal = globalAttributes.ContainsKey(personId) && 
+                                             globalAttributes[personId].ContainsKey(attributeName) &&
+                                             globalAttributes[personId][attributeName] != null;
+                    
+                    if (!hasExistingGlobal)
+                    {
+                        // 처음 설정 또는 null에서 설정: Global로 저장
+                        if (!globalAttributes.ContainsKey(personId))
+                        {
+                            globalAttributes[personId] = new Dictionary<string, object>();
+                        }
+                        globalAttributes[personId][attributeName] = value;
+                    }
+                    else
+                    {
+                        // 이미 Global 값이 있음: waypoint-scoped로 저장 (Global 값은 유지)
+                        if (!waypointScopedAttributes.ContainsKey(personId))
+                        {
+                            waypointScopedAttributes[personId] = new List<PersonAttributeEntry>();
+                        }
+                        
+                        // 기존 항목 제거 (같은 waypoint, 같은 속성)
+                        waypointScopedAttributes[personId].RemoveAll(e => 
+                            e.AttributeName == attributeName && e.WaypointEntryFrame == waypointEntryFrame);
+                        
+                        // 새 항목 추가
+                        waypointScopedAttributes[personId].Add(new PersonAttributeEntry
+                        {
+                            AttributeName = attributeName,
+                            Value = value,
+                            WaypointEntryFrame = waypointEntryFrame,
+                            PersonId = personId
+                        });
+                        
+                        // EntryFrame 순으로 정렬
+                        waypointScopedAttributes[personId].Sort((a, b) => a.WaypointEntryFrame.CompareTo(b.WaypointEntryFrame));
+                    }
+                }
+            }
+        }
+
+        // 모든 속성 가져오기 (현재 프레임 기준)
+        public Dictionary<string, object> GetAllAttributes(int personId, int frameIndex, List<WaypointMarker> waypointMarkers)
+        {
+            var result = new Dictionary<string, object>();
+            
+            // 모든 가능한 속성 이름 목록 (나중에 정의)
+            var allAttributeNames = new HashSet<string>();
+            
+            // Global 속성 추가
+            if (globalAttributes.ContainsKey(personId))
+            {
+                foreach (var kvp in globalAttributes[personId])
+                {
+                    if (kvp.Value != null)
+                    {
+                        result[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            
+            // Waypoint-scoped 속성 추가 (우선순위가 높으므로 나중에 덮어쓰기)
+            var personWaypoints = waypointMarkers
+                .Where(w => w.Label == "person" && w.ObjectId == personId)
+                .OrderByDescending(w => w.EntryFrame)
+                .ToList();
+
+            foreach (var waypoint in personWaypoints)
+            {
+                if (frameIndex >= waypoint.EntryFrame)
+                {
+                    if (waypointScopedAttributes.ContainsKey(personId))
+                    {
+                        var entries = waypointScopedAttributes[personId]
+                            .Where(e => e.WaypointEntryFrame == waypoint.EntryFrame);
+                        
+                        foreach (var entry in entries)
+                        {
+                            result[entry.AttributeName] = entry.Value;
+                        }
+                    }
+                    break; // 첫 번째로 찾은 waypoint만 사용
+                }
+            }
+            
+            return result;
+        }
+
+        // person_id의 모든 속성 초기화
+        public void ClearPersonAttributes(int personId)
+        {
+            if (globalAttributes.ContainsKey(personId))
+            {
+                globalAttributes[personId].Clear();
+            }
+            if (waypointScopedAttributes.ContainsKey(personId))
+            {
+                waypointScopedAttributes[personId].Clear();
+            }
+        }
+    }
 
     public abstract class TrackingEngine
     {
@@ -703,6 +929,9 @@ namespace WinFormsApp1
         
         // ✅ 실패 구간 저장 (Key: "Label_ObjectId", Value: List<(startFrame, endFrame)>)
         private Dictionary<string, List<(int start, int end)>> waypointFailureRanges = new Dictionary<string, List<(int, int)>>();
+        
+        // ✅ Person 속성 저장소
+        private PersonAttributeStore personAttributeStore = new PersonAttributeStore();
 
         // 리스트뷰 MouseDown에서 이미 이동 처리한 경우 Click 핸들러 1회 무시
         private bool suppressWaypointClickOnce = false;
@@ -819,6 +1048,7 @@ namespace WinFormsApp1
         
         // 성능 최적화: 재사용 가능한 Font 객체
         private Font labelFont = new Font("Segoe UI", 10F, FontStyle.Bold);
+        private Font attributeFont = new Font("Segoe UI", 7F, FontStyle.Regular);  // 속성 표시용 작은 폰트
         private Font yoloDetectionFont = new Font("Segoe UI", 8F, FontStyle.Regular);
 
         // 카테고리 ID 매핑 (스펙에 따른 고정 매핑)
@@ -966,29 +1196,14 @@ namespace WinFormsApp1
                 }
                 else
                 {
-                    // FFmpeg를 찾을 수 없음
+                    // FFmpeg를 찾을 수 없음 (조용히 처리, 외부 SRT 파일은 정상 작동)
                     isFFmpegAvailable = false;
-                    MessageBox.Show(
-                        "FFmpeg를 찾을 수 없습니다.\n\n" +
-                        "비디오 내 자막 추출 기능을 사용하려면:\n" +
-                        "1. FFmpeg를 다운로드 (https://ffmpeg.org/download.html)\n" +
-                        "2. 시스템 PATH에 추가하거나\n" +
-                        "3. 실행 파일과 같은 폴더에 'ffmpeg' 폴더를 만들고 ffmpeg.exe를 넣어주세요\n\n" +
-                        "※ 외부 SRT 파일이 있으면 자동으로 로드됩니다.",
-                        "FFmpeg 없음",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
+                // FFmpeg 설정 중 오류 발생 (조용히 처리, 외부 SRT 파일은 정상 작동)
                 isFFmpegAvailable = false;
-                MessageBox.Show(
-                    $"FFmpeg 설정 중 오류:\n{ex.Message}\n\n" +
-                    "외부 SRT 파일만 사용 가능합니다.",
-                    "FFmpeg 오류",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
             }
         }
 
@@ -3668,6 +3883,33 @@ namespace WinFormsApp1
 
         private void pictureBoxVideo_MouseDown(object sender, MouseEventArgs e)
         {
+            // ✅ 우클릭: Person 박스 속성 편집
+            if (e.Button == MouseButtons.Right)
+            {
+                var clickedBox = GetBoundingBoxAt(e.Location);
+                if (clickedBox != null && clickedBox.Label == "person")
+                {
+                    var waypoint = FindWaypointForBox(clickedBox);
+                    int waypointEntryFrame = waypoint != null ? waypoint.EntryFrame : currentFrameIndex;
+                    
+                    using (var form = new PersonAttributesForm(
+                        clickedBox.PersonId,
+                        waypointEntryFrame,
+                        currentFrameIndex,
+                        GetPersonAttribute,
+                        SetPersonAttribute))
+                    {
+                        if (form.ShowDialog() == DialogResult.OK)
+                        {
+                            // 속성 저장 완료 (form에서 이미 저장됨)
+                            UpdateBboxListDisplay();
+                            pictureBoxVideo.Invalidate();
+                        }
+                    }
+                    return;
+                }
+            }
+            
             if (currentMode == DrawMode.Draw)
             {
                 // Entry 마커 체크 제거 - YOLO 추적 시에만 필요
@@ -4009,6 +4251,12 @@ namespace WinFormsApp1
                     if (box == selectedBox)
                     {
                         DrawResizeHandles(g, viewRect);
+                        
+                        // ✅ Person 박스인 경우 속성 정보 표시
+                        if (box.Label == "person" && currentMode == DrawMode.Select)
+                        {
+                            DrawPersonAttributes(g, box, viewRect);
+                        }
                     }
                 }
             }
@@ -4488,6 +4736,89 @@ namespace WinFormsApp1
             using (Pen pen = new Pen(borderColor, 2))
                 g.DrawRectangle(pen, handleRect.X, handleRect.Y, handleRect.Width, handleRect.Height);
         }
+
+        // ✅ Person 박스 속성 정보 표시
+        private void DrawPersonAttributes(Graphics g, BoundingBox box, RectangleF viewRect)
+        {
+            try
+            {
+                // 속성 가져오기
+                var attributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers);
+                if (attributes == null || attributes.Count == 0)
+                    return;
+
+                // 값이 있는 속성만 필터링
+                var nonNullAttributes = attributes.Where(kvp => kvp.Value != null).ToList();
+                if (nonNullAttributes.Count == 0)
+                    return;
+
+                // 속성 텍스트 생성 (간단한 형식)
+                var attributeTexts = nonNullAttributes.Select(kvp => 
+                {
+                    string attrName = kvp.Key;
+                    string value = kvp.Value?.ToString() ?? "";
+                    
+                    // 값에서 속성 이름 접두사 제거 (예: "Age-Minor" -> "Minor", "Gender-Female" -> "Female")
+                    if (value.Contains("-"))
+                    {
+                        string[] parts = value.Split('-');
+                        // 마지막 부분만 사용 (예: "Age-Minor" -> "Minor")
+                        value = parts[parts.Length - 1];
+                    }
+                    
+                    // 속성 이름과 값이 같은 경우 (예: "Age:Age-Minor" -> "Age:Minor")
+                    if (value.StartsWith(attrName + "-"))
+                    {
+                        value = value.Substring(attrName.Length + 1);
+                    }
+                    
+                    return $"{attrName}:{value}";
+                }).ToList();
+
+                if (attributeTexts.Count == 0)
+                    return;
+
+                // 텍스트 크기 측정
+                string sampleText = attributeTexts[0];
+                SizeF textSize = g.MeasureString(sampleText, attributeFont);
+                float lineHeight = textSize.Height + 2; // 줄 간격
+                float totalHeight = lineHeight * attributeTexts.Count;
+                float maxWidth = attributeTexts.Max(t => g.MeasureString(t, attributeFont).Width);
+
+                // 오른쪽에 표시할 공간 확인
+                float rightSpace = pictureBoxVideo.Width - (viewRect.X + viewRect.Width);
+                float leftSpace = viewRect.X;
+                bool showOnRight = rightSpace >= maxWidth + 10; // 여유 공간 포함
+
+                float startX = showOnRight ? viewRect.X + viewRect.Width + 5 : viewRect.X - maxWidth - 5;
+                float startY = viewRect.Y;
+
+                // 배경 그리기
+                RectangleF bgRect = new RectangleF(
+                    startX - 2,
+                    startY - 2,
+                    maxWidth + 4,
+                    totalHeight + 4
+                );
+
+                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(220, Color.Black)))
+                    g.FillRectangle(bgBrush, bgRect);
+
+                // 속성 텍스트 그리기
+                using (SolidBrush textBrush = new SolidBrush(Color.White))
+                {
+                    for (int i = 0; i < attributeTexts.Count; i++)
+                    {
+                        g.DrawString(attributeTexts[i], attributeFont, textBrush, startX, startY + i * lineHeight);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // 속성 표시 중 오류 발생 시 조용히 처리
+                System.Diagnostics.Debug.WriteLine($"[DrawPersonAttributes 오류] {ex.Message}");
+            }
+        }
         
         // ✅ 마우스 위치에서 크기 조정 핸들 감지 (4개 모서리만)
         private ResizeHandle GetResizeHandleAtPoint(System.Drawing.Point viewPoint, RectangleF viewRect)
@@ -4956,6 +5287,25 @@ namespace WinFormsApp1
                     labelText = $"Label: event_{eventTypes[box.EventId - 1]}";
                 else
                     labelText = $"Label: event_{box.EventId}";
+            }
+            
+            // ✅ Person인 경우 속성 정보 추가 표시 (선택사항)
+            if (box.Label == "person")
+            {
+                var attributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers);
+                if (attributes != null && attributes.Count > 0)
+                {
+                    var nonNullAttributes = attributes.Where(kvp => kvp.Value != null).ToList();
+                    if (nonNullAttributes.Count > 0)
+                    {
+                        string attrSummary = string.Join(", ", nonNullAttributes.Take(3).Select(kvp => $"{kvp.Key}:{kvp.Value}"));
+                        if (nonNullAttributes.Count > 3)
+                        {
+                            attrSummary += $" ... (+{nonNullAttributes.Count - 3} more)";
+                        }
+                        labelText += $"\n속성: {attrSummary}";
+                    }
+                }
             }
             
             labelObjectLabel.Text = labelText;
@@ -6092,6 +6442,18 @@ namespace WinFormsApp1
                 box.FrameIndex <= w.ExitFrame);
             
             return waypoint;
+        }
+
+        // Person 속성 읽기 메서드
+        private object GetPersonAttribute(int personId, int frameIndex, string attributeName)
+        {
+            return personAttributeStore.GetAttribute(personId, frameIndex, attributeName, waypointMarkers);
+        }
+
+        // Person 속성 저장 메서드
+        private void SetPersonAttribute(int personId, int waypointEntryFrame, string attributeName, object value)
+        {
+            personAttributeStore.SetAttribute(personId, waypointEntryFrame, attributeName, value);
         }
         
         // 박스 수정 완료 시 수정된 프레임 기록
@@ -8649,6 +9011,59 @@ namespace WinFormsApp1
                     }
                 }
 
+                // ✅ Person attributes 복원 (waypoint 생성 후)
+                foreach (var annotation in labelingData.Annotations)
+                {
+                    if (annotation.Bbox == null || annotation.Bbox.Length < 4)
+                        continue;
+
+                    // CategoryId로 라벨 결정
+                    int catId = annotation.CategoryId;
+                    string label = "person";
+                    if (catId >= 1 && catId <= 20)
+                    {
+                        label = "person";
+                    }
+                    else if (catId >= 21 && catId <= 24)
+                    {
+                        label = "vehicle";
+                    }
+                    else if (catId >= 25 && catId <= 28)
+                    {
+                        label = "event";
+                    }
+
+                    if (label == "person" && annotation.Attributes != null && annotation.Attributes.Count > 0)
+                    {
+                        int personId = annotation.TrackId;
+                        
+                        // ImageId로 실제 프레임 번호 찾기
+                        int frameNumber = annotation.ImageId;
+                        if (imageIdToFrameNumber.ContainsKey(annotation.ImageId))
+                        {
+                            frameNumber = imageIdToFrameNumber[annotation.ImageId];
+                        }
+                        
+                        // 현재 박스가 속한 waypoint 찾기 (임시 리스트에서)
+                        var matchingWaypoint = tempWaypointMarkers.FirstOrDefault(w =>
+                            w.Label == "person" &&
+                            w.ObjectId == personId &&
+                            frameNumber >= w.EntryFrame &&
+                            frameNumber <= w.ExitFrame);
+                        
+                        int waypointEntryFrame = matchingWaypoint != null ? matchingWaypoint.EntryFrame : frameNumber;
+                        
+                        // 각 속성을 저장
+                        foreach (var kvp in annotation.Attributes)
+                        {
+                            if (kvp.Value != null)
+                            {
+                                personAttributeStore.SetAttribute(personId, waypointEntryFrame, kvp.Key, kvp.Value);
+                            }
+                        }
+                    }
+                }
+
                 // ✅ 6. 트랜잭션 커밋: 모든 데이터가 성공적으로 로드되었으므로 실제 데이터 구조에 반영
                 // UI 스레드에서 실행되어야 함
                 if (this.InvokeRequired)
@@ -9010,6 +9425,21 @@ namespace WinFormsApp1
                         if (box.Label == "event" && matchingWaypoint != null && !string.IsNullOrWhiteSpace(matchingWaypoint.InteractingObject))
                         {
                             annotation.InteractingObject = matchingWaypoint.InteractingObject;
+                        }
+
+                        // Person인 경우 attributes 포함
+                        if (box.Label == "person")
+                        {
+                            var attributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers);
+                            if (attributes != null && attributes.Count > 0)
+                            {
+                                // null이 아닌 속성만 포함
+                                var nonNullAttributes = attributes.Where(kvp => kvp.Value != null).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                                if (nonNullAttributes.Count > 0)
+                                {
+                                    annotation.Attributes = nonNullAttributes;
+                                }
+                            }
                         }
 
                         annotations.Add(annotation);
@@ -10124,6 +10554,7 @@ namespace WinFormsApp1
                 var ffTask = FFMpegArguments
                     .FromFileInput(videoPath)
                     .OutputToFile(srtPath, true, options => options
+                        .WithCustomArgument("-loglevel error")  // 경고 메시지 숨기기
                         .WithCustomArgument("-map 0:s:0")  // 첫 번째 자막 스트림 선택
                         .WithCustomArgument("-c:s srt")    // SRT 형식으로 출력
                     )
