@@ -123,8 +123,8 @@ namespace WinFormsApp1
         // Event 전용: 상호작용 객체 텍스트 (person/vehicle 등)
         [JsonProperty("interacting_object", NullValueHandling = NullValueHandling.Ignore)]
         public string InteractingObject { get; set; }
-        // Person 전용: 속성 정보
-        [JsonProperty("attributes", NullValueHandling = NullValueHandling.Ignore)]
+        // Person 전용: 속성 정보 (null 값도 포함)
+        [JsonProperty("attributes")]
         public Dictionary<string, object> Attributes { get; set; }
     }
 
@@ -9553,19 +9553,48 @@ namespace WinFormsApp1
                             annotation.InteractingObject = matchingWaypoint.InteractingObject;
                         }
 
-                        // Person인 경우 attributes 포함
+                        // Person인 경우 attributes 포함 (모든 속성 포함, null도 포함)
                         if (box.Label == "person")
                         {
-                            var attributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers);
-                            if (attributes != null && attributes.Count > 0)
+                            // 모든 속성 목록 정의
+                            var allAttributeNames = new HashSet<string>
                             {
-                                // null이 아닌 속성만 포함
-                                var nonNullAttributes = attributes.Where(kvp => kvp.Value != null).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                                if (nonNullAttributes.Count > 0)
+                                // View
+                                "Occlusion", "BodyView",
+                                // Biometric
+                                "Age", "Gender", "Height", "Weight", "BodyPosture", "Face",
+                                // Head/Hair
+                                "HairLength", "HairStyle", "HairColor",
+                                // UpperCloth
+                                "UpperClothType", "UpperClothSleeve", "UpperClothPattern", "UpperClothColor",
+                                // LowerCloth
+                                "LowerClothType", "LowerClothLegwear", "LowerClothLength", "LowerClothPattern", "LowerClothColor", "LowerClothMaterial",
+                                // Footwear
+                                "FootwearType", "FootwearColor",
+                                // Accessory
+                                "HeadwearType", "FacewearType", "BagType", "CarringItemType",
+                                // Action
+                                "ActionType"
+                            };
+                            
+                            // 현재 프레임의 속성 가져오기
+                            var currentAttributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers);
+                            
+                            // 모든 속성을 포함하는 Dictionary 생성 (없는 속성은 null로)
+                            var allAttributes = new Dictionary<string, object>();
+                            foreach (string attrName in allAttributeNames)
+                            {
+                                if (currentAttributes != null && currentAttributes.ContainsKey(attrName))
                                 {
-                                    annotation.Attributes = nonNullAttributes;
+                                    allAttributes[attrName] = currentAttributes[attrName]; // 값이 null이어도 포함
+                                }
+                                else
+                                {
+                                    allAttributes[attrName] = null; // 설정되지 않은 속성도 null로 포함
                                 }
                             }
+                            
+                            annotation.Attributes = allAttributes;
                         }
 
                         annotations.Add(annotation);
@@ -9591,7 +9620,13 @@ namespace WinFormsApp1
                     FailureRanges = waypointFailureRanges
                 };
 
-                string json = JsonConvert.SerializeObject(labelingData, Formatting.Indented);
+                // null 값도 포함하여 직렬화
+                var settings = new JsonSerializerSettings
+                {
+                    NullValueHandling = NullValueHandling.Include,
+                    Formatting = Formatting.Indented
+                };
+                string json = JsonConvert.SerializeObject(labelingData, settings);
                 File.WriteAllText(filePath, json);
             }
             catch (Exception ex)
