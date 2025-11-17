@@ -6,6 +6,24 @@ using System.Windows.Forms;
 
 namespace WinFormsApp1
 {
+    // ComboBox에 한국어 표시, 영문 값 저장을 위한 클래스
+    public class AttributeComboBoxItem
+    {
+        public string DisplayText { get; set; }  // 한국어 표시 텍스트
+        public string? EnglishValue { get; set; }   // 영문 저장 값 (null 가능)
+        
+        public AttributeComboBoxItem(string displayText, string? englishValue)
+        {
+            DisplayText = displayText;
+            EnglishValue = englishValue;
+        }
+        
+        public override string ToString()
+        {
+            return DisplayText;
+        }
+    }
+
     public partial class PersonAttributesForm : Form
     {
         private Dictionary<string, ComboBox> attributeControls = new Dictionary<string, ComboBox>();
@@ -212,8 +230,12 @@ namespace WinFormsApp1
                     DropDownStyle = ComboBoxStyle.DropDownList
                 };
                 
-                comboBox.Items.Add("(없음)"); // null 값 표시
-                comboBox.Items.AddRange(values);
+                comboBox.Items.Add(new AttributeComboBoxItem("(없음)", null)); // null 값 표시
+                foreach (string englishValue in values)
+                {
+                    string koreanText = Form1.GetAttributeValueKorean(englishValue);
+                    comboBox.Items.Add(new AttributeComboBoxItem(koreanText, englishValue));
+                }
                 
                 attributeControls[attrName] = comboBox;
 
@@ -242,15 +264,16 @@ namespace WinFormsApp1
                 else
                 {
                     string valueStr = value.ToString();
-                    int index = comboBox.Items.IndexOf(valueStr);
-                    if (index >= 0)
+                    // 영문 값으로 항목 찾기
+                    for (int i = 1; i < comboBox.Items.Count; i++)
                     {
-                        comboBox.SelectedIndex = index;
+                        if (comboBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue == valueStr)
+                        {
+                            comboBox.SelectedIndex = i;
+                            return;
+                        }
                     }
-                    else
-                    {
-                        comboBox.SelectedIndex = 0;
-                    }
+                    comboBox.SelectedIndex = 0;
                 }
             }
         }
@@ -263,9 +286,9 @@ namespace WinFormsApp1
                 ComboBox comboBox = kvp.Value;
                 
                 object value = null;
-                if (comboBox.SelectedIndex > 0)
+                if (comboBox.SelectedIndex > 0 && comboBox.Items[comboBox.SelectedIndex] is AttributeComboBoxItem item)
                 {
-                    value = comboBox.Items[comboBox.SelectedIndex].ToString();
+                    value = item.EnglishValue; // 영문 값 저장
                 }
                 
                 setAttributeFunc(personId, waypointEntryFrame, attrName, value);

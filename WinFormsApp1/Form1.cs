@@ -1051,6 +1051,145 @@ namespace WinFormsApp1
         private Font attributeFont = new Font("Segoe UI", 7F, FontStyle.Regular);  // 속성 표시용 작은 폰트
         private Font yoloDetectionFont = new Font("Segoe UI", 8F, FontStyle.Regular);
 
+        // 속성 값 한국어 매핑
+        private static readonly Dictionary<string, string> AttributeValueKoreanMap = new Dictionary<string, string>
+        {
+            // View
+            { "Person-Multi", "한명 이상 포함" },
+            { "Person-FullyVisible", "대상 인물 전신 전체가 보임" },
+            { "Person-PartiallyVisible", "전신 중 일부 가려짐" },
+            { "OccludedPart-Head", "머리(전체)가 안보임" },
+            { "OccludedPart-UpperBody", "상반신이 안보임(가려짐/잘림)" },
+            { "OccludedPart-LowerBody", "하반신이 안보임" },
+            { "OccludedPart-Feet", "양발이 다 안보임" },
+            { "Occluded-byPerson", "대상 인물이 타인에 의해 가려짐" },
+            { "BodyView-Back", "후면 (얼굴이 아닌 전신을 기준으로)" },
+            { "BodyView-Front", "전면" },
+            { "BodyView-Side", "측면" },
+            
+            // Biometric
+            { "Age-Minor", "미성년자(어린이, 초중고)" },
+            { "Age-Adult", "성인" },
+            { "Age-Old", "노인" },
+            { "Gender-Female", "여자" },
+            { "Gender-Male", "남자" },
+            { "Height-Short", "키작음(<145cm, 어린이, 초등학생정도)" },
+            { "Height-Average", "키보통" },
+            { "Height-Tall", "키큼(>180cm)" },
+            { "Weight-Underweight", "체격_마름" },
+            { "Weight-Average", "체격_보통" },
+            { "Weight-Overweight", "체격_과체중(curvy한 체형)" },
+            { "BodyPosture-Stooped", "등이 굽은 체형" },
+            { "Face-Recognizable", "안면 인식이 가능한 정도" },
+            
+            // Head/Hair
+            { "HairLength-Bald", "대머리(부분 대머리 포함)" },
+            { "HairLength-Short", "짧은 머리" },
+            { "HairLength-Medium", "단발 머리(어깨선 정도 길이)" },
+            { "HairLength-Long", "긴 머리(어깨선 이하로)" },
+            { "HairStyle-Ponytail", "묶은 머리형태" },
+            { "HairColor-Dark", "Black, brown" },
+            { "HairColor-Light", "Grey, white(흰머리)" },
+            { "HairColor-Colored", "Red, Gold" },
+            
+            // UpperCloth
+            { "Upper-Type-Tshirt", "긴팔/반팔 티셔츠, 캐주얼 폴로티, 민소매티" },
+            { "Upper-Type-Shirt", "셔츠(카라, 버튼다운), 블라우스" },
+            { "Upper-Type-Sweater", "니트 스웨터, 가디건, 맨투맨 스웻셔츠, 후드 스웻" },
+            { "Upper-Type-Jacket", "캐주얼 겉옷(잠바, 트렌치코트, 봄버, 가죽자켓 등)" },
+            { "Upper-Type-Blazer", "양복자켓, 콤비자켓 등" },
+            { "Upper-Type-LongCoat", "허벅지 중간보다 긴 길이의 겉옷" },
+            { "Upper-Type-Dress", "원피스" },
+            { "Upper-Sleeve-Sleeveless", "민소매" },
+            { "Upper-Sleeve-Short", "반팔 소매" },
+            { "Upper-Sleeve-Long", "긴 소매" },
+            { "Upper-Pattern-Solid", "무늬 없는 단색" },
+            { "Upper-Pattern-Logo", "로고(브랜드 로고, 글자로고, 중앙/단일 그래픽, 캐릭터 등)" },
+            { "Upper-Pattern-Plaid", "체크 무늬" },
+            { "Upper-Pattern-Stripe", "줄 무늬(가로, 세로, 사선)" },
+            { "Upper-Pattern-Splice", "배색 무늬(color-block)" },
+            { "Upper-Pattern-Graphics", "상의전체 반복 패턴(폴카닷, 꽃무늬, 기하학 반복 무늬)" },
+            { "Upper-Color-Black", "검정" },
+            { "Upper-Color-Blue", "파랑" },
+            { "Upper-Color-Brown", "갈색" },
+            { "Upper-Color-Green", "초록" },
+            { "Upper-Color-Grey", "회색" },
+            { "Upper-Color-Orange", "주황" },
+            { "Upper-Color-Pink", "분홍" },
+            { "Upper-Color-Purple", "보라" },
+            { "Upper-Color-Red", "빨강" },
+            { "Upper-Color-White", "흰색" },
+            { "Upper-Color-Yellow", "노랑" },
+            
+            // LowerCloth
+            { "Lower-Type-Pants", "하의유형_바지" },
+            { "Lower-Type-Skirt", "하의유형_치마" },
+            { "Lower-Legwear-Tights", "하의_타이즈/레깅스 착용" },
+            { "Lower-Length-Short", "하의길이_무릅 기준" },
+            { "Lower-Length-MidCalf", "하의길이_정강이 중간 기준" },
+            { "Lower-Length-Full", "하의길이_발목 기준" },
+            { "Lower-Pattern-Solid", "하의무늬_단색(무늬 없음)" },
+            { "Lower-Pattern-Plaid", "하의무늬_체크" },
+            { "Lower-Pattern-Stripe", "하의무늬_줄무늬(가로, 세로, 사선 줄이 한 개 이상)" },
+            { "Lower-Pattern-Graphics", "하의무늬_하의전체 반복(점, 꽃무늬, 군복위장무늬 등)" },
+            { "Lower-Color-Black", "검정" },
+            { "Lower-Color-Blue", "파랑" },
+            { "Lower-Color-Brown", "갈색" },
+            { "Lower-Color-Green", "초록" },
+            { "Lower-Color-Grey", "회색" },
+            { "Lower-Color-Pink", "분홍" },
+            { "Lower-Color-Purple", "보라" },
+            { "Lower-Color-Red", "빨강" },
+            { "Lower-Color-White", "흰색" },
+            { "Lower-Color-Yellow", "노랑" },
+            { "Lower-Material-Denim", "데님소재(청바지, 청치마)" },
+            
+            // Footwear
+            { "Footwear-Type-Boots", "부츠(발목 위~무릅까지 커버)" },
+            { "Footwear-Type-Flats", "발등이 노출되는 구조의 신발" },
+            { "Footwear-Type-Formal", "구두(가죽소재), 신사화, 여성용힐" },
+            { "Footwear-Type-Sandals", "발가락, 뒷꿈치가 노출되는 구조의 실발(슬리퍼 포함)" },
+            { "Footwear-Type-Sneakers", "운동화" },
+            { "Footwear-Color-Black", "검정" },
+            { "Footwear-Color-Brown", "갈색류" },
+            { "Footwear-Color-White", "흰색" },
+            
+            // Accessory
+            { "Headwear-Hat", "모자" },
+            { "Headwear-Halmet", "헬맷(딱딱한 소재, 오토바이/자전거 헬맷)" },
+            { "Headwear-Other", "다른 형태의 머리 전체를 커버하는 악세서리" },
+            { "Facewear-Glasses", "안경착용" },
+            { "Facewear-Sunglasses", "썬글라스착용" },
+            { "Facewear-Mask", "마스크 착용" },
+            { "Bag-Backpack", "백팩" },
+            { "Bag-Handbag", "leather, plastic, paper bags worn by hands" },
+            { "Bag-ShoulderBag", "한쪽 어깨에 걸치는 형태의 가방(메신저, 크로스백 등)" },
+            { "Bag-Suitcase", "바퀴 달린 형태의 가방(여행용 캐리어, 쇼핑카트)" },
+            { "Carrying-Phone", "휴대폰 소지" },
+            { "Carrying-Umbrella", "우산(펼친 우산, 접은 우산) 소지" },
+            { "Carrying-Drink", "음료수 컵, 생수병 등 소지" },
+            { "Carrying-Box", "박스 소지" },
+            { "Carrying-Stick", "지팡이, 등산스틱, 목발 등 소지" },
+            { "HandsOccupied", "한손 또는 양손에 물건(가방, 소지품) 소지(빈손이 아님)" },
+            
+            // Action
+            { "Standing", "서있음" },
+            { "Walking", "걷고 있음" },
+            { "Running", "뛰고 있음" },
+            { "Riding", "타고 있음(자전거, 오토바이, 퀵보드 등)" },
+            { "Sitting", "앉아 있음(모빌리티 제외한 의자, 고정형 구조물에)" },
+            { "Pulling", "끌고 있음(유모차, 자전거, 카트, 캐리어 등)" }
+        };
+
+        // 영문 값을 한국어로 변환
+        public static string GetAttributeValueKorean(string englishValue)
+        {
+            if (string.IsNullOrEmpty(englishValue))
+                return englishValue;
+            
+            return AttributeValueKoreanMap.TryGetValue(englishValue, out string korean) ? korean : englishValue;
+        }
+
         // 카테고리 ID 매핑 (스펙에 따른 고정 매핑)
         private static readonly Dictionary<string, int> CategoryIdMap = new Dictionary<string, int>
         {
@@ -4752,27 +4891,14 @@ namespace WinFormsApp1
                 if (nonNullAttributes.Count == 0)
                     return;
 
-                // 속성 텍스트 생성 (간단한 형식)
+                // 속성 텍스트 생성 (한국어로 표시)
                 var attributeTexts = nonNullAttributes.Select(kvp => 
                 {
                     string attrName = kvp.Key;
-                    string value = kvp.Value?.ToString() ?? "";
+                    string englishValue = kvp.Value?.ToString() ?? "";
+                    string koreanValue = GetAttributeValueKorean(englishValue);
                     
-                    // 값에서 속성 이름 접두사 제거 (예: "Age-Minor" -> "Minor", "Gender-Female" -> "Female")
-                    if (value.Contains("-"))
-                    {
-                        string[] parts = value.Split('-');
-                        // 마지막 부분만 사용 (예: "Age-Minor" -> "Minor")
-                        value = parts[parts.Length - 1];
-                    }
-                    
-                    // 속성 이름과 값이 같은 경우 (예: "Age:Age-Minor" -> "Age:Minor")
-                    if (value.StartsWith(attrName + "-"))
-                    {
-                        value = value.Substring(attrName.Length + 1);
-                    }
-                    
-                    return $"{attrName}:{value}";
+                    return $"{attrName}:{koreanValue}";
                 }).ToList();
 
                 if (attributeTexts.Count == 0)
