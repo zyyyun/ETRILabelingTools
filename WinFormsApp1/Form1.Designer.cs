@@ -254,6 +254,7 @@
             this.pictureBoxVideo.MouseDown += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseDown);
             this.pictureBoxVideo.MouseMove += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseMove);
             this.pictureBoxVideo.MouseUp += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseUp);
+            this.pictureBoxVideo.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.pictureBoxVideo_MouseDoubleClick);
 
             // 
             // labelSubtitleTimestamp (자막 타임스탬프 표시 - 좌측 하단)

@@ -1130,6 +1130,9 @@ namespace WinFormsApp1
         private bool isDrawing = false;
         private bool isDragging = false;
         private System.Drawing.Point dragOffset;
+        private bool isWaitingForDoubleClick = false; // 더블 클릭 대기 플래그
+        private System.Threading.Timer doubleClickTimer = null; // 더블 클릭 타이머
+        private System.Drawing.Point lastClickPoint; // 마지막 클릭 위치
 
         // ✅ BBox 크기 조정 관련 변수
         private bool isResizing = false;
@@ -4303,13 +4306,42 @@ namespace WinFormsApp1
                         return;
                     }
 
-                    // ✅ 선택 유지 개선: 선택된 박스 내부 클릭이더라도
-                    // 동일 지점에 다른 후보 박스가 있으면 새 선택을 허용
+                    // ✅ 선택된 박스 내부 클릭 시 더블 클릭 대기 후 드래그 시작
                     if (viewRect.Contains(e.Location))
                     {
-                        if (!HasAnotherHitCandidateAt(e.Location, selectedBox))
+                        // 겹치는 박스가 있으면 더블 클릭 대기
+                        if (HasAnotherHitCandidateAt(e.Location, selectedBox))
                         {
-                            // 다른 후보가 없을 때만 드래그 시작
+                            isWaitingForDoubleClick = true;
+                            lastClickPoint = e.Location;
+                            dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
+                            
+                            // 더블 클릭 타이머 시작 (500ms 후 드래그 시작)
+                            if (doubleClickTimer != null)
+                            {
+                                doubleClickTimer.Dispose();
+                            }
+                            doubleClickTimer = new System.Threading.Timer((state) =>
+                            {
+                                if (isWaitingForDoubleClick && !isDragging)
+                                {
+                                    this.Invoke((Action)(() =>
+                                    {
+                                        if (isWaitingForDoubleClick && selectedBox != null)
+                                        {
+                                            isDragging = true;
+                                            isWaitingForDoubleClick = false;
+                                            pictureBoxVideo.Invalidate();
+                                        }
+                                    }));
+                                }
+                            }, null, 500, Timeout.Infinite);
+                            
+                            return;
+                        }
+                        else
+                        {
+                            // 겹치는 박스가 없으면 즉시 드래그 시작
                             isDragging = true;
                             dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
                             UpdateObjectInfo(selectedBox);
@@ -4318,30 +4350,6 @@ namespace WinFormsApp1
                             pictureBoxVideo.Invalidate();
                             return;
                         }
-                        else
-                        {
-                            // ✅ 다른 후보가 있으면 현재 선택 다음 후보로 전환 (라벨 전환 보장)
-                            var ordered = GetOrderedCandidatesAt(e.Location);
-                            if (ordered.Count > 0)
-                            {
-                                int idx = ordered.IndexOf(selectedBox);
-                                // 현재가 목록에 없으면 첫 후보, 있으면 다음 후보
-                                BoundingBox next = (idx < 0)
-                                    ? ordered[0]
-                                    : ordered[(idx + 1) % ordered.Count];
-
-                                if (next != selectedBox)
-                                {
-                                    selectedBox = next;
-                                    UpdateObjectInfo(selectedBox);
-                                    UpdateBboxListDisplay();
-                                    HighlightSelectedBoxInSidebar();
-                                    pictureBoxVideo.Invalidate();
-                                    return;
-                                }
-                            }
-                        }
-                        // 후보 없음이면 아래 선택 로직으로 진행
                     }
                 }
                 
@@ -4372,6 +4380,52 @@ namespace WinFormsApp1
             }
         }
 
+        private void pictureBoxVideo_MouseDoubleClick(object sender, MouseEventArgs e)
+        {
+            // ✅ 더블 클릭: 겹치는 박스 중 다음 후보로 선택 전환
+            if (currentMode == DrawMode.Select && e.Button == MouseButtons.Left)
+            {
+                // 더블 클릭 대기 취소 및 타이머 정리
+                isWaitingForDoubleClick = false;
+                if (doubleClickTimer != null)
+                {
+                    doubleClickTimer.Dispose();
+                    doubleClickTimer = null;
+                }
+                
+                // 드래그 취소
+                if (isDragging)
+                {
+                    isDragging = false;
+                }
+                
+                var clickedBox = GetBoundingBoxAt(e.Location);
+                if (clickedBox != null)
+                {
+                    // 겹치는 박스가 있는지 확인
+                    if (HasAnotherHitCandidateAt(e.Location, clickedBox))
+                    {
+                        var ordered = GetOrderedCandidatesAt(e.Location);
+                        if (ordered.Count > 1)
+                        {
+                            int idx = ordered.IndexOf(clickedBox);
+                            // 다음 후보로 전환
+                            BoundingBox next = ordered[(idx + 1) % ordered.Count];
+
+                            if (next != clickedBox)
+                            {
+                                selectedBox = next;
+                                UpdateObjectInfo(selectedBox);
+                                UpdateBboxListDisplay();
+                                HighlightSelectedBoxInSidebar();
+                                pictureBoxVideo.Invalidate();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         private void pictureBoxVideo_MouseMove(object sender, MouseEventArgs e)
         {
             if (isDrawing && drawingBox != null)
@@ -4394,6 +4448,21 @@ namespace WinFormsApp1
                 // ✅ 크기 조정 중
                 PerformResize(e.Location);
                 pictureBoxVideo.Invalidate();
+            }
+            else if (isWaitingForDoubleClick && selectedBox != null)
+            {
+                // 더블 클릭 대기 중 마우스가 움직이면 드래그 시작
+                int moveDistance = (int)Math.Sqrt(Math.Pow(e.X - lastClickPoint.X, 2) + Math.Pow(e.Y - lastClickPoint.Y, 2));
+                if (moveDistance > 5) // 5픽셀 이상 움직이면 드래그 시작
+                {
+                    isDragging = true;
+                    isWaitingForDoubleClick = false;
+                    if (doubleClickTimer != null)
+                    {
+                        doubleClickTimer.Dispose();
+                        doubleClickTimer = null;
+                    }
+                }
             }
             else if (isDragging && selectedBox != null)
             {
@@ -4490,21 +4559,39 @@ namespace WinFormsApp1
                 pictureBoxVideo.Cursor = Cursors.Default;
                 pictureBoxVideo.Invalidate();
             }
-            else if (isDragging)
+            else if (isDragging || isWaitingForDoubleClick)
             {
-                isDragging = false;
-                
-                // ✅ 수동 수정 프레임 기록
-                if (selectedBox != null)
+                // 더블 클릭 대기 중이었지만 더블 클릭이 발생하지 않았으면 드래그 시작
+                if (isWaitingForDoubleClick && !isDragging)
                 {
-                    RecordManuallyAdjustedFrame(selectedBox);
+                    isDragging = true;
+                    isWaitingForDoubleClick = false;
                 }
                 
-                // 박스 이동/수정 완료 시에도 Event 박스 전파
-                if (selectedBox != null && selectedBox.Label == "event")
+                if (isDragging)
                 {
-                    PropagateEventBoxFromCurrentFrame(selectedBox);
+                    isDragging = false;
+                    
+                    // ✅ 수동 수정 프레임 기록
+                    if (selectedBox != null)
+                    {
+                        RecordManuallyAdjustedFrame(selectedBox);
+                    }
+                    
+                    // 박스 이동/수정 완료 시에도 Event 박스 전파
+                    if (selectedBox != null && selectedBox.Label == "event")
+                    {
+                        PropagateEventBoxFromCurrentFrame(selectedBox);
+                    }
                 }
+                
+                // 타이머 정리
+                if (doubleClickTimer != null)
+                {
+                    doubleClickTimer.Dispose();
+                    doubleClickTimer = null;
+                }
+                isWaitingForDoubleClick = false;
             }
         }
 
@@ -4551,8 +4638,14 @@ namespace WinFormsApp1
                 lastCachedFrameForPaint = currentFrameIndex;
             }
 
+            // 1단계: 선택된 박스를 제외한 모든 박스 그리기
             foreach (var box in cachedCurrentFrameBoxes)
             {
+                // 선택된 박스는 나중에 그리므로 건너뛰기
+                if (box == selectedBox || (selectedBox != null && box.FrameIndex == currentFrameIndex && 
+                    box.Label == selectedBox.Label && GetBoxId(box) == GetBoxId(selectedBox)))
+                    continue;
+
                 // 현재 프레임의 박스만 표시 (box.FrameIndex == currentFrameIndex)
                 // currentFrameBoxes에서 이미 필터링되었으므로 추가 체크 불필요
 
@@ -4576,8 +4669,6 @@ namespace WinFormsApp1
                     // 정상 박스는 기존 로직대로
                     using (Pen pen = new Pen(boxColor, 3))
                     {
-                        if (box == selectedBox)
-                            pen.Width = 5;
                         g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
                     }
 
@@ -4599,12 +4690,56 @@ namespace WinFormsApp1
 
                     using (SolidBrush textBrush = new SolidBrush(Color.White))
                         g.DrawString(labelText, labelFont, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
+                }
+            }
+
+            // 2단계: 선택된 박스를 마지막에 그리기 (제일 위에 표시)
+            if (selectedBox != null && selectedBox.FrameIndex == currentFrameIndex)
+            {
+                // 이미지 좌표를 뷰 좌표로 변환
+                var viewRect = ImageToView(new RectangleF(selectedBox.Rectangle.X, selectedBox.Rectangle.Y, 
+                    selectedBox.Rectangle.Width, selectedBox.Rectangle.Height));
+
+                Color boxColor = GetColorForLabel(selectedBox.Label);
+                
+                // ✅ 삭제된 박스는 얇고 옅게 표시
+                if (selectedBox.IsDeleted)
+                {
+                    Color fadedColor = Color.FromArgb(150, boxColor.R, boxColor.G, boxColor.B);
+                    using (Pen pen = new Pen(fadedColor, 2))
+                    {
+                        g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
+                    }
+                }
+                else
+                {
+                    // 정상 박스는 기존 로직대로 (선택된 박스는 더 두꺼운 선)
+                    using (Pen pen = new Pen(boxColor, 5))
+                    {
+                        g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
+                    }
+
+                    // 라벨 텍스트 생성 (성능 최적화: 캐싱된 배열 사용)
+                    string labelText = GetBoxLabelText(selectedBox);
+                    
+                    // 성능 최적화: 재사용 가능한 Font 사용
+                    SizeF textSize = g.MeasureString(labelText, labelFont);
+                    RectangleF labelBg = new RectangleF(
+                        viewRect.X,
+                        
+                        viewRect.Y - textSize.Height - 4,
+                        textSize.Width + 8,
+                        textSize.Height + 4
+                    );
+
+                    using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(200, boxColor)))
+                        g.FillRectangle(bgBrush, labelBg);
+
+                    using (SolidBrush textBrush = new SolidBrush(Color.White))
+                        g.DrawString(labelText, labelFont, textBrush, viewRect.X + 4, viewRect.Y - textSize.Height - 2);
                     
                     // ✅ 선택된 박스에 크기 조정 핸들 표시 (4개 엣지만)
-                    if (box == selectedBox)
-                    {
-                        DrawResizeHandles(g, viewRect);
-                    }
+                    DrawResizeHandles(g, viewRect);
                 }
             }
 
@@ -10000,7 +10135,25 @@ namespace WinFormsApp1
                 // 방향키: 영상 로드된 경우만 처리
                 if (isVideoLoaded)
                 {
-                    if (keyData == Keys.Left)
+                    // Shift + 방향키: 2초씩 이동 (우선 처리)
+                    if (keyData == (Keys.Shift | Keys.Left))
+                    {
+                        // 2초씩 뒤로 이동
+                        int framesToMove = (int)(fps * 2);
+                        int newFrame = Math.Max(0, currentFrameIndex - framesToMove);
+                        LoadFrame(newFrame);
+                        return true; // 이벤트 처리 완료
+                    }
+                    else if (keyData == (Keys.Shift | Keys.Right))
+                    {
+                        // 2초씩 앞으로 이동
+                        int framesToMove = (int)(fps * 2);
+                        int newFrame = Math.Min(totalFrames - 1, currentFrameIndex + framesToMove);
+                        LoadFrame(newFrame);
+                        return true; // 이벤트 처리 완료
+                    }
+                    // 방향키만: 5초씩 이동
+                    else if (keyData == Keys.Left)
                     {
                         // 5초씩 뒤로 이동
                         int framesToMove = (int)(fps * 5);
