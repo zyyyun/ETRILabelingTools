@@ -52,7 +52,7 @@
             this.btnExit = new System.Windows.Forms.Button();
             this.btnToggleSubtitle = new System.Windows.Forms.Button();
             this.btnToggleYoloDetections = new System.Windows.Forms.Button();
-            this.trackBarVolume = new System.Windows.Forms.TrackBar();
+            this.btnToggleAttributeView = new System.Windows.Forms.Button();
             this.panelTimeline = new System.Windows.Forms.Panel();
 
             // Right Sidebar (Info Panel)
@@ -82,7 +82,6 @@
             this.timerPlayback = new System.Windows.Forms.Timer(this.components);
 
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxVideo)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.trackBarVolume)).BeginInit();
             this.SuspendLayout();
 
             // 
@@ -287,7 +286,7 @@
             this.panelVideoControls.Controls.Add(this.btnExit);
             this.panelVideoControls.Controls.Add(this.btnToggleSubtitle);
             this.panelVideoControls.Controls.Add(this.btnToggleYoloDetections);
-            this.panelVideoControls.Controls.Add(this.trackBarVolume);
+            this.panelVideoControls.Controls.Add(this.btnToggleAttributeView);
             this.panelVideoControls.Controls.Add(this.panelTimeline);
             this.panelVideoControls.Resize += new System.EventHandler(this.panelVideoControls_Resize);
 
@@ -327,7 +326,7 @@
 
             // Entry/Exit buttons
             this.btnEntry.Text = "Entry";
-            this.btnEntry.Location = new System.Drawing.Point(600, 16);
+            this.btnEntry.Location = new System.Drawing.Point(750, 16);
             this.btnEntry.Size = new System.Drawing.Size(130, 40);
             this.btnEntry.BackColor = System.Drawing.Color.FromArgb(250, 204, 21);
             this.btnEntry.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -336,7 +335,7 @@
             this.btnEntry.Click += new System.EventHandler(this.btnEntry_Click);
 
             this.btnExit.Text = "Exit";
-            this.btnExit.Location = new System.Drawing.Point(740, 16);
+            this.btnExit.Location = new System.Drawing.Point(890, 16);
             this.btnExit.Size = new System.Drawing.Size(130, 40);
             this.btnExit.BackColor = System.Drawing.Color.FromArgb(250, 204, 21);
             this.btnExit.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
@@ -368,12 +367,17 @@
             this.btnToggleYoloDetections.TabStop = false;
             this.btnToggleYoloDetections.Click += new System.EventHandler(this.btnToggleYoloDetections_Click);
 
-            // Volume control
-            this.trackBarVolume.Location = new System.Drawing.Point(920, 20);
-            this.trackBarVolume.Size = new System.Drawing.Size(100, 35);
-            this.trackBarVolume.Maximum = 100;
-            this.trackBarVolume.Value = 50;
-            this.trackBarVolume.TickStyle = System.Windows.Forms.TickStyle.None;
+            // btnToggleAttributeView (속성값 조회)
+            this.btnToggleAttributeView.Text = "속성값 조회";
+            this.btnToggleAttributeView.Location = new System.Drawing.Point(590, 16);
+            this.btnToggleAttributeView.Size = new System.Drawing.Size(150, 40);
+            this.btnToggleAttributeView.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
+            this.btnToggleAttributeView.ForeColor = System.Drawing.Color.White;
+            this.btnToggleAttributeView.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnToggleAttributeView.FlatAppearance.BorderSize = 0;
+            this.btnToggleAttributeView.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.btnToggleAttributeView.TabStop = false;
+            this.btnToggleAttributeView.Click += new System.EventHandler(this.btnToggleAttributeView_Click);
 
             // 
             // panelTimeline (Progress bar with markers - 좌측에 고정)
@@ -722,7 +726,6 @@
             this.Load += new System.EventHandler(this.Form1_Load);
 
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxVideo)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.trackBarVolume)).EndInit();
             this.ResumeLayout(false);
         }
 
@@ -765,7 +768,7 @@
         private System.Windows.Forms.Button btnExit;
         private System.Windows.Forms.Button btnToggleSubtitle;
         private System.Windows.Forms.Button btnToggleYoloDetections;
-        private System.Windows.Forms.TrackBar trackBarVolume;
+        private System.Windows.Forms.Button btnToggleAttributeView;
         private System.Windows.Forms.Panel panelTimeline;
 
         // Right Sidebar
