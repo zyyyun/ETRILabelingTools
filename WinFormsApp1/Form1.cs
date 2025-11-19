@@ -5911,7 +5911,7 @@ namespace WinFormsApp1
                         // 속성을 더 보기 좋게 표시 (각 속성을 줄바꿈으로 구분)
                         var attrLines = waypointScopedAttrs.Select(kvp => $"  • {kvp.Key}: {kvp.Value}");
                         string attrText = string.Join("\n", attrLines);
-                        labelText += $"\n\n속성:\n{attrText}";
+                        labelText += $"\n속성:\n{attrText}";
                     }
                 }
             }

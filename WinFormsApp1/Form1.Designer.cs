@@ -409,19 +409,17 @@
             // groupBoxObjectInfo (하단 플레이바 - 우측에 고정 배치)
             // 
             this.groupBoxObjectInfo.Text = "Object Info";
-            this.groupBoxObjectInfo.Size = new System.Drawing.Size(280, 84);
+            this.groupBoxObjectInfo.Size = new System.Drawing.Size(280, 100);
             this.groupBoxObjectInfo.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold);
             this.groupBoxObjectInfo.BackColor = System.Drawing.Color.White;
             this.groupBoxObjectInfo.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right;
             this.groupBoxObjectInfo.TabStop = false;
             this.groupBoxObjectInfo.Controls.Add(this.labelObjectLabel);
-            this.groupBoxObjectInfo.Controls.Add(this.labelPrevWaypoint);
-            this.groupBoxObjectInfo.Controls.Add(this.labelNextWaypoint);
 
             this.labelObjectLabel.Text = "Label: -";
             this.labelObjectLabel.Location = new System.Drawing.Point(8, 18);
-            this.labelObjectLabel.Size = new System.Drawing.Size(264, 18);
-            this.labelObjectLabel.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold);
+            this.labelObjectLabel.Size = new System.Drawing.Size(264, 78);
+            this.labelObjectLabel.Font = new System.Drawing.Font("Segoe UI", 8.5F, System.Drawing.FontStyle.Bold);
             this.labelObjectLabel.ForeColor = System.Drawing.Color.FromArgb(55, 65, 81);
             this.labelObjectLabel.AutoSize = false;
 
@@ -431,6 +429,7 @@
             this.labelPrevWaypoint.Font = new System.Drawing.Font("Segoe UI", 7F);
             this.labelPrevWaypoint.ForeColor = System.Drawing.Color.Gray;
             this.labelPrevWaypoint.AutoSize = false;
+            this.labelPrevWaypoint.Visible = false;
 
             this.labelNextWaypoint.Text = "Next Waypoint: -";
             this.labelNextWaypoint.Location = new System.Drawing.Point(8, 58);
@@ -438,6 +437,7 @@
             this.labelNextWaypoint.Font = new System.Drawing.Font("Segoe UI", 7F);
             this.labelNextWaypoint.ForeColor = System.Drawing.Color.Gray;
             this.labelNextWaypoint.AutoSize = false;
+            this.labelNextWaypoint.Visible = false;
 
             // 
             // groupBoxPersonWaypoint (빨강 테마)
