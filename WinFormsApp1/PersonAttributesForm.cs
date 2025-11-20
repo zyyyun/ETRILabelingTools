@@ -100,8 +100,7 @@ namespace WinFormsApp1
                 ("Age", new[] { "Age-Minor", "Age-Adult", "Age-Old" }),
                 ("Gender", new[] { "Gender-Female", "Gender-Male" }),
                 ("Height", new[] { "Height-Short", "Height-Average", "Height-Tall" }),
-                ("Weight", new[] { "Weight-Underweight", "Weight-Average", "Weight-Overweight" }),
-                ("BodyPosture", new[] { "BodyPosture-Stooped" }),
+                ("Weight/BodyShape", new[] { "Weight-Underweight", "Weight-Average", "Weight-Overweight", "BodyPosture-Stooped" }),
                 ("Face", new[] { "Face-Recognizable" })
             });
             tabControl.TabPages.Add(biometricTab);
@@ -345,8 +344,7 @@ namespace WinFormsApp1
                 { "Age", "연령대" },
                 { "Gender", "성별" },
                 { "Height", "키" },
-                { "Weight", "체중" },
-                { "BodyPosture", "자세" },
+                { "Weight/BodyShape", "체격/체형" },
                 { "Face", "얼굴" },
                 // Head/Hair 탭
                 { "HairLength", "머리 길이" },
