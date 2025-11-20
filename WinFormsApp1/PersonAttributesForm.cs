@@ -27,6 +27,19 @@ namespace WinFormsApp1
     public partial class PersonAttributesForm : Form
     {
         private Dictionary<string, ComboBox> attributeControls = new Dictionary<string, ComboBox>();
+        private readonly Dictionary<Keys, (string attributeName, string englishValue)> numpadShortcutMap =
+            new Dictionary<Keys, (string attributeName, string englishValue)>
+            {
+                { Keys.NumPad1, ("Occlusion", "Person-FullyVisible") },
+                { Keys.NumPad2, ("Occlusion", "Person-PartiallyVisible") },
+                { Keys.NumPad3, ("Occlusion", "OccludedPart-LowerBody") },
+                { Keys.NumPad4, ("BodyView", "BodyView-Front") },
+                { Keys.NumPad5, ("BodyView", "BodyView-Side") },
+                { Keys.NumPad6, ("BodyView", "BodyView-Back") },
+                { Keys.NumPad7, ("ActionType", "Standing") },
+                { Keys.NumPad8, ("ActionType", "Walking") },
+                { Keys.NumPad9, ("ActionType", "Sitting") }
+            };
         private int personId;
         private int waypointEntryFrame;
         private int currentFrameIndex;
@@ -63,6 +76,7 @@ namespace WinFormsApp1
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+            this.KeyPreview = true;
 
             // 정보 레이블
             Label infoLabel = new Label
@@ -89,7 +103,7 @@ namespace WinFormsApp1
             TabPage viewActionTab = CreateTabPage("보임/가림/행동", new[]
             {
                 ("Occlusion", new[] { "Person-Multi", "Person-FullyVisible", "Person-PartiallyVisible", "OccludedPart-Head", "OccludedPart-UpperBody", "OccludedPart-LowerBody", "OccludedPart-Feet", "Occluded-byPerson" }),
-                ("BodyView", new[] { "BodyView-Back", "BodyView-Front", "BodyView-Side" }),
+                ("BodyView", new[] { "BodyView-Front", "BodyView-Side", "BodyView-Back" }),
                 ("ActionType", new[] { "Standing", "Walking", "Running", "Riding", "Sitting", "Pulling" })
             });
             tabControl.TabPages.Add(viewActionTab);
@@ -408,7 +422,7 @@ namespace WinFormsApp1
                     DropDownStyle = ComboBoxStyle.DropDownList
                 };
                 
-                comboBox.Items.Add(new AttributeComboBoxItem("(없음)", null)); // null 값 표시
+                comboBox.Items.Add(new AttributeComboBoxItem("(없음)", "none")); // "none" 값으로 저장
                 foreach (string englishValue in values)
                 {
                     string koreanText = GetAttributeValueKorean(englishValue);
@@ -426,6 +440,49 @@ namespace WinFormsApp1
             return tabPage;
         }
 
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (HandleNumpadShortcut(keyData))
+            {
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private bool HandleNumpadShortcut(Keys keyData)
+        {
+            Keys keyCode = keyData & Keys.KeyCode;
+            if (numpadShortcutMap.TryGetValue(keyCode, out var mapping))
+            {
+                if (attributeControls.TryGetValue(mapping.attributeName, out ComboBox comboBox))
+                {
+                    if (SelectComboBoxValue(comboBox, mapping.englishValue))
+                    {
+                        comboBox.Focus();
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private bool SelectComboBoxValue(ComboBox comboBox, string englishValue)
+        {
+            for (int i = 0; i < comboBox.Items.Count; i++)
+            {
+                if (comboBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue == englishValue)
+                {
+                    if (comboBox.SelectedIndex != i)
+                    {
+                        comboBox.SelectedIndex = i;
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private void LoadCurrentAttributes()
         {
             foreach (var kvp in attributeControls)
@@ -437,7 +494,11 @@ namespace WinFormsApp1
                 
                 if (value == null)
                 {
-                    comboBox.SelectedIndex = 0; // "(없음)"
+                    comboBox.SelectedIndex = -1; // 빈 칸 (아무것도 선택 안됨, null 유지)
+                }
+                else if (value.ToString() == "none")
+                {
+                    comboBox.SelectedIndex = 0; // "(없음)" 선택
                 }
                 else
                 {
@@ -458,7 +519,7 @@ namespace WinFormsApp1
                     }
                     if (!found)
                     {
-                        comboBox.SelectedIndex = 0;
+                        comboBox.SelectedIndex = -1; // 찾지 못하면 빈 칸
                     }
                 }
             }
@@ -475,10 +536,15 @@ namespace WinFormsApp1
                 object currentValue = getAttributeFunc(personId, currentFrameIndex, attrName);
                 
                 object newValue = null;
-                if (comboBox.SelectedIndex > 0 && comboBox.Items[comboBox.SelectedIndex] is AttributeComboBoxItem item)
+                if (comboBox.SelectedIndex == 0)
+                {
+                    newValue = "none"; // "(없음)" 선택 시 "none" 저장
+                }
+                else if (comboBox.SelectedIndex > 0 && comboBox.Items[comboBox.SelectedIndex] is AttributeComboBoxItem item)
                 {
                     newValue = item.EnglishValue; // 영문 값 저장
                 }
+                // SelectedIndex == -1이면 newValue는 null (null로 저장)
                 
                 // 값이 변경된 경우에만 저장
                 string currentValueStr = currentValue?.ToString() ?? "";
