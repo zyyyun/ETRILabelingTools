@@ -7,6 +7,7 @@ using System.Windows.Forms;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.IO;
 using OpenCvSharp.Tracking;
 using Compunet.YoloSharp;
@@ -173,15 +174,35 @@ namespace WinFormsApp1
 
     public class PersonAttributeStore
     {
-        // Global 속성: person_id -> attributes
-        private Dictionary<int, Dictionary<string, object>> globalAttributes = new Dictionary<int, Dictionary<string, object>>();
+        // Global 속성: (videoFile, personId) -> attributes (영상별로 구분)
+        private Dictionary<(string videoFile, int personId), Dictionary<string, object>> globalAttributes = new Dictionary<(string, int), Dictionary<string, object>>();
         
-        // Global 속성 우선순위: person_id -> (attributeName -> priority)
+        // Global 속성 우선순위: person_id -> (attributeName -> priority) (호환성을 위해 유지, 사용 안함)
         private Dictionary<int, Dictionary<string, int>> globalAttributePriority = new Dictionary<int, Dictionary<string, int>>();
         
         // Waypoint-scoped 속성: person_id -> entries (EntryFrame 순으로 정렬)
+        // waypointMarkers를 통해 현재 영상의 waypoint만 필터링되므로 영상별로 분리됨
         private Dictionary<int, List<PersonAttributeEntry>> waypointScopedAttributes = new Dictionary<int, List<PersonAttributeEntry>>();
 
+        // 단일 선택 속성 목록 (ComboBox 사용)
+        // 다중 선택 속성: 악세서리(HeadwearType, FacewearType, BagType, CarringItemType), 상의 색상(UpperClothColor), 하의 색상(LowerClothColor)
+        // 나머지는 모두 단일 선택 속성
+        public static readonly HashSet<string> singleSelectAttributeNames = new HashSet<string>
+        {
+            // 보임/가림/행동 탭
+            "Occlusion", "BodyView", "ActionType",
+            // 생체 정보 탭
+            "Age", "Gender", "Height", "Weight/BodyShape", "Face",
+            // 머리/헤어 탭
+            "HairLength", "HairStyle", "HairColor",
+            // 상의 탭
+            "UpperClothType", "UpperClothSleeve", "UpperClothPattern",
+            // 하의 탭
+            "LowerClothType", "LowerClothLegwear", "LowerClothLength", "LowerClothPattern", "LowerClothMaterial",
+            // 신발 탭
+            "FootwearType", "FootwearColor"
+        };
+        
         // 노란색 표시 속성 목록 (Waypoint-scoped)
         private static readonly HashSet<string> waypointScopedAttributeNames = new HashSet<string>
         {
@@ -224,7 +245,7 @@ namespace WinFormsApp1
         }
 
         // 속성 읽기: 현재 프레임에 적용되는 속성 값 반환
-        public object GetAttribute(int personId, int frameIndex, string attributeName, List<WaypointMarker> waypointMarkers)
+        public object GetAttribute(int personId, int frameIndex, string attributeName, List<WaypointMarker> waypointMarkers, string videoFile = null)
         {
             // ✅ Weight나 BodyPosture를 Weight/BodyShape로 변환 (기존 데이터 호환성)
             string searchAttributeName = attributeName;
@@ -232,6 +253,11 @@ namespace WinFormsApp1
             {
                 searchAttributeName = "Weight/BodyShape";
             }
+            
+            // 단일 선택 속성인지 확인
+            bool isSingleSelect = singleSelectAttributeNames.Contains(attributeName);
+            
+            object rawValue = null;
             
             // ✅ applyFromFrame을 고려하여 현재 프레임에 적용되는 속성 찾기
             if (waypointScopedAttributes.ContainsKey(personId))
@@ -257,31 +283,105 @@ namespace WinFormsApp1
                     
                     if (entry != null)
                     {
-                        return entry.Value;
+                        rawValue = entry.Value;
                     }
                 }
             }
             
-            // fallback: globalAttributes에서 확인
-            if (globalAttributes.ContainsKey(personId))
+            // fallback: globalAttributes에서 확인 (현재 영상의 속성 우선, 없으면 다른 영상의 같은 person_id 속성 조회)
+            if (rawValue == null && !string.IsNullOrEmpty(videoFile))
             {
-                // Weight/BodyShape 우선 확인
-                if (globalAttributes[personId].ContainsKey(searchAttributeName))
+                var currentKey = (videoFile, personId);
+                // 1. 현재 영상의 속성 확인
+                if (globalAttributes.ContainsKey(currentKey))
                 {
-                    return globalAttributes[personId][searchAttributeName];
+                    // Weight/BodyShape 우선 확인
+                    if (globalAttributes[currentKey].ContainsKey(searchAttributeName))
+                    {
+                        rawValue = globalAttributes[currentKey][searchAttributeName];
+                    }
+                    // 기존 Weight나 BodyPosture도 확인 (호환성)
+                    else if (globalAttributes[currentKey].ContainsKey(attributeName))
+                    {
+                        rawValue = globalAttributes[currentKey][attributeName];
+                    }
                 }
-                // 기존 Weight나 BodyPosture도 확인 (호환성)
-                if (globalAttributes[personId].ContainsKey(attributeName))
+                
+                // 2. 현재 영상에 속성이 없으면 다른 영상의 같은 person_id 속성 조회
+                if (rawValue == null)
                 {
-                    return globalAttributes[personId][attributeName];
+                    foreach (var kvp in globalAttributes)
+                    {
+                        // 같은 person_id이지만 다른 영상의 속성
+                        if (kvp.Key.personId == personId && kvp.Key.videoFile != videoFile)
+                        {
+                            // Weight/BodyShape 우선 확인
+                            if (kvp.Value.ContainsKey(searchAttributeName))
+                            {
+                                rawValue = kvp.Value[searchAttributeName];
+                                break;
+                            }
+                            // 기존 Weight나 BodyPosture도 확인 (호환성)
+                            else if (kvp.Value.ContainsKey(attributeName))
+                            {
+                                rawValue = kvp.Value[attributeName];
+                                break;
+                            }
+                        }
+                    }
                 }
             }
             
-            return null;
+            if (rawValue == null)
+            {
+                return null;
+            }
+            
+            // 단일 선택 속성은 단일 값 반환 (string 또는 null)
+            if (isSingleSelect)
+            {
+                if (rawValue is List<string> listValue && listValue.Count > 0)
+                {
+                    // 배열인 경우 첫 번째 값만 반환 (기존 데이터 호환성)
+                    return listValue[0];
+                }
+                else if (rawValue is string[] arrayValue && arrayValue.Length > 0)
+                {
+                    return arrayValue[0];
+                }
+                else if (rawValue is string stringValue)
+                {
+                    return stringValue;
+                }
+                else
+                {
+                    return rawValue.ToString();
+                }
+            }
+            
+            // 다중 선택 속성은 배열로 반환 (기존 단일 값도 배열로 변환)
+            if (rawValue is List<string> listValue2)
+            {
+                return listValue2;
+            }
+            else if (rawValue is string[] arrayValue2)
+            {
+                return arrayValue2.ToList();
+            }
+            else if (rawValue is string stringValue2)
+            {
+                // 단일 값인 경우 배열로 변환 (기존 데이터 호환성)
+                return new List<string> { stringValue2 };
+            }
+            else
+            {
+                // 기타 타입도 문자열로 변환하여 배열로 반환
+                return new List<string> { rawValue.ToString() };
+            }
         }
 
         // 속성 저장 (applyFromFrame + 우선순위 방식)
-        public void SetAttribute(int personId, int waypointEntryFrame, int applyFromFrame, string attributeName, object value, List<WaypointMarker> waypointMarkers)
+        public void SetAttribute(int personId, int waypointEntryFrame, int applyFromFrame, string attributeName, object value, List<WaypointMarker> waypointMarkers, string videoFile = null)
         {
             // ✅ Weight나 BodyPosture를 Weight/BodyShape로 변환
             string saveAttributeName = attributeName;
@@ -300,13 +400,17 @@ namespace WinFormsApp1
                         e.AttributeName == saveAttributeName || 
                         (saveAttributeName == "Weight/BodyShape" && (e.AttributeName == "Weight" || e.AttributeName == "BodyPosture")));
                 }
-                if (globalAttributes.ContainsKey(personId))
+                if (!string.IsNullOrEmpty(videoFile))
                 {
-                    globalAttributes[personId][saveAttributeName] = null;
-                    if (saveAttributeName == "Weight/BodyShape")
+                    var key = (videoFile, personId);
+                    if (globalAttributes.ContainsKey(key))
                     {
-                        globalAttributes[personId]["Weight"] = null;
-                        globalAttributes[personId]["BodyPosture"] = null;
+                        globalAttributes[key][saveAttributeName] = null;
+                        if (saveAttributeName == "Weight/BodyShape")
+                        {
+                            globalAttributes[key]["Weight"] = null;
+                            globalAttributes[key]["BodyPosture"] = null;
+                        }
                     }
                 }
                 if (globalAttributePriority.ContainsKey(personId))
@@ -353,15 +457,19 @@ namespace WinFormsApp1
                     return a.ApplyFromFrame.CompareTo(b.ApplyFromFrame);
                 });
                 
-                // Global 속성에도 저장 (최신 값 유지용)
-                if (!globalAttributes.ContainsKey(personId))
-                    globalAttributes[personId] = new Dictionary<string, object>();
-                globalAttributes[personId][saveAttributeName] = value;
+                // Global 속성에도 저장 (최신 값 유지용, 현재 영상의 속성만)
+                if (!string.IsNullOrEmpty(videoFile))
+                {
+                    var key = (videoFile, personId);
+                    if (!globalAttributes.ContainsKey(key))
+                        globalAttributes[key] = new Dictionary<string, object>();
+                    globalAttributes[key][saveAttributeName] = value;
+                }
             }
         }
 
         // 일괄 속성 설정 (정렬 최소화 - JSON 로드 시 사용)
-        public void SetAttributesBatch(int personId, List<(int waypointEntryFrame, int applyFromFrame, string attributeName, object value)> attributes, List<WaypointMarker> waypointMarkers)
+        public void SetAttributesBatch(int personId, List<(int waypointEntryFrame, int applyFromFrame, string attributeName, object value)> attributes, List<WaypointMarker> waypointMarkers, string videoFile = null)
         {
             if (attributes == null || attributes.Count == 0)
                 return;
@@ -378,9 +486,13 @@ namespace WinFormsApp1
                     {
                         waypointScopedAttributes[personId].RemoveAll(e => e.AttributeName == attributeName);
                     }
-                    if (globalAttributes.ContainsKey(personId))
+                    if (!string.IsNullOrEmpty(videoFile))
                     {
-                        globalAttributes[personId][attributeName] = null;
+                        var key = (videoFile, personId);
+                        if (globalAttributes.ContainsKey(key))
+                        {
+                            globalAttributes[key][attributeName] = null;
+                        }
                     }
                 }
                 else
@@ -408,10 +520,14 @@ namespace WinFormsApp1
                     
                     needsSort = true;
                     
-                    // Global 속성에도 저장 (최신 값 유지용)
-                    if (!globalAttributes.ContainsKey(personId))
-                        globalAttributes[personId] = new Dictionary<string, object>();
-                    globalAttributes[personId][attributeName] = value;
+                    // Global 속성에도 저장 (최신 값 유지용, 현재 영상의 속성만)
+                    if (!string.IsNullOrEmpty(videoFile))
+                    {
+                        var key = (videoFile, personId);
+                        if (!globalAttributes.ContainsKey(key))
+                            globalAttributes[key] = new Dictionary<string, object>();
+                        globalAttributes[key][attributeName] = value;
+                    }
                 }
             }
             
@@ -428,7 +544,7 @@ namespace WinFormsApp1
         }
 
         // 모든 속성 가져오기 (현재 프레임 기준)
-        public Dictionary<string, object> GetAllAttributes(int personId, int frameIndex, List<WaypointMarker> waypointMarkers)
+        public Dictionary<string, object> GetAllAttributes(int personId, int frameIndex, List<WaypointMarker> waypointMarkers, string videoFile = null)
         {
             var result = new Dictionary<string, object>();
             
@@ -467,23 +583,63 @@ namespace WinFormsApp1
             }
             
             // fallback: globalAttributes에서 추가 (waypointScopedAttributes에 없는 속성)
-            if (globalAttributes.ContainsKey(personId))
+            // 현재 영상의 속성 우선, 없으면 다른 영상의 같은 person_id 속성 조회
+            if (!string.IsNullOrEmpty(videoFile))
             {
-                foreach (var kvp in globalAttributes[personId])
+                var currentKey = (videoFile, personId);
+                var fallbackAttributes = new Dictionary<string, object>();
+                
+                // 1. 현재 영상의 속성 확인
+                if (globalAttributes.ContainsKey(currentKey))
                 {
-                    if (kvp.Value != null)
+                    foreach (var kvp in globalAttributes[currentKey])
                     {
-                        string attrName = kvp.Key;
-                        // ✅ Weight나 BodyPosture를 Weight/BodyShape로 변환
-                        if (attrName == "Weight" || attrName == "BodyPosture")
+                        if (kvp.Value != null)
                         {
-                            attrName = "Weight/BodyShape";
-                        }
-                        if (!result.ContainsKey(attrName))
-                        {
-                            result[attrName] = kvp.Value;
+                            string attrName = kvp.Key;
+                            // ✅ Weight나 BodyPosture를 Weight/BodyShape로 변환
+                            if (attrName == "Weight" || attrName == "BodyPosture")
+                            {
+                                attrName = "Weight/BodyShape";
+                            }
+                            if (!result.ContainsKey(attrName))
+                            {
+                                result[attrName] = kvp.Value;
+                            }
                         }
                     }
+                }
+                
+                // 2. 현재 영상에 없는 속성은 다른 영상의 같은 person_id 속성에서 조회
+                foreach (var kvp in globalAttributes)
+                {
+                    // 같은 person_id이지만 다른 영상의 속성
+                    if (kvp.Key.personId == personId && kvp.Key.videoFile != videoFile)
+                    {
+                        foreach (var attrKvp in kvp.Value)
+                        {
+                            if (attrKvp.Value != null)
+                            {
+                                string attrName = attrKvp.Key;
+                                // ✅ Weight나 BodyPosture를 Weight/BodyShape로 변환
+                                if (attrName == "Weight" || attrName == "BodyPosture")
+                                {
+                                    attrName = "Weight/BodyShape";
+                                }
+                                // result에 없고, fallbackAttributes에도 없으면 추가
+                                if (!result.ContainsKey(attrName) && !fallbackAttributes.ContainsKey(attrName))
+                                {
+                                    fallbackAttributes[attrName] = attrKvp.Value;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // fallback 속성을 result에 추가
+                foreach (var kvp in fallbackAttributes)
+                {
+                    result[kvp.Key] = kvp.Value;
                 }
             }
             
@@ -491,11 +647,15 @@ namespace WinFormsApp1
         }
 
         // person_id의 모든 속성 초기화
-        public void ClearPersonAttributes(int personId)
+        public void ClearPersonAttributes(int personId, string videoFile = null)
         {
-            if (globalAttributes.ContainsKey(personId))
+            if (!string.IsNullOrEmpty(videoFile))
             {
-                globalAttributes[personId].Clear();
+                var key = (videoFile, personId);
+                if (globalAttributes.ContainsKey(key))
+                {
+                    globalAttributes[key].Clear();
+                }
             }
             if (waypointScopedAttributes.ContainsKey(personId))
             {
@@ -617,11 +777,45 @@ namespace WinFormsApp1
             var lines = new List<string>();
             foreach (var kvp in attributes)
             {
-                string value = kvp.Value?.ToString() ?? "-";
+                string value = FormatAttributeValue(kvp.Value);
                 lines.Add($"{kvp.Key}: {value}");
             }
 
             lblContent.Text = string.Join("\r\n", lines);
+        }
+        
+        private string FormatAttributeValue(object value)
+        {
+            if (value == null)
+                return "-";
+            
+            // 배열/리스트인 경우 처리
+            if (value is List<string> listValue)
+            {
+                if (listValue.Count == 0)
+                    return "-";
+                // 한국어로 변환하여 표시
+                var koreanValues = listValue.Select(v => PersonAttributesForm.GetAttributeValueKorean(v)).ToList();
+                return string.Join(", ", koreanValues);
+            }
+            else if (value is string[] arrayValue)
+            {
+                if (arrayValue.Length == 0)
+                    return "-";
+                var koreanValues = arrayValue.Select(v => PersonAttributesForm.GetAttributeValueKorean(v)).ToList();
+                return string.Join(", ", koreanValues);
+            }
+            else if (value is string stringValue)
+            {
+                // 단일 값인 경우 한국어로 변환
+                return PersonAttributesForm.GetAttributeValueKorean(stringValue);
+            }
+            else
+            {
+                // 기타 타입은 문자열로 변환 후 한국어 변환 시도
+                string strValue = value.ToString();
+                return PersonAttributesForm.GetAttributeValueKorean(strValue);
+            }
         }
 
         private void TitleBar_MouseDown(object sender, MouseEventArgs e)
@@ -2502,7 +2696,7 @@ namespace WinFormsApp1
                     var key = (box.PersonId, box.FrameIndex);
                     
                     // 속성 가져오기
-                    var attributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers);
+                    var attributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers, currentVideoFile);
 
                     if (attributeWindows.ContainsKey(key))
                     {
@@ -5294,6 +5488,40 @@ namespace WinFormsApp1
         }
 
         // ✅ Person 박스 속성 정보 표시
+        private string FormatAttributeValueForDisplay(object value)
+        {
+            if (value == null)
+                return "";
+            
+            // 배열/리스트인 경우 처리
+            if (value is List<string> listValue)
+            {
+                if (listValue.Count == 0)
+                    return "";
+                // 한국어로 변환하여 표시
+                var koreanValues = listValue.Select(v => PersonAttributesForm.GetAttributeValueKorean(v)).ToList();
+                return string.Join(", ", koreanValues);
+            }
+            else if (value is string[] arrayValue)
+            {
+                if (arrayValue.Length == 0)
+                    return "";
+                var koreanValues = arrayValue.Select(v => PersonAttributesForm.GetAttributeValueKorean(v)).ToList();
+                return string.Join(", ", koreanValues);
+            }
+            else if (value is string stringValue)
+            {
+                // 단일 값인 경우 한국어로 변환
+                return PersonAttributesForm.GetAttributeValueKorean(stringValue);
+            }
+            else
+            {
+                // 기타 타입은 문자열로 변환 후 한국어 변환 시도
+                string strValue = value.ToString();
+                return PersonAttributesForm.GetAttributeValueKorean(strValue);
+            }
+        }
+
         private void DrawPersonAttributes(Graphics g, BoundingBox box, RectangleF viewRect)
         {
             try
@@ -5312,10 +5540,9 @@ namespace WinFormsApp1
                 var attributeTexts = nonNullAttributes.Select(kvp => 
                 {
                     string attrName = kvp.Key;
-                    string englishValue = kvp.Value?.ToString() ?? "";
-                    string koreanValue = PersonAttributesForm.GetAttributeValueKorean(englishValue);
+                    string formattedValue = FormatAttributeValueForDisplay(kvp.Value);
                     
-                    return $"{attrName}:{koreanValue}";
+                    return $"{attrName}:{formattedValue}";
                 }).ToList();
 
                 if (attributeTexts.Count == 0)
@@ -6941,7 +7168,7 @@ namespace WinFormsApp1
         // Person 속성 읽기 메서드
         private object GetPersonAttribute(int personId, int frameIndex, string attributeName)
         {
-            return personAttributeStore.GetAttribute(personId, frameIndex, attributeName, waypointMarkers);
+            return personAttributeStore.GetAttribute(personId, frameIndex, attributeName, waypointMarkers, currentVideoFile);
         }
 
         // Person 속성 저장 메서드
@@ -6960,7 +7187,7 @@ namespace WinFormsApp1
                 applyFromFrame = currentFrameIndex;
             }
             
-            personAttributeStore.SetAttribute(personId, waypointEntryFrame, applyFromFrame, attributeName, value, waypointMarkers);
+            personAttributeStore.SetAttribute(personId, waypointEntryFrame, applyFromFrame, attributeName, value, waypointMarkers, currentVideoFile);
         }
         
         // 박스 수정 완료 시 수정된 프레임 기록
@@ -9658,25 +9885,30 @@ namespace WinFormsApp1
                         if (attrValue == null)
                             continue;
                         
-                        if (attrName == "Weight/BodyShape")
+                        // JSON에서 배열로 저장된 경우 List<string>으로 변환
+                        object processedValue = attrValue;
+                        
+                        // "보임/가림/행동" 탭 속성은 단일 값 유지
+                        if (attrName != "Occlusion" && attrName != "BodyView" && attrName != "ActionType")
                         {
-                            // Weight/BodyShape 값을 분석하여 Weight와 BodyPosture로 분리
-                            string valueStr = attrValue.ToString();
-                            if (valueStr.Contains("Underweight") || valueStr.Contains("Average") || valueStr.Contains("Overweight"))
+                            // 배열인지 확인하고 List<string>으로 변환
+                            if (attrValue is Newtonsoft.Json.Linq.JArray jArray)
                             {
-                                // Weight 값
-                                attributesByPerson[personId].Add((waypointEntryFrame, frameNumber, "Weight", attrValue));
+                                processedValue = jArray.ToObject<List<string>>();
                             }
-                            if (valueStr.Contains("Stooped"))
+                            else if (attrValue is List<object> objectList)
                             {
-                                // BodyPosture 값
-                                attributesByPerson[personId].Add((waypointEntryFrame, frameNumber, "BodyPosture", "BodyPosture-Stooped"));
+                                processedValue = objectList.Select(x => x?.ToString()).Where(x => x != null).ToList();
                             }
+                            else if (attrValue is object[] objectArray)
+                            {
+                                processedValue = objectArray.Select(x => x?.ToString()).Where(x => x != null).ToList();
+                            }
+                            // 단일 값인 경우는 그대로 유지 (기존 데이터 호환성)
                         }
-                        else
-                        {
-                            attributesByPerson[personId].Add((waypointEntryFrame, frameNumber, attrName, attrValue));
-                        }
+                        
+                        // Weight/BodyShape를 그대로 저장 (Weight와 BodyPosture로 분리하지 않음)
+                        attributesByPerson[personId].Add((waypointEntryFrame, frameNumber, attrName, processedValue));
                     }
                     
                     // 초기 프레임인 경우 속성 스키마와 병합하여 저장
@@ -9712,7 +9944,7 @@ namespace WinFormsApp1
                 int personProcessedCount = 0;
                 foreach (var kvp in attributesByPerson)
                 {
-                    personAttributeStore.SetAttributesBatch(kvp.Key, kvp.Value, tempWaypointMarkers);
+                    personAttributeStore.SetAttributesBatch(kvp.Key, kvp.Value, tempWaypointMarkers, videoFilePath);
                     
                     personProcessedCount++;
                     if (personProcessedCount % 10 == 0 && loadingForm != null && loadingForm.InvokeRequired)
@@ -9964,6 +10196,55 @@ namespace WinFormsApp1
             DeleteJsonFileForCurrentVideo();
         }
 
+        // 속성 값 비교 (배열 비교 지원)
+        private bool AreAttributeValuesEqualForExport(object current, object previous)
+        {
+            // null 비교
+            if (current == null && previous == null) return true;
+            if (current == null || previous == null) return false;
+            
+            // 배열 비교
+            List<string> currentList = new List<string>();
+            List<string> previousList = new List<string>();
+            
+            if (current is List<string> currentListValue)
+            {
+                currentList = currentListValue;
+            }
+            else if (current is string[] currentArrayValue)
+            {
+                currentList = currentArrayValue.ToList();
+            }
+            else if (current is string currentString)
+            {
+                currentList = new List<string> { currentString };
+            }
+            else
+            {
+                currentList = new List<string> { current.ToString() };
+            }
+            
+            if (previous is List<string> previousListValue)
+            {
+                previousList = previousListValue;
+            }
+            else if (previous is string[] previousArrayValue)
+            {
+                previousList = previousArrayValue.ToList();
+            }
+            else if (previous is string previousString)
+            {
+                previousList = new List<string> { previousString };
+            }
+            else
+            {
+                previousList = new List<string> { previous.ToString() };
+            }
+            
+            // 정렬 후 비교
+            return currentList.OrderBy(x => x).SequenceEqual(previousList.OrderBy(x => x));
+        }
+
         private void ExportToJsonExtended(string filePath)
         {
             try
@@ -10000,6 +10281,32 @@ namespace WinFormsApp1
                 
                 // Person별로 이전 프레임의 속성을 추적 (변경 감지용)
                 var previousAttributesByPerson = new Dictionary<int, Dictionary<string, object>>();
+                
+                // ✅ Person별 첫 번째 waypoint entry frame의 속성 수집 (categories에 저장할 초기 속성)
+                var initialAttributesByPerson = new Dictionary<int, Dictionary<string, object>>();
+                var personIds = boundingBoxes
+                    .Where(b => b.Label == "person" && !b.IsDeleted)
+                    .Select(b => b.PersonId)
+                    .Distinct()
+                    .ToList();
+                
+                foreach (var personId in personIds)
+                {
+                    var firstWaypoint = waypointMarkers
+                        .Where(w => w.Label == "person" && w.ObjectId == personId)
+                        .OrderBy(w => w.EntryFrame)
+                        .FirstOrDefault();
+                    
+                    if (firstWaypoint != null)
+                    {
+                        var attributes = personAttributeStore.GetAllAttributes(
+                            personId, firstWaypoint.EntryFrame, waypointMarkers, currentVideoFile);
+                        if (attributes != null && attributes.Count > 0)
+                        {
+                            initialAttributesByPerson[personId] = attributes;
+                        }
+                    }
+                }
 
                 foreach (var frameGroup in frameGroups)
                 {
@@ -10043,10 +10350,89 @@ namespace WinFormsApp1
                             if (box.Label == "person" && !personCategoryAttributesSet)
                             {
                                 categories[categoryId].Attributes = new Dictionary<string, object>();
+                                
+                                // ✅ 초기 속성들을 병합하여 categories에 저장
                                 foreach (string attrName in allAttributeNames)
                                 {
-                                    categories[categoryId].Attributes[attrName] = null;
+                                    object mergedValue = null;
+                                    
+                                    // 모든 person의 초기 속성에서 해당 속성 이름의 값 수집
+                                    var valuesForAttribute = new List<object>();
+                                    foreach (var personAttrs in initialAttributesByPerson.Values)
+                                    {
+                                        if (personAttrs.ContainsKey(attrName) && personAttrs[attrName] != null)
+                                        {
+                                            valuesForAttribute.Add(personAttrs[attrName]);
+                                        }
+                                    }
+                                    
+                                    if (valuesForAttribute.Count > 0)
+                                    {
+                                        // 모든 person이 같은 값을 가지는지 확인
+                                        bool allSame = true;
+                                        object firstValue = valuesForAttribute[0];
+                                        
+                                        foreach (var value in valuesForAttribute)
+                                        {
+                                            if (!AreAttributeValuesEqualForExport(firstValue, value))
+                                            {
+                                                allSame = false;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        // 모든 person이 같은 값을 가지는 경우에만 저장
+                                        if (allSame)
+                                        {
+                                            // 단일/다중 선택에 따라 형식 변환
+                                            if (PersonAttributeStore.singleSelectAttributeNames.Contains(attrName))
+                                            {
+                                                // 단일 선택 속성: 단일 값(string) 또는 null
+                                                if (firstValue is List<string> listValue && listValue.Count > 0)
+                                                {
+                                                    mergedValue = listValue[0];
+                                                }
+                                                else if (firstValue is string[] arrayValue && arrayValue.Length > 0)
+                                                {
+                                                    mergedValue = arrayValue[0];
+                                                }
+                                                else if (firstValue is string stringValue)
+                                                {
+                                                    mergedValue = stringValue;
+                                                }
+                                                else
+                                                {
+                                                    mergedValue = firstValue?.ToString();
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // 다중 선택 속성: 배열(List<string>) 또는 null
+                                                if (firstValue is List<string> listValue2)
+                                                {
+                                                    mergedValue = listValue2.Count > 0 ? listValue2 : null;
+                                                }
+                                                else if (firstValue is string[] arrayValue2)
+                                                {
+                                                    mergedValue = arrayValue2.Length > 0 ? arrayValue2.ToList() : null;
+                                                }
+                                                else if (firstValue is string stringValue2)
+                                                {
+                                                    mergedValue = new List<string> { stringValue2 };
+                                                }
+                                                else
+                                                {
+                                                    mergedValue = firstValue != null ? new List<string> { firstValue.ToString() } : null;
+                                                }
+                                            }
+                                        }
+                                        // 값이 다른 경우 null로 설정 (또는 첫 번째 person의 값 사용)
+                                        // 플랜에 따라 null로 설정
+                                    }
+                                    
+                                    categories[categoryId].Attributes[attrName] = mergedValue;
                                 }
+                                
                                 personCategoryAttributesSet = true;
                             }
                         }
@@ -10127,7 +10513,7 @@ namespace WinFormsApp1
                         if (box.Label == "person")
                         {
                             // 현재 프레임의 속성 가져오기
-                            var currentAttributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers);
+                            var currentAttributes = personAttributeStore.GetAllAttributes(box.PersonId, box.FrameIndex, waypointMarkers, currentVideoFile);
                             
                             // Weight와 BodyPosture를 Weight/BodyShape로 통합
                             var mergedAttributes = new Dictionary<string, object>();
@@ -10161,6 +10547,67 @@ namespace WinFormsApp1
                                 }
                             }
                             
+                            // 속성 값을 JSON 저장 형식으로 변환 (단일/배열 구분)
+                            var formattedAttributes = new Dictionary<string, object>();
+                            foreach (var kvp in mergedAttributes)
+                            {
+                                string attrName = kvp.Key;
+                                object attrValue = kvp.Value;
+                                
+                                // 단일 선택 속성은 단일 값으로 저장
+                                if (PersonAttributeStore.singleSelectAttributeNames.Contains(attrName))
+                                {
+                                    // 단일 선택 속성: 단일 값(string) 또는 null
+                                    if (attrValue == null)
+                                    {
+                                        formattedAttributes[attrName] = null;
+                                    }
+                                    else if (attrValue is List<string> listValue && listValue.Count > 0)
+                                    {
+                                        // 배열인 경우 첫 번째 값만 사용 (기존 데이터 호환성)
+                                        formattedAttributes[attrName] = listValue[0];
+                                    }
+                                    else if (attrValue is string[] arrayValue && arrayValue.Length > 0)
+                                    {
+                                        formattedAttributes[attrName] = arrayValue[0];
+                                    }
+                                    else if (attrValue is string stringValue)
+                                    {
+                                        formattedAttributes[attrName] = stringValue;
+                                    }
+                                    else
+                                    {
+                                        formattedAttributes[attrName] = attrValue.ToString();
+                                    }
+                                }
+                                else
+                                {
+                                    // 다중 선택 속성은 배열로 저장
+                                    if (attrValue == null)
+                                    {
+                                        formattedAttributes[attrName] = null;
+                                    }
+                                    else if (attrValue is List<string> listValue)
+                                    {
+                                        // 빈 배열은 null로 저장
+                                        formattedAttributes[attrName] = listValue.Count > 0 ? listValue : null;
+                                    }
+                                    else if (attrValue is string[] arrayValue)
+                                    {
+                                        formattedAttributes[attrName] = arrayValue.Length > 0 ? arrayValue.ToList() : null;
+                                    }
+                                    else if (attrValue is string stringValue)
+                                    {
+                                        // 단일 값인 경우 배열로 변환 (기존 데이터 호환성)
+                                        formattedAttributes[attrName] = new List<string> { stringValue };
+                                    }
+                                    else
+                                    {
+                                        formattedAttributes[attrName] = new List<string> { attrValue.ToString() };
+                                    }
+                                }
+                            }
+                            
                             // 초기 프레임 판단: Waypoint EntryFrame과 현재 프레임이 같으면 초기 프레임
                             bool isInitialFrame = (matchingWaypoint != null && box.FrameIndex == matchingWaypoint.EntryFrame);
                             
@@ -10170,9 +10617,9 @@ namespace WinFormsApp1
                                 var allAttributes = new Dictionary<string, object>();
                                 foreach (string attrName in allAttributeNames)
                                 {
-                                    if (mergedAttributes.ContainsKey(attrName))
+                                    if (formattedAttributes.ContainsKey(attrName))
                                     {
-                                        allAttributes[attrName] = mergedAttributes[attrName];
+                                        allAttributes[attrName] = formattedAttributes[attrName];
                                     }
                                     else
                                     {
@@ -10199,11 +10646,11 @@ namespace WinFormsApp1
                                 // 모든 속성 이름에 대해 비교
                                 foreach (string attrName in allAttributeNames)
                                 {
-                                    object currentValue = mergedAttributes.ContainsKey(attrName) ? mergedAttributes[attrName] : null;
+                                    object currentValue = formattedAttributes.ContainsKey(attrName) ? formattedAttributes[attrName] : null;
                                     object previousValue = previousAttributes != null && previousAttributes.ContainsKey(attrName) ? previousAttributes[attrName] : null;
                                     
-                                    // 값이 다르고 현재 값이 null이 아니면 변경된 것으로 간주
-                                    if (!Equals(currentValue, previousValue) && currentValue != null)
+                                    // 값이 다르고 현재 값이 null이 아니면 변경된 것으로 간주 (배열 비교 지원)
+                                    if (!AreAttributeValuesEqualForExport(currentValue, previousValue) && currentValue != null)
                                     {
                                         changedAttributes[attrName] = currentValue;
                                     }
@@ -10224,7 +10671,7 @@ namespace WinFormsApp1
                                 // 현재 프레임의 모든 속성을 이전 속성에 반영
                                 foreach (string attrName in allAttributeNames)
                                 {
-                                    object currentValue = mergedAttributes.ContainsKey(attrName) ? mergedAttributes[attrName] : null;
+                                    object currentValue = formattedAttributes.ContainsKey(attrName) ? formattedAttributes[attrName] : null;
                                     if (currentValue != null)
                                     {
                                         previousAttributesByPerson[box.PersonId][attrName] = currentValue;

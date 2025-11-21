@@ -26,7 +26,7 @@ namespace WinFormsApp1
 
     public partial class PersonAttributesForm : Form
     {
-        private Dictionary<string, ComboBox> attributeControls = new Dictionary<string, ComboBox>();
+        private Dictionary<string, Control> attributeControls = new Dictionary<string, Control>();
         private readonly Dictionary<Keys, (string attributeName, string englishValue)> numpadShortcutMap =
             new Dictionary<Keys, (string attributeName, string englishValue)>
             {
@@ -52,6 +52,25 @@ namespace WinFormsApp1
             "Occlusion",      // View 탭의 노란색 표시 속성
             "BodyView",       // View 탭의 노란색 표시 속성
             "ActionType"      // Action 탭의 노란색 표시 속성
+        };
+        
+        // 단일 선택 속성 목록 (ComboBox 사용)
+        // 다중 선택 속성: 악세서리(HeadwearType, FacewearType, BagType, CarringItemType), 상의 색상(UpperClothColor), 하의 색상(LowerClothColor)
+        // 나머지는 모두 단일 선택 속성
+        private static readonly HashSet<string> singleSelectAttributes = new HashSet<string>
+        {
+            // 보임/가림/행동 탭
+            "Occlusion", "BodyView", "ActionType",
+            // 생체 정보 탭
+            "Age", "Gender", "Height", "Weight/BodyShape", "Face",
+            // 머리/헤어 탭
+            "HairLength", "HairStyle", "HairColor",
+            // 상의 탭
+            "UpperClothType", "UpperClothSleeve", "UpperClothPattern",
+            // 하의 탭
+            "LowerClothType", "LowerClothLegwear", "LowerClothLength", "LowerClothPattern", "LowerClothMaterial",
+            // 신발 탭
+            "FootwearType", "FootwearColor"
         };
 
         public PersonAttributesForm(int personId, int waypointEntryFrame, int currentFrameIndex,
@@ -281,7 +300,7 @@ namespace WinFormsApp1
             { "Lower-Type-Pants", "하의유형_바지" },
             { "Lower-Type-Skirt", "하의유형_치마" },
             { "Lower-Legwear-Tights", "하의_타이즈/레깅스 착용" },
-            { "Lower-Length-Short", "하의길이_무릅 기준" },
+            { "Lower-Length-Short", "하의길이_무릎 기준" },
             { "Lower-Length-MidCalf", "하의길이_정강이 중간 기준" },
             { "Lower-Length-Full", "하의길이_발목 기준" },
             { "Lower-Pattern-Solid", "하의무늬_단색(무늬 없음)" },
@@ -401,10 +420,14 @@ namespace WinFormsApp1
                 Padding = new Padding(10)
             };
 
+            // "보임/가림/행동" 탭인지 확인
+            bool isViewActionTab = tabName == "보임/가림/행동";
+
             int yPos = 10;
             foreach (var (attrName, values) in attributes)
             {
                 bool isWaypointScoped = waypointScopedAttributes.Contains(attrName);
+                bool isSingleSelect = singleSelectAttributes.Contains(attrName);
                 string koreanName = GetKoreanAttributeName(attrName);
                 
                 Label label = new Label
@@ -415,27 +438,56 @@ namespace WinFormsApp1
                     ForeColor = isWaypointScoped ? Color.Orange : Color.Black
                 };
 
-                ComboBox comboBox = new ComboBox
+                if (isSingleSelect)
                 {
-                    Location = new Point(220, yPos - 2),
-                    Size = new Size(500, 25),
-                    DropDownStyle = ComboBoxStyle.DropDownList
-                };
-                
-                comboBox.Items.Add(new AttributeComboBoxItem("(없음)", "none")); // "none" 값으로 저장
-                foreach (string englishValue in values)
-                {
-                    string koreanText = GetAttributeValueKorean(englishValue);
-                    comboBox.Items.Add(new AttributeComboBoxItem(koreanText, englishValue));
+                    // 단일 선택 속성: ComboBox 사용
+                    ComboBox comboBox = new ComboBox
+                    {
+                        Location = new Point(220, yPos - 2),
+                        Size = new Size(500, 25),
+                        DropDownStyle = ComboBoxStyle.DropDownList
+                    };
+                    
+                    // 모든 단일 선택 속성에 "(없음)" 옵션 추가
+                    comboBox.Items.Add(new AttributeComboBoxItem("(없음)", "none")); // "none" 값으로 저장
+                    
+                    foreach (string englishValue in values)
+                    {
+                        string koreanText = GetAttributeValueKorean(englishValue);
+                        comboBox.Items.Add(new AttributeComboBoxItem(koreanText, englishValue));
+                    }
+                    
+                    attributeControls[attrName] = comboBox;
+                    panel.Controls.Add(label);
+                    panel.Controls.Add(comboBox);
+                    yPos += 35;
                 }
-                
-                attributeControls[attrName] = comboBox;
-
-                panel.Controls.Add(label);
-                panel.Controls.Add(comboBox);
-                yPos += 35;
+                else
+                {
+                    // 다중 선택 속성: CheckedListBox 사용
+                    CheckedListBox checkedListBox = new CheckedListBox
+                    {
+                        Location = new Point(220, yPos - 2),
+                        Size = new Size(500, Math.Min(values.Length * 25 + 10, 200)),
+                        CheckOnClick = true
+                    };
+                    
+                    foreach (string englishValue in values)
+                    {
+                        string koreanText = GetAttributeValueKorean(englishValue);
+                        checkedListBox.Items.Add(new AttributeComboBoxItem(koreanText, englishValue));
+                    }
+                    
+                    attributeControls[attrName] = checkedListBox;
+                    panel.Controls.Add(label);
+                    panel.Controls.Add(checkedListBox);
+                    yPos += Math.Min(values.Length * 25 + 10, 200) + 15;
+                }
             }
 
+            // Panel의 AutoScrollMinSize 설정 (마지막 컨트롤의 위치 + 높이 + 여백)
+            panel.AutoScrollMinSize = new Size(0, yPos + 20);
+            
             tabPage.Controls.Add(panel);
             return tabPage;
         }
@@ -455,7 +507,7 @@ namespace WinFormsApp1
             Keys keyCode = keyData & Keys.KeyCode;
             if (numpadShortcutMap.TryGetValue(keyCode, out var mapping))
             {
-                if (attributeControls.TryGetValue(mapping.attributeName, out ComboBox comboBox))
+                if (attributeControls.TryGetValue(mapping.attributeName, out Control control) && control is ComboBox comboBox)
                 {
                     if (SelectComboBoxValue(comboBox, mapping.englishValue))
                     {
@@ -488,38 +540,84 @@ namespace WinFormsApp1
             foreach (var kvp in attributeControls)
             {
                 string attrName = kvp.Key;
-                ComboBox comboBox = kvp.Value;
+                Control control = kvp.Value;
                 
                 object value = getAttributeFunc(personId, currentFrameIndex, attrName);
                 
-                if (value == null)
+                if (control is ComboBox comboBox)
                 {
-                    comboBox.SelectedIndex = -1; // 빈 칸 (아무것도 선택 안됨, null 유지)
-                }
-                else if (value.ToString() == "none")
-                {
-                    comboBox.SelectedIndex = 0; // "(없음)" 선택
-                }
-                else
-                {
-                    string valueStr = value.ToString();
-                    // 영문 값으로 항목 찾기
-                    bool found = false;
-                    for (int i = 1; i < comboBox.Items.Count; i++)
+                    // ComboBox 처리 (보임/가림/행동 탭)
+                    if (value == null)
                     {
-                        if (comboBox.Items[i] is AttributeComboBoxItem item)
+                        comboBox.SelectedIndex = -1; // 빈 칸 (아무것도 선택 안됨, null 유지)
+                    }
+                    else if (value.ToString() == "none")
+                    {
+                        comboBox.SelectedIndex = 0; // "(없음)" 선택
+                    }
+                    else
+                    {
+                        string valueStr = value.ToString();
+                        // 영문 값으로 항목 찾기
+                        bool found = false;
+                        for (int i = 1; i < comboBox.Items.Count; i++)
                         {
-                            if (item.EnglishValue == valueStr)
+                            if (comboBox.Items[i] is AttributeComboBoxItem item)
                             {
-                                comboBox.SelectedIndex = i;
-                                found = true;
-                                break;
+                                if (item.EnglishValue == valueStr)
+                                {
+                                    comboBox.SelectedIndex = i;
+                                    found = true;
+                                    break;
+                                }
                             }
                         }
+                        if (!found)
+                        {
+                            comboBox.SelectedIndex = -1; // 찾지 못하면 빈 칸
+                        }
                     }
-                    if (!found)
+                }
+                else if (control is CheckedListBox checkedListBox)
+                {
+                    // CheckedListBox 처리 (그 외 탭)
+                    // 모든 항목 체크 해제
+                    for (int i = 0; i < checkedListBox.Items.Count; i++)
                     {
-                        comboBox.SelectedIndex = -1; // 찾지 못하면 빈 칸
+                        checkedListBox.SetItemChecked(i, false);
+                    }
+                    
+                    if (value != null)
+                    {
+                        List<string> valueList = new List<string>();
+                        
+                        // 배열인지 확인
+                        if (value is List<string> listValue)
+                        {
+                            valueList = listValue;
+                        }
+                        else if (value is string[] arrayValue)
+                        {
+                            valueList = arrayValue.ToList();
+                        }
+                        else if (value is string stringValue)
+                        {
+                            // 단일 값인 경우 배열로 변환 (기존 데이터 호환성)
+                            valueList = new List<string> { stringValue };
+                        }
+                        
+                        // 배열의 각 값에 해당하는 항목을 체크
+                        foreach (string englishValue in valueList)
+                        {
+                            for (int i = 0; i < checkedListBox.Items.Count; i++)
+                            {
+                                if (checkedListBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue == englishValue)
+                                {
+                                    checkedListBox.SetItemChecked(i, true);
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -530,31 +628,98 @@ namespace WinFormsApp1
             foreach (var kvp in attributeControls)
             {
                 string attrName = kvp.Key;
-                ComboBox comboBox = kvp.Value;
+                Control control = kvp.Value;
                 
                 // 현재 저장된 값 가져오기
                 object currentValue = getAttributeFunc(personId, currentFrameIndex, attrName);
                 
                 object newValue = null;
-                if (comboBox.SelectedIndex == 0)
-                {
-                    newValue = "none"; // "(없음)" 선택 시 "none" 저장
-                }
-                else if (comboBox.SelectedIndex > 0 && comboBox.Items[comboBox.SelectedIndex] is AttributeComboBoxItem item)
-                {
-                    newValue = item.EnglishValue; // 영문 값 저장
-                }
-                // SelectedIndex == -1이면 newValue는 null (null로 저장)
                 
-                // 값이 변경된 경우에만 저장
-                string currentValueStr = currentValue?.ToString() ?? "";
-                string newValueStr = newValue?.ToString() ?? "";
-                
-                if (currentValueStr != newValueStr)
+                if (control is ComboBox comboBox)
                 {
-                    setAttributeFunc(personId, waypointEntryFrame, attrName, newValue);
+                    // ComboBox 처리 (보임/가림/행동 탭)
+                    if (comboBox.SelectedIndex == 0)
+                    {
+                        newValue = "none"; // "(없음)" 선택 시 "none" 저장
+                    }
+                    else if (comboBox.SelectedIndex > 0 && comboBox.Items[comboBox.SelectedIndex] is AttributeComboBoxItem item)
+                    {
+                        newValue = item.EnglishValue; // 영문 값 저장
+                    }
+                    // SelectedIndex == -1이면 newValue는 null (null로 저장)
+                    
+                    // 값이 변경된 경우에만 저장
+                    string currentValueStr = currentValue?.ToString() ?? "";
+                    string newValueStr = newValue?.ToString() ?? "";
+                    
+                    if (currentValueStr != newValueStr)
+                    {
+                        setAttributeFunc(personId, waypointEntryFrame, attrName, newValue);
+                    }
+                }
+                else if (control is CheckedListBox checkedListBox)
+                {
+                    // CheckedListBox 처리 (그 외 탭)
+                    List<string> checkedValues = new List<string>();
+                    
+                    for (int i = 0; i < checkedListBox.Items.Count; i++)
+                    {
+                        if (checkedListBox.GetItemChecked(i) && checkedListBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue != null)
+                        {
+                            checkedValues.Add(item.EnglishValue);
+                        }
+                    }
+                    
+                    // 빈 리스트인 경우 null 저장
+                    newValue = checkedValues.Count > 0 ? checkedValues : null;
+                    
+                    // 값이 변경된 경우에만 저장 (배열 비교)
+                    if (!AreAttributeValuesEqual(currentValue, newValue))
+                    {
+                        setAttributeFunc(personId, waypointEntryFrame, attrName, newValue);
+                    }
                 }
             }
+        }
+        
+        private bool AreAttributeValuesEqual(object current, object newValue)
+        {
+            // null 비교
+            if (current == null && newValue == null) return true;
+            if (current == null || newValue == null) return false;
+            
+            // 배열 비교
+            List<string> currentList = new List<string>();
+            List<string> newList = new List<string>();
+            
+            if (current is List<string> currentListValue)
+            {
+                currentList = currentListValue;
+            }
+            else if (current is string[] currentArrayValue)
+            {
+                currentList = currentArrayValue.ToList();
+            }
+            else if (current is string currentString)
+            {
+                currentList = new List<string> { currentString };
+            }
+            
+            if (newValue is List<string> newListValue)
+            {
+                newList = newListValue;
+            }
+            else if (newValue is string[] newArrayValue)
+            {
+                newList = newArrayValue.ToList();
+            }
+            else if (newValue is string newString)
+            {
+                newList = new List<string> { newString };
+            }
+            
+            // 정렬 후 비교
+            return currentList.OrderBy(x => x).SequenceEqual(newList.OrderBy(x => x));
         }
     }
 }
