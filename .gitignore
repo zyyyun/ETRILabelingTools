@@ -52,3 +52,8 @@ artifacts/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+## Review Package
+ReviewPackage/
+ReviewPackage.zip
+prepareforreview.ps1

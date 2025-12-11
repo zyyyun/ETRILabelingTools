@@ -320,7 +320,7 @@ namespace WinFormsApp1
             { "Lower-Material-Denim", "데님소재(청바지, 청치마)" },
             
             // Footwear
-            { "Footwear-Type-Boots", "부츠(발목 위~무릅까지 커버)" },
+            { "Footwear-Type-Boots", "부츠(발목 위~무릎까지 커버)" },
             { "Footwear-Type-Flats", "발등이 노출되는 구조의 신발" },
             { "Footwear-Type-Formal", "구두(가죽소재), 신사화, 여성용힐" },
             { "Footwear-Type-Sandals", "발가락, 뒷꿈치가 노출되는 구조의 실발(슬리퍼 포함)" },
@@ -468,9 +468,12 @@ namespace WinFormsApp1
                     CheckedListBox checkedListBox = new CheckedListBox
                     {
                         Location = new Point(220, yPos - 2),
-                        Size = new Size(500, Math.Min(values.Length * 25 + 10, 200)),
+                        Size = new Size(500, Math.Min((values.Length + 1) * 25 + 10, 200)), // +1 for "(없음)" 항목
                         CheckOnClick = true
                     };
+                    
+                    // "(없음)" 항목을 첫 번째로 추가
+                    checkedListBox.Items.Add(new AttributeComboBoxItem("(없음)", "none"));
                     
                     foreach (string englishValue in values)
                     {
@@ -478,10 +481,34 @@ namespace WinFormsApp1
                         checkedListBox.Items.Add(new AttributeComboBoxItem(koreanText, englishValue));
                     }
                     
+                    // ItemCheck 이벤트 핸들러: "(없음)" 선택 시 다른 항목 해제, 다른 항목 선택 시 "(없음)" 해제
+                    checkedListBox.ItemCheck += (s, e) =>
+                    {
+                        if (e.Index == 0) // "(없음)" 항목 (첫 번째)
+                        {
+                            if (e.NewValue == CheckState.Checked)
+                            {
+                                // "(없음)" 선택 시 다른 모든 항목 해제
+                                for (int i = 1; i < checkedListBox.Items.Count; i++)
+                                {
+                                    checkedListBox.SetItemChecked(i, false);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // 다른 항목 선택 시 "(없음)" 해제
+                            if (e.NewValue == CheckState.Checked)
+                            {
+                                checkedListBox.SetItemChecked(0, false);
+                            }
+                        }
+                    };
+                    
                     attributeControls[attrName] = checkedListBox;
                     panel.Controls.Add(label);
                     panel.Controls.Add(checkedListBox);
-                    yPos += Math.Min(values.Length * 25 + 10, 200) + 15;
+                    yPos += Math.Min((values.Length + 1) * 25 + 10, 200) + 15; // +1 for "(없음)" 항목
                 }
             }
 
@@ -606,19 +633,28 @@ namespace WinFormsApp1
                             valueList = new List<string> { stringValue };
                         }
                         
-                        // 배열의 각 값에 해당하는 항목을 체크
-                        foreach (string englishValue in valueList)
+                        // "none" 값이 있으면 "(없음)" 항목만 체크
+                        if (valueList.Contains("none"))
                         {
-                            for (int i = 0; i < checkedListBox.Items.Count; i++)
+                            checkedListBox.SetItemChecked(0, true); // "(없음)" 항목 (첫 번째)
+                        }
+                        else
+                        {
+                            // 배열의 각 값에 해당하는 항목을 체크
+                            foreach (string englishValue in valueList)
                             {
-                                if (checkedListBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue == englishValue)
+                                for (int i = 0; i < checkedListBox.Items.Count; i++)
                                 {
-                                    checkedListBox.SetItemChecked(i, true);
-                                    break;
+                                    if (checkedListBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue == englishValue)
+                                    {
+                                        checkedListBox.SetItemChecked(i, true);
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
+                    // value가 null이면 아무것도 선택하지 않음 (빈 상태)
                 }
             }
         }
@@ -662,16 +698,28 @@ namespace WinFormsApp1
                     // CheckedListBox 처리 (그 외 탭)
                     List<string> checkedValues = new List<string>();
                     
-                    for (int i = 0; i < checkedListBox.Items.Count; i++)
-                    {
-                        if (checkedListBox.GetItemChecked(i) && checkedListBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue != null)
-                        {
-                            checkedValues.Add(item.EnglishValue);
-                        }
-                    }
+                    // "(없음)" 항목이 체크되어 있는지 확인 (첫 번째 항목)
+                    bool noneChecked = checkedListBox.GetItemChecked(0);
                     
-                    // 빈 리스트인 경우 null 저장
-                    newValue = checkedValues.Count > 0 ? checkedValues : null;
+                    if (noneChecked)
+                    {
+                        // "(없음)" 선택 시 "none" 값 저장
+                        newValue = new List<string> { "none" };
+                    }
+                    else
+                    {
+                        // 다른 체크된 항목들 수집
+                        for (int i = 1; i < checkedListBox.Items.Count; i++)
+                        {
+                            if (checkedListBox.GetItemChecked(i) && checkedListBox.Items[i] is AttributeComboBoxItem item && item.EnglishValue != null)
+                            {
+                                checkedValues.Add(item.EnglishValue);
+                            }
+                        }
+                        
+                        // 빈 리스트인 경우 null 저장
+                        newValue = checkedValues.Count > 0 ? checkedValues : null;
+                    }
                     
                     // 값이 변경된 경우에만 저장 (배열 비교)
                     if (!AreAttributeValuesEqual(currentValue, newValue))
