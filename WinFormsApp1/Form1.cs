@@ -77,6 +77,7 @@ namespace WinFormsApp1
         public string EventName { get; set; }
         public bool IsDeleted { get; set; } // ✅ 삭제된 박스 표시 (흔적 유지)
         public Dictionary<string, object> PersonAttributes { get; set; } // Person 전용: 속성 정보
+        public List<List<double>> Skeleton3D { get; set; } // Skeleton 데이터: 17개 관절의 [x, y, z] 좌표
     }
 
     public class SubtitleEntry
@@ -130,6 +131,12 @@ namespace WinFormsApp1
         // 기존 호환성을 위한 Attributes 필드 (deprecated)
         [JsonProperty("attributes", NullValueHandling = NullValueHandling.Ignore)]
         public Dictionary<string, object> Attributes { get; set; }
+        // Skeleton 데이터: 17개 관절의 [x, y, z] 좌표
+        [JsonProperty("skeleton_3d", NullValueHandling = NullValueHandling.Ignore)]
+        public List<List<double>> Skeleton3D { get; set; }
+        // 다른 파이프라인 호환: keypoints_3d도 스켈레톤으로 취급
+        [JsonProperty("keypoints_3d", NullValueHandling = NullValueHandling.Ignore)]
+        public List<List<double>> Keypoints3D { get; set; }
     }
 
     public class CategoryData
@@ -1396,6 +1403,7 @@ namespace WinFormsApp1
         private int totalFrames = 0;
         private double fps = 30.0;
         private string currentVideoFile = "";
+        private string currentJsonFile = "";  // 현재 로드된 JSON 파일 경로
 
         private enum DrawMode { None, Select, Draw }
         private DrawMode currentMode = DrawMode.Select;
@@ -1529,6 +1537,8 @@ namespace WinFormsApp1
         
         // ✅ YOLO 탐지 박스 표시 관련
         private bool showYoloDetections = false; // YOLO 탐지 박스 표시 여부
+        private bool showSkeleton = false; // Skeleton 표시 여부
+        private bool invertSkeletonY = true; // Skeleton Y축 반전 옵션 (필요 시 true)
         private Dictionary<int, List<YoloDetectionBox>> yoloDetectionCache = new Dictionary<int, List<YoloDetectionBox>>();
         private CancellationTokenSource yoloDetectionCancellationToken = null;
         private Task yoloDetectionTask = null;
@@ -1933,18 +1943,17 @@ namespace WinFormsApp1
                 loadingForm.Close();
 
                 // ✅ JSON 저장 후 자동 재로드
-                string videoDir = Path.GetDirectoryName(currentVideoFile);
-                string labelsDir = Path.Combine(videoDir, "labels");
-                string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
-                string jsonFilePath = Path.Combine(labelsDir, fileName);
-                
-                if (File.Exists(jsonFilePath))
+                if (!string.IsNullOrEmpty(currentJsonFile) && File.Exists(currentJsonFile))
                 {
                     await LoadLabelingData(currentVideoFile); // JSON 재로드
                 }
-                
+
+                string savedFileName = !string.IsNullOrEmpty(currentJsonFile) ? Path.GetFileName(currentJsonFile) : "labels.json";
+                string labelsDir = Path.GetDirectoryName(currentJsonFile) ?? Path.Combine(Path.GetDirectoryName(currentVideoFile), "labels");
+
                 MessageBox.Show(
                     $"JSON 파일이 저장되었습니다.\n\n" +
+                    $"파일: {savedFileName}\n" +
                     $"위치: {labelsDir}\n" +
                     $"박스 개수: {boundingBoxes.Count}개",
                     "저장 완료",
@@ -2901,6 +2910,40 @@ namespace WinFormsApp1
                         System.Diagnostics.Debug.WriteLine($"[YOLO 탐지 토글] 상태 복원 오류: {restoreEx.Message}");
                     }
                 }
+            }
+        }
+
+        private void btnToggleSkeleton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (btnToggleSkeleton == null)
+                {
+                    System.Diagnostics.Debug.WriteLine("[Skeleton 토글 오류] btnToggleSkeleton이 null입니다.");
+                    return;
+                }
+
+                showSkeleton = !showSkeleton;
+                System.Diagnostics.Debug.WriteLine($"[Skeleton 토글] showSkeleton = {showSkeleton}");
+
+                btnToggleSkeleton.Text = showSkeleton ? "Skeleton 숨기기" : "Skeleton 표시";
+                btnToggleSkeleton.BackColor = showSkeleton
+                    ? System.Drawing.Color.FromArgb(34, 197, 94) // 녹색 (표시 중)
+                    : System.Drawing.Color.FromArgb(100, 116, 139); // 회색 (숨김)
+
+                if (pictureBoxVideo != null)
+                {
+                    pictureBoxVideo.Invalidate();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Skeleton 토글 오류] {ex.Message}\n{ex.StackTrace}");
+                MessageBox.Show(
+                    $"Skeleton 토글 중 오류 발생:\n{ex.Message}",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
         }
 
@@ -5190,6 +5233,81 @@ namespace WinFormsApp1
                     // 렌더링 오류는 전체 UI에 영향 주지 않도록 무시
                 }
             }
+
+            // ✅ Skeleton 렌더링
+            if (showSkeleton)
+            {
+                try
+                {
+                    var skeletonConnections = GetSkeletonConnections();
+                    Color skeletonColor = Color.Yellow;
+
+                    foreach (var box in cachedCurrentFrameBoxes)
+                    {
+                        if (box.Skeleton3D == null || box.Skeleton3D.Count == 0)
+                            continue;
+
+                        try
+                        {
+                            float imageWidth = pictureBoxVideo.Image.Width;
+                            float imageHeight = pictureBoxVideo.Image.Height;
+                            var imagePoints = ConvertSkeletonJointsToImagePoints(
+                                box.Skeleton3D,
+                                box.Rectangle,
+                                imageWidth,
+                                imageHeight);
+
+                            // 관절 점 그리기
+                            for (int i = 0; i < box.Skeleton3D.Count; i++)
+                            {
+                                var imagePoint = imagePoints[i];
+                                if (!imagePoint.HasValue)
+                                    continue;
+
+                                // 이미지 좌표를 뷰 좌표로 변환
+                                var viewPoint = ImageToView(imagePoint.Value);
+
+                                // 관절 점 그리기 (원형)
+                                using (SolidBrush brush = new SolidBrush(skeletonColor))
+                                {
+                                    g.FillEllipse(brush, viewPoint.X - 3, viewPoint.Y - 3, 6, 6);
+                                }
+                            }
+
+                            // 관절 연결선 그리기
+                            using (Pen pen = new Pen(skeletonColor, 2))
+                            {
+                                foreach (var (start, end) in skeletonConnections)
+                                {
+                                    if (start >= box.Skeleton3D.Count || end >= box.Skeleton3D.Count)
+                                        continue;
+
+                                    var startImagePoint = imagePoints[start];
+                                    var endImagePoint = imagePoints[end];
+
+                                    if (!startImagePoint.HasValue || !endImagePoint.HasValue)
+                                        continue;
+
+                                    // 이미지 좌표를 뷰 좌표로 변환
+                                    var startPoint = ImageToView(startImagePoint.Value);
+                                    var endPoint = ImageToView(endImagePoint.Value);
+
+                                    // 연결선 그리기
+                                    g.DrawLine(pen, startPoint, endPoint);
+                                }
+                            }
+                        }
+                        catch (Exception skeletonBoxEx)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[Skeleton 렌더링] 개별 박스 렌더링 오류: {skeletonBoxEx.Message}");
+                        }
+                    }
+                }
+                catch (Exception skeletonEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Skeleton 렌더링 오류] {skeletonEx.Message}\n{skeletonEx.StackTrace}");
+                }
+            }
         }
 
         // ✅ 실패 박스 판별 함수
@@ -5897,6 +6015,22 @@ namespace WinFormsApp1
             // ✅ 삭제되지 않은 박스만 카운트
             int activeCount = boundingBoxes.Count(b => !b.IsDeleted);
             labelBoxCount.Text = $"박스 개수: {activeCount}";
+        }
+
+        // ✅ 상단 헤더에 현재 JSON 파일명 표시
+        private void UpdateCurrentJsonFileLabel()
+        {
+            if (labelCurrentJsonFile == null) return;
+
+            if (!string.IsNullOrEmpty(currentJsonFile))
+            {
+                string fileName = Path.GetFileName(currentJsonFile);
+                labelCurrentJsonFile.Text = $"📄 {fileName}";
+            }
+            else
+            {
+                labelCurrentJsonFile.Text = "";
+            }
         }
 
         private string FormatFrameTime(int frameIndex)
@@ -8861,16 +8995,26 @@ namespace WinFormsApp1
                         Directory.CreateDirectory(saveDir);
                     }
                     
-                    string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
-                    string jsonFilePath = Path.Combine(saveDir, fileName);
-                    
+                    // ✅ 기존에 로드된 파일에 저장
+                    string jsonFilePath;
+                    if (!string.IsNullOrEmpty(currentJsonFile) && File.Exists(currentJsonFile))
+                    {
+                        jsonFilePath = currentJsonFile;
+                    }
+                    else
+                    {
+                        string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                        jsonFilePath = Path.Combine(saveDir, fileName);
+                        currentJsonFile = jsonFilePath;
+                    }
+
                     // JSON 저장
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
-                    
+
                     // JSON 재로드하여 추적 데이터 기반으로 표시
                     if (File.Exists(jsonFilePath))
                     {
-                        await LoadLabelingData(jsonFilePath);
+                        await LoadLabelingData(currentVideoFile);
                     }
 
                     MessageBox.Show(
@@ -9324,15 +9468,25 @@ namespace WinFormsApp1
                 {
                     string videoDir = Path.GetDirectoryName(currentVideoFile);
                     string saveDir = Path.Combine(videoDir, "labels");
-                    
+
                     if (!Directory.Exists(saveDir))
                     {
                         Directory.CreateDirectory(saveDir);
                     }
-                    
-                    string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
-                    string jsonFilePath = Path.Combine(saveDir, fileName);
-                    
+
+                    // ✅ 기존에 로드된 파일에 저장
+                    string jsonFilePath;
+                    if (!string.IsNullOrEmpty(currentJsonFile) && File.Exists(currentJsonFile))
+                    {
+                        jsonFilePath = currentJsonFile;
+                    }
+                    else
+                    {
+                        string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                        jsonFilePath = Path.Combine(saveDir, fileName);
+                        currentJsonFile = jsonFilePath;
+                    }
+
                     // JSON 저장 (재로드하지 않음 - 메모리 상태가 이미 최신)
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
                 }
@@ -9501,17 +9655,51 @@ namespace WinFormsApp1
             {
                 string videoDir = Path.GetDirectoryName(videoFilePath);
                 if (string.IsNullOrEmpty(videoDir) || !Directory.Exists(videoDir))
+                {
+                    currentJsonFile = "";
+                    UpdateCurrentJsonFileLabel();
                     return;
+                }
 
                 string saveDir = Path.Combine(videoDir, "labels");
                 if (!Directory.Exists(saveDir))
+                {
+                    currentJsonFile = "";
+                    UpdateCurrentJsonFileLabel();
                     return;
+                }
 
-                string fileName = Path.GetFileNameWithoutExtension(videoFilePath) + "_labels.json";
-                string loadPath = Path.Combine(saveDir, fileName);
+                // ✅ 우선순위: _labels_skeleton.json > _labels.json
+                string baseFileName = Path.GetFileNameWithoutExtension(videoFilePath);
+                string skeletonFileName = baseFileName + "_labels_skeleton.json";
+                string normalFileName = baseFileName + "_labels.json";
 
-                if (!File.Exists(loadPath))
-                    return;
+                string skeletonPath = Path.Combine(saveDir, skeletonFileName);
+                string normalPath = Path.Combine(saveDir, normalFileName);
+
+                string loadPath;
+                if (File.Exists(skeletonPath))
+                {
+                    loadPath = skeletonPath;
+                    System.Diagnostics.Debug.WriteLine($"[JSON 로드] skeleton 파일 우선 로드: {skeletonPath}");
+                }
+                else if (File.Exists(normalPath))
+                {
+                    loadPath = normalPath;
+                    System.Diagnostics.Debug.WriteLine($"[JSON 로드] 일반 파일 로드: {normalPath}");
+                }
+                else
+                {
+                    currentJsonFile = "";
+                    UpdateCurrentJsonFileLabel();
+                    return; // 파일 없음
+                }
+
+                // 로드된 파일 경로 저장
+                currentJsonFile = loadPath;
+
+                // ✅ 상단 헤더에 현재 JSON 파일명 표시
+                UpdateCurrentJsonFileLabel();
 
                 // ✅ 1. 파일 크기 체크 및 경고
                 FileInfo fileInfo = new FileInfo(loadPath);
@@ -9775,7 +9963,8 @@ namespace WinFormsApp1
                         PersonId = personId,
                         VehicleId = vehicleId,
                         EventId = eventId,
-                        Action = "waypoint"
+                        Action = "waypoint",
+                        Skeleton3D = annotation.Skeleton3D ?? annotation.Keypoints3D // Skeleton 데이터 로드
                     };
 
                     tempBoundingBoxes.Add(box);
@@ -10106,8 +10295,13 @@ namespace WinFormsApp1
 
                 string videoDir = Path.GetDirectoryName(videoFilePath);
                 string saveDir = Path.Combine(videoDir, "labels");
-                string fileName = Path.GetFileNameWithoutExtension(videoFilePath) + "_labels.json.backup";
-                string backupPath = Path.Combine(saveDir, fileName);
+
+                // ✅ 백업 파일 찾기 (skeleton 우선)
+                string baseFileName = Path.GetFileNameWithoutExtension(videoFilePath);
+                string skeletonBackup = Path.Combine(saveDir, baseFileName + "_labels_skeleton.json.backup");
+                string normalBackup = Path.Combine(saveDir, baseFileName + "_labels.json.backup");
+
+                string backupPath = File.Exists(skeletonBackup) ? skeletonBackup : normalBackup;
 
                 var result = MessageBox.Show(
                     $"메모리 부족으로 파일을 로드할 수 없습니다.\n\n" +
@@ -10183,8 +10377,20 @@ namespace WinFormsApp1
                     return;
                 }
 
-                string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
-                string savePath = Path.Combine(saveDir, fileName);
+                // ✅ 기존에 로드된 파일에 저장, 없으면 _labels.json으로 생성
+                string savePath;
+                if (!string.IsNullOrEmpty(currentJsonFile) && File.Exists(currentJsonFile))
+                {
+                    savePath = currentJsonFile;
+                    System.Diagnostics.Debug.WriteLine($"[JSON 저장] 기존 파일에 저장: {savePath}");
+                }
+                else
+                {
+                    string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
+                    savePath = Path.Combine(saveDir, fileName);
+                    currentJsonFile = savePath;
+                    System.Diagnostics.Debug.WriteLine($"[JSON 저장] 새 파일 생성: {savePath}");
+                }
 
                 ExportToJsonExtended(savePath);
             }
@@ -10212,13 +10418,37 @@ namespace WinFormsApp1
                     return;
 
                 string saveDir = Path.Combine(videoDir, "labels");
-                string fileName = Path.GetFileNameWithoutExtension(currentVideoFile) + "_labels.json";
-                string jsonPath = Path.Combine(saveDir, fileName);
 
-                if (!File.Exists(jsonPath))
+                // ✅ 현재 로드된 파일 또는 존재하는 파일 찾기
+                string jsonPath;
+                string fileName;
+                if (!string.IsNullOrEmpty(currentJsonFile) && File.Exists(currentJsonFile))
                 {
-                    MessageBox.Show("삭제할 JSON 파일이 존재하지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
+                    jsonPath = currentJsonFile;
+                    fileName = Path.GetFileName(currentJsonFile);
+                }
+                else
+                {
+                    // skeleton 파일 우선 확인
+                    string baseFileName = Path.GetFileNameWithoutExtension(currentVideoFile);
+                    string skeletonPath = Path.Combine(saveDir, baseFileName + "_labels_skeleton.json");
+                    string normalPath = Path.Combine(saveDir, baseFileName + "_labels.json");
+
+                    if (File.Exists(skeletonPath))
+                    {
+                        jsonPath = skeletonPath;
+                        fileName = Path.GetFileName(skeletonPath);
+                    }
+                    else if (File.Exists(normalPath))
+                    {
+                        jsonPath = normalPath;
+                        fileName = Path.GetFileName(normalPath);
+                    }
+                    else
+                    {
+                        MessageBox.Show("삭제할 JSON 파일이 존재하지 않습니다.", "알림", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
                 }
 
                 // 삭제 확인
@@ -10231,7 +10461,8 @@ namespace WinFormsApp1
                 if (result == DialogResult.Yes)
                 {
                     File.Delete(jsonPath);
-                    
+                    currentJsonFile = "";  // 삭제 후 경로 초기화
+
                     // UI 초기화: 메모리의 모든 라벨링 데이터 삭제
                     boundingBoxes.Clear();
                     waypointMarkers.Clear();
@@ -10240,11 +10471,12 @@ namespace WinFormsApp1
                     entryFrameIndex = null;
                     undoStack.Clear();
                     redoStack.Clear();
-                    
+
                     // UI 업데이트
                     UpdateWaypointListView();
                     UpdateBboxListDisplay();
                     UpdateBoxCount();
+                    UpdateCurrentJsonFileLabel();  // 상단 JSON 파일명 초기화
                     pictureBoxVideo.Invalidate();
                     panelTimeline.Invalidate();
                     
@@ -12066,6 +12298,215 @@ namespace WinFormsApp1
         #endregion
 
         #region Coordinate Transformation
+        private enum SkeletonCoordSpace
+        {
+            Pixel,
+            NormalizedZeroToOne,
+            NormalizedMinusOneToOne
+        }
+
+        private SkeletonCoordSpace DetectSkeletonCoordSpace(List<List<double>> joints)
+        {
+            if (joints == null || joints.Count == 0)
+                return SkeletonCoordSpace.Pixel;
+
+            double minX = double.MaxValue, maxX = double.MinValue;
+            double minY = double.MaxValue, maxY = double.MinValue;
+            double maxAbs = 0;
+            bool hasValid = false;
+
+            foreach (var joint in joints)
+            {
+                if (joint == null || joint.Count < 2)
+                    continue;
+
+                double x = joint[0];
+                double y = joint[1];
+
+                minX = Math.Min(minX, x);
+                maxX = Math.Max(maxX, x);
+                minY = Math.Min(minY, y);
+                maxY = Math.Max(maxY, y);
+                maxAbs = Math.Max(maxAbs, Math.Max(Math.Abs(x), Math.Abs(y)));
+                hasValid = true;
+            }
+
+            if (!hasValid)
+                return SkeletonCoordSpace.Pixel;
+
+            const double normalizedMargin = 1.2; // 약간의 오차 허용
+            if (minX >= 0 && maxX <= normalizedMargin && minY >= 0 && maxY <= normalizedMargin)
+                return SkeletonCoordSpace.NormalizedZeroToOne;
+
+            if (minX >= -normalizedMargin && maxX <= normalizedMargin && minY >= -normalizedMargin && maxY <= normalizedMargin)
+                return SkeletonCoordSpace.NormalizedMinusOneToOne;
+
+            // -1~1을 넘더라도 작은 범위(예: -2~2, -3~3 등)는 정규화/로컬 좌표로 간주
+            if (maxAbs <= 5.0)
+                return SkeletonCoordSpace.NormalizedMinusOneToOne;
+
+            return SkeletonCoordSpace.Pixel;
+        }
+
+        private double InvertSkeletonYValue(double y, float imageHeight, Rectangle? bbox)
+        {
+            if (bbox.HasValue && bbox.Value.Width > 0 && bbox.Value.Height > 0)
+            {
+                return bbox.Value.Y + bbox.Value.Height - (y - bbox.Value.Y);
+            }
+
+            return imageHeight - y;
+        }
+
+        private bool TryConvertSkeletonJointToImagePoint(
+            List<double> joint,
+            SkeletonCoordSpace coordSpace,
+            float imageWidth,
+            float imageHeight,
+            Rectangle? bbox,
+            out PointF imagePoint)
+        {
+            imagePoint = default;
+            if (joint == null || joint.Count < 2)
+                return false;
+
+            double x = joint[0];
+            double y = joint[1];
+
+            switch (coordSpace)
+            {
+                case SkeletonCoordSpace.NormalizedMinusOneToOne:
+                    x = (x + 1.0) * 0.5 * imageWidth;
+                    y = (y + 1.0) * 0.5 * imageHeight;
+                    break;
+                case SkeletonCoordSpace.NormalizedZeroToOne:
+                    x *= imageWidth;
+                    y *= imageHeight;
+                    break;
+                default:
+                    break;
+            }
+
+            if (invertSkeletonY)
+            {
+                y = InvertSkeletonYValue(y, imageHeight, bbox);
+            }
+
+            const float margin = 5f;
+            if (x < -margin || y < -margin || x > imageWidth + margin || y > imageHeight + margin)
+                return false;
+
+            imagePoint = new PointF((float)x, (float)y);
+            return true;
+        }
+
+        private List<PointF?> ConvertSkeletonJointsToImagePoints(
+            List<List<double>> joints,
+            Rectangle bbox,
+            float imageWidth,
+            float imageHeight)
+        {
+            var points = new List<PointF?>(joints.Count);
+            var coordSpace = DetectSkeletonCoordSpace(joints);
+
+            if (coordSpace == SkeletonCoordSpace.Pixel)
+            {
+                foreach (var joint in joints)
+                {
+                    if (TryConvertSkeletonJointToImagePoint(joint, coordSpace, imageWidth, imageHeight, bbox, out var imagePoint))
+                    {
+                        points.Add(imagePoint);
+                    }
+                    else
+                    {
+                        points.Add(null);
+                    }
+                }
+
+                return points;
+            }
+
+            double minX = double.MaxValue, maxX = double.MinValue;
+            double minY = double.MaxValue, maxY = double.MinValue;
+            bool hasValid = false;
+
+            foreach (var joint in joints)
+            {
+                if (joint == null || joint.Count < 2)
+                    continue;
+
+                double x = joint[0];
+                double y = joint[1];
+                minX = Math.Min(minX, x);
+                maxX = Math.Max(maxX, x);
+                minY = Math.Min(minY, y);
+                maxY = Math.Max(maxY, y);
+                hasValid = true;
+            }
+
+            if (!hasValid)
+            {
+                for (int i = 0; i < joints.Count; i++)
+                    points.Add(null);
+                return points;
+            }
+
+            double rangeX = Math.Max(maxX - minX, 1e-6);
+            double rangeY = Math.Max(maxY - minY, 1e-6);
+
+            float centerX;
+            float centerY;
+            double scale;
+
+            if (bbox.Width > 0 && bbox.Height > 0)
+            {
+                centerX = bbox.X + bbox.Width / 2f;
+                centerY = bbox.Y + bbox.Height / 2f;
+                double scaleX = bbox.Width / rangeX;
+                double scaleY = bbox.Height / rangeY;
+                scale = Math.Min(scaleX, scaleY) * 0.8; // 약간 여유 공간
+            }
+            else
+            {
+                centerX = imageWidth / 2f;
+                centerY = imageHeight / 2f;
+                double scaleX = imageWidth / rangeX;
+                double scaleY = imageHeight / rangeY;
+                scale = Math.Min(scaleX, scaleY) * 0.9;
+            }
+
+            double centerJointX = (minX + maxX) / 2.0;
+            double centerJointY = (minY + maxY) / 2.0;
+
+            const float margin = 5f;
+            foreach (var joint in joints)
+            {
+                if (joint == null || joint.Count < 2)
+                {
+                    points.Add(null);
+                    continue;
+                }
+
+                double x = (joint[0] - centerJointX) * scale + centerX;
+                double y = (joint[1] - centerJointY) * scale + centerY;
+
+                if (invertSkeletonY)
+                {
+                y = InvertSkeletonYValue(y, imageHeight, bbox);
+                }
+
+                if (x < -margin || y < -margin || x > imageWidth + margin || y > imageHeight + margin)
+                {
+                    points.Add(null);
+                    continue;
+                }
+
+                points.Add(new PointF((float)x, (float)y));
+            }
+
+            return points;
+        }
+
         // PictureBox의 Zoom 모드에서 실제 이미지가 표시되는 영역 계산
         private RectangleF GetImageDisplayRectangle()
         {
@@ -12171,6 +12612,26 @@ namespace WinFormsApp1
                 Action = box.Action,
                 VehicleName = box.VehicleName,
                 EventName = box.EventName
+            };
+        }
+
+        /// <summary>
+        /// COCO 17개 관절 연결 구조 반환
+        /// 0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear
+        /// 5: left_shoulder, 6: right_shoulder, 7: left_elbow, 8: right_elbow
+        /// 9: left_wrist, 10: right_wrist, 11: left_hip, 12: right_hip
+        /// 13: left_knee, 14: right_knee, 15: left_ankle, 16: right_ankle
+        /// </summary>
+        private (int, int)[] GetSkeletonConnections()
+        {
+            return new (int, int)[]
+            {
+                // 머리
+                (0, 1), (0, 2), (1, 3), (2, 4),
+                // 상체
+                (5, 6), (5, 7), (7, 9), (6, 8), (8, 10), (5, 11), (6, 12),
+                // 하체
+                (11, 12), (11, 13), (13, 15), (12, 14), (14, 16)
             };
         }
         #endregion

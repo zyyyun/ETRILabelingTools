@@ -52,6 +52,7 @@
             this.btnExit = new System.Windows.Forms.Button();
             this.btnToggleSubtitle = new System.Windows.Forms.Button();
             this.btnToggleYoloDetections = new System.Windows.Forms.Button();
+            this.btnToggleSkeleton = new System.Windows.Forms.Button();
             this.btnToggleAttributeView = new System.Windows.Forms.Button();
             this.panelTimeline = new System.Windows.Forms.Panel();
 
@@ -96,6 +97,7 @@
             this.panelHeader.Controls.Add(this.btnExportJson);
             this.panelHeader.Controls.Add(this.btnDeleteJson);
             this.panelHeader.Controls.Add(this.labelBoxCount);
+            this.panelHeader.Controls.Add(this.labelCurrentJsonFile);
             // Track Selected Only Toggle Button
             // 선택만 추적 버튼 제거 (롤백)
             this.panelHeader.Controls.Add(this.btnMinimize);
@@ -151,6 +153,15 @@
             this.labelBoxCount.Location = new System.Drawing.Point(560, 15);
             this.labelBoxCount.Size = new System.Drawing.Size(80, 25);
             this.labelBoxCount.Visible = false; // 표시 숨김
+
+            // Current JSON File Label
+            this.labelCurrentJsonFile = new System.Windows.Forms.Label();
+            this.labelCurrentJsonFile.Text = "";
+            this.labelCurrentJsonFile.Location = new System.Drawing.Point(565, 15);
+            this.labelCurrentJsonFile.Size = new System.Drawing.Size(800, 20);
+            this.labelCurrentJsonFile.ForeColor = System.Drawing.Color.FromArgb(100, 116, 139);
+            this.labelCurrentJsonFile.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.labelCurrentJsonFile.AutoEllipsis = true;
 
             // Window Control Buttons (Right side)
             this.btnClose.Text = "✕";
@@ -287,6 +298,7 @@
             this.panelVideoControls.Controls.Add(this.btnExit);
             this.panelVideoControls.Controls.Add(this.btnToggleSubtitle);
             this.panelVideoControls.Controls.Add(this.btnToggleYoloDetections);
+            this.panelVideoControls.Controls.Add(this.btnToggleSkeleton);
             this.panelVideoControls.Controls.Add(this.btnToggleAttributeView);
             this.panelVideoControls.Controls.Add(this.panelTimeline);
             this.panelVideoControls.Resize += new System.EventHandler(this.panelVideoControls_Resize);
@@ -327,8 +339,8 @@
 
             // Entry/Exit buttons
             this.btnEntry.Text = "Entry";
-            this.btnEntry.Location = new System.Drawing.Point(750, 16);
-            this.btnEntry.Size = new System.Drawing.Size(130, 40);
+            this.btnEntry.Location = new System.Drawing.Point(860, 16);
+            this.btnEntry.Size = new System.Drawing.Size(110, 40);
             this.btnEntry.BackColor = System.Drawing.Color.FromArgb(250, 204, 21);
             this.btnEntry.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnEntry.FlatAppearance.BorderSize = 0;
@@ -336,8 +348,8 @@
             this.btnEntry.Click += new System.EventHandler(this.btnEntry_Click);
 
             this.btnExit.Text = "Exit";
-            this.btnExit.Location = new System.Drawing.Point(890, 16);
-            this.btnExit.Size = new System.Drawing.Size(130, 40);
+            this.btnExit.Location = new System.Drawing.Point(980, 16);
+            this.btnExit.Size = new System.Drawing.Size(110, 40);
             this.btnExit.BackColor = System.Drawing.Color.FromArgb(250, 204, 21);
             this.btnExit.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.btnExit.FlatAppearance.BorderSize = 0;
@@ -367,6 +379,18 @@
             this.btnToggleYoloDetections.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.btnToggleYoloDetections.TabStop = false;
             this.btnToggleYoloDetections.Click += new System.EventHandler(this.btnToggleYoloDetections_Click);
+
+            // btnToggleSkeleton (Skeleton 표시/숨기기)
+            this.btnToggleSkeleton.Text = "Skeleton 표시";
+            this.btnToggleSkeleton.Location = new System.Drawing.Point(750, 16);
+            this.btnToggleSkeleton.Size = new System.Drawing.Size(100, 40);
+            this.btnToggleSkeleton.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
+            this.btnToggleSkeleton.ForeColor = System.Drawing.Color.White;
+            this.btnToggleSkeleton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnToggleSkeleton.FlatAppearance.BorderSize = 0;
+            this.btnToggleSkeleton.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.btnToggleSkeleton.TabStop = false;
+            this.btnToggleSkeleton.Click += new System.EventHandler(this.btnToggleSkeleton_Click);
 
             // btnToggleAttributeView (속성값 조회)
             this.btnToggleAttributeView.Text = "속성값 조회";
@@ -740,6 +764,7 @@
         private System.Windows.Forms.Button btnExportJson;
         private System.Windows.Forms.Button btnDeleteJson;
         private System.Windows.Forms.Label labelBoxCount;
+        private System.Windows.Forms.Label labelCurrentJsonFile;
         private System.Windows.Forms.Button btnMinimize;
         private System.Windows.Forms.Button btnMaximize;
         private System.Windows.Forms.Button btnClose;
@@ -769,6 +794,7 @@
         private System.Windows.Forms.Button btnExit;
         private System.Windows.Forms.Button btnToggleSubtitle;
         private System.Windows.Forms.Button btnToggleYoloDetections;
+        private System.Windows.Forms.Button btnToggleSkeleton;
         private System.Windows.Forms.Button btnToggleAttributeView;
         private System.Windows.Forms.Panel panelTimeline;
 
