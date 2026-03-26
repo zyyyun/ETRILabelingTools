@@ -64,6 +64,6 @@ prepareforreview.ps1
 *브랜치*
 
 ## Installer (대용량 바이너리)
-installer/cuda/*.exe
+installer/cuda/
 installer/cudnn/*.dll
 installer/output/
