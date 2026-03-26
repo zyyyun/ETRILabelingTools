@@ -100,6 +100,13 @@ Source: "..\WinFormsApp1\bin\x64\Release\net8.0-windows\runtimes\win-x64\native\
 ;   - {app} 폴더에 직접 배치
 ;   - CudaEnvironmentHelper가 AppContext.BaseDirectory를 먼저 탐색하므로
 ;     환경변수 설정 없이 앱이 바로 참조 가능
+; CUDA Runtime DLL (CUDA Toolkit 없이도 동작하도록 앱 폴더에 번들)
+Source: "cudnn\cublas64_12.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cublasLt64_12.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudart64_12.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cufft64_11.dll"; DestDir: "{app}"; Flags: ignoreversion
+
+; cuDNN DLL
 Source: "cudnn\cudnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "cudnn\cudnn_adv64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "cudnn\cudnn_cnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
