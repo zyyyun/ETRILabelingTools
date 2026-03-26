@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="occupancy_calculator_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:41:39" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="1">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="toolDocRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="toolDocInstallDir" value="${{toolDocRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="Occupancy Calculator"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDADocument_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="Occupancy Calculator" ordering="CUDA|Documentation" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{toolDocInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/occupancy_calculator.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Documentation files" uninstallText="Deleting CUDA Development files">
+			<copyFile target="tools\CUDA_Occupancy_Calculator.xls"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="occupancy_calculator.nvi" sizeKB="2"/><file name="tools\CUDA_Occupancy_Calculator.xls" sizeKB="260"/></manifest>
+</nvi>

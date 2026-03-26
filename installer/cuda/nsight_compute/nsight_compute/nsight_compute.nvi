@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="nsight_compute_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2025-05-31T14:43:04" disposition="default" installerMin="2.1002.191.1621" no-arp="true" preserveCache="false" bare="true" diskSpaceForBare="330">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="nsightComputeVersion" value="2025.2.1.3"/>
+		<string name="title" value="Nsight Compute"/>
+		<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+		<string name="NotAnUpgradeMessage" value="A newer or a same version of ${{title}} is present on this computer"/>
+		<string name="NsightComputeMSI" value="nsight_compute-windows-x86_64-2025.2.1.3.msi"/>
+		<string name="NsightProgramGroup" value="NVIDIA Corporation\Nsight Compute ${{nsightShortVersion}}"/>
+		<string name="ToolkitRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="ToolkitInstallDir" value="${{ToolkitRootDir}}\v${{version}}"/>
+	</strings>
+	<dependencies>
+		<package type="uninstalls" package="CUDANsightCompute_${{version}}"/>
+	</dependencies>
+	<description/>
+	<extensions>
+		<extension file="CUDAVisualStudioIntegrationExt.DLL"/>
+	</extensions>
+	<customInstallTree>
+		<treeNode text="Nsight Compute" ordering="CUDA" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<bool name="FixedInstallLocation" value="true"/>
+		<bool name="PreInstallCustomForm" value="true"/>
+		<bool name="PostInstallCustomForm" value="false"/>
+		<string name="InstallLocation" value="${{ToolkitInstallDir}}"/>
+		<string name="ArpDisplayName" value="${{arpDisplayName}}"/>
+		<string name="NsightComputeInstallLocation" value="${{NvidiaProgramFilesX86}}\NVIDIA Corporation\Nsight Compute ${{nsightComputeVersion}}"/>
+		<string name="NsightComputeVersion" value="${{nsightComputeVersion}}"/>
+		<string name="NsightComputeMSI" value="${{NsightComputeMSI}}"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/nsight_compute.exe"/></properties>
+	<manifest>
+		<file name="CUDAVisualStudioIntegrationExt.dll" sizeKB="1048"/><file name="nsight_compute-windows-x86_64-2025.2.1.3.msi" sizeKB="342568"/><file name="nsight_compute.nvi" sizeKB="4"/></manifest>
+	<phases>
+		<custom phase="handleExistingNsightCompute" action="HandleExistingNsightCompute"/>
+		<custom phase="detectDisableCallHome" action="DetectDisableCallHome"/>
+		<msi platform="x86" phase="NsightComputeMSINoTraffic" name="${{NsightComputeMSI}}" condition="NsightComputeMSIActionActiveAndNoTraffic" installText="Installing Nsight Compute">
+			<arg name="CUDAINSTALLER" value="true"/>
+			<arg name="DISABLE_NV_CH" value="1"/>
+		</msi>
+		<msi platform="x86" phase="NsightComputeMSITraffic" name="${{NsightComputeMSI}}" condition="NsightComputeMSIActionActiveAndTraffic" installText="Installing Nsight Compute">
+			<arg name="CUDAINSTALLER" value="true"/>
+			<arg name="DISABLE_NV_CH" value="0"/>
+		</msi>
+		<standard phase="copyFiles">
+		</standard>
+	</phases>
+	<forms>
+		<form name="PreInstallProcessRunningForm" base="!PreInstallTemplate">
+			<properties>
+				<bool name="@WaitToConfirm" value="false"/>
+			</properties>
+			<control name="header"/>
+			<control name="warningIcon" class="image" x="137pt" y="62pt" width="18pt" height="18pt" sourceFile="${{InstallerDllDirectory}}\warning.png"/>
+			<control name="headText" style="header" x="160pt" y="62pt" width="300pt" height="18pt" text="Running Processes"/>
+			<control name="placeholder"/>
+			<control name="RunningProcessesDetails" font="standardText" enabledTextColor="0xFFFFFF" class="link" x="137pt" y="85pt" width="294pt" height="140pt" text="The following processes must be stopped before the Nsight Compute installation can proceed:${CustomProcessesDesc}"/>
+			<control name="next" style="smallPrimaryButton" text="&amp;RETRY" x="289pt" y="280pt" onClick="!PrevFormGroup" disabled="false"/>
+		</form>
+	</forms>
+</nvi>

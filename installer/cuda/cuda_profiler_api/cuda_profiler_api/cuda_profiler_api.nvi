@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="cuda_profiler_api_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:43:04" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="1">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="toolsLibRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="toolsLibInstallDir" value="${{toolsLibRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="CUDA Profiler API"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDAToolkit_${{version}}"/>
+		<package type="requires" package="CUDADevelopment_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="Profiling API" ordering="CUDA|Development|Compiler|Libraries" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{toolsLibInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/cuda_profiler_api.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Development files" uninstallText="Deleting CUDA Development files">
+			<copyFile target="include\cudaProfiler.h"/>
+			<copyFile target="include\cuda_profiler_api.h"/>
+			<copyFile target="LICENSE"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="cuda_profiler_api.nvi" sizeKB="2"/><file name="include\cudaProfiler.h" sizeKB="7"/><file name="include\cuda_profiler_api.h" sizeKB="5"/><file name="LICENSE" sizeKB="62"/></manifest>
+</nvi>

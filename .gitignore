@@ -62,3 +62,8 @@ prepareforreview.ps1
 ## Branch files (프로그램 시작 시 생성되는 브랜치 파일)
 *branch*
 *브랜치*
+
+## Installer (대용량 바이너리)
+installer/cuda/*.exe
+installer/cudnn/*.dll
+installer/output/

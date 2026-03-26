@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="NvTelemetry" title="${{title}}" version="19.4.23.0" versionText="19.4.23.0" timestamp="2025-01-24T05:01:05" disposition="demand" hidden="true" installerMin="2.1002.215.1898">
+	<filter name="64bit" platform="amd64,arm64"/>
+	<dependencies>
+		<package type="requires" package="NvContainer.LocalSystem"/>
+		<package type="after" package="Display.Driver"/>
+	</dependencies>
+	<constraints>
+	</constraints>
+	<manifest>
+		<file name="NvTelemetry.nvi"/>
+		<file name="NvTelemetry64.dll"/>
+		<file name="NvTelemetryBridge32.dll"/>
+		<file name="NvTelemetryBridge64.dll"/>
+		<file name="NvTelemetryAPI32.dll"/>
+		<file name="NvTelemetryAPI64.dll"/>
+		<file name="NvTelemetry.json"/></manifest>
+	<strings>
+		<string name="title" value="NVIDIA Telemetry Client"/>
+		<string name="NvContainerPluginDirectoryLS" value="${{NvidiaProgramFiles}}\NvContainer\plugins\LocalSystem\NvTelemetry"/>
+	</strings>
+	<properties>
+		<bool name="IsGFExperienceComponent" value="true"/>
+	</properties>
+	<phases>
+		<standard phase="deleteNvTelemetryContainerFiles" onError="ignore" when="install">
+			<deleteDirectoryTree target="${{NvidiaProgramFiles}}\NvTelemetry\plugins"/>
+		</standard>
+		<standard phase="deleteOldPluginsSymlink" onError="ignore" when="install">
+			<deleteDirectoryTree target="${{NvidiaProgramFilesX86}}\NvTelemetry\plugins"/>
+		</standard>
+		<exe phase="killContainers" name="${{SystemDirectory}}\taskkill.exe" when="install" onError="ignore">
+			<arg value="/f /t /im NvTelemetryContainer.exe" quote="none"/>
+			<success value="0"/>
+			<success value="128"/>
+		</exe>
+		<setPropertyIf phase="checkOldApi32Exists" boolProperty="OldApi32Exists" value="true" when="install">
+			<file name="${{NvidiaProgramFilesX86}}\NvTelemetry\NvTelemetryAPI32.dll" check="exists"/>
+		</setPropertyIf>
+		<standard phase="moveOldAPI32" condition="OldApi32Exists" when="install">
+			<renameFile source="${{NvidiaProgramFilesX86}}\NvTelemetry\NvTelemetryAPI32.dll" target="${{LocalUserAppData}}\temp\NvTelemetryAPI32.dll.19.4.23.0" waitForUnlock="2000"/>
+			<deleteFile target="${{LocalUserAppData}}\temp\NvTelemetryAPI32.dll.19.4.23.0" waitForUnlock="2000"/>
+		</standard>
+		<setPropertyIf phase="checkOldApi64Exists" boolProperty="OldApi64Exists" value="true" when="install">
+			<file name="${{NvidiaProgramFiles}}\NvTelemetry\NvTelemetryAPI64.dl" check="exists"/>
+		</setPropertyIf>
+		<standard phase="moveOldAPI64" condition="OldApi64Exists" when="install">
+			<renameFile source="${{NvidiaProgramFiles}}\NvTelemetry\NvTelemetryAPI64.dl" target="${{LocalUserAppData}}\temp\NvTelemetryAPI64.dll.19.4.23.0" waitForUnlock="2000"/>
+			<deleteFile target="${{LocalUserAppData}}\temp\NvTelemetryAPI64.dll.19.4.23.0" waitForUnlock="2000"/>
+		</standard>
+		<standard phase="createAppFolder">
+			<createDirectory target="${{CommonAppData}}\NVIDIA Corporation\NvTelemetry"/>
+		</standard>
+		<setPropertyIf phase="checkOldDllExists" boolProperty="OldDllExists" value="true" when="install">
+			<file name="${{NvidiaProgramFilesX86}}\NvContainer\plugins\User\NvTelemetry.dll" check="exists"/>
+		</setPropertyIf>
+		<standard phase="moveOldDLL" condition="OldDllExists" when="install">
+			<renameFile source="${{NvidiaProgramFilesX86}}\NvContainer\plugins\User\NvTelemetry.dll" target="${{LocalUserAppData}}\temp\NvTelemetry.dll.19.4.23.0" waitForUnlock="2000"/>
+			<deleteFile target="${{LocalUserAppData}}\temp\NvTelemetry.dll.19.4.23.0" waitForUnlock="2000"/>
+		</standard>
+		<standard phase="removeOldFolder" when="install" onError="ignore">
+			<deleteDirectoryTree target="${{LocalUserAppData}}\NVIDIA Corporation\NvTelemetry"/>
+		</standard>
+		<standard phase="copyX86API">
+			<createDirectory target="${{NvidiaProgramFilesX86}}\NvTelemetry"/>
+			<copyFile source="NvTelemetryBridge32.dll" target="${{NvidiaProgramFilesX86}}\NvTelemetry\NvTelemetryBridge32.dll"/>
+			<copyFile source="NvTelemetryAPI32.dll" target="${{NvidiaProgramFilesX86}}\NvTelemetry\NvTelemetryAPI32.dll"/>
+		</standard>
+		<if filter="64bit">
+			<standard phase="copyx64API">
+				<createDirectory target="${{NvidiaProgramFiles}}\NvTelemetry"/>
+				<copyFile source="NvTelemetryBridge64.dll" target="${{NvidiaProgramFiles}}\NvTelemetry\NvTelemetryBridge64.dll"/>
+				<copyFile source="NvTelemetryAPI64.dll" target="${{NvidiaProgramFiles}}\NvTelemetry\NvTelemetryAPI64.dll"/>
+			</standard>
+		</if>
+		<standard phase="deleteFiles" when="uninstall" onError="ignore">
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA Corporation\NvTelemetry"/>
+		</standard>
+		<standard phase="deleteOldPlugins" onError="ignore" when="install">
+			<deleteDirectoryTree target="${{NvidiaProgramFilesX86}}\NvTelemetry\plugin"/>
+			<deleteFile target="${{NvidiaProgramFiles}}\NvTelemetry\plugin\_NvTelemetryStatusReporter64.dll"/>
+		</standard>
+		<standard phase="copyPluginFiles" when="install">
+			<createDirectory target="${{NvidiaProgramFiles}}\NvTelemetry\plugin"/>
+			<copyFile source="NvTelemetry64.dll" target="${{NvidiaProgramFiles}}\NvTelemetry\plugin\NvTelemetry64.dll"/>
+		</standard>
+		<setPropertyIf phase="checkConfigFileExists" boolProperty="ConfigFileExists" onError="ignore" value="true" when="install">
+			<file name="${{SubPackageDirectory}}\NvTelemetry.json" check="exists"/>
+		</setPropertyIf>
+		<standard phase="copyConfigFile" condition="ConfigFileExists" when="install">
+			<copyFile source="NvTelemetry.json" target="${{NvidiaProgramFiles}}\NvTelemetry\plugin\NvTelemetry.json"/>
+		</standard>
+		<standard phase="deletePluginFiles" when="uninstall">
+			<deleteDirectoryTree target="${{NvidiaProgramFiles}}\NvTelemetry\plugin" waitForUnlock="10000"/>
+		</standard>
+		<standard phase="createLinkToPlugins">
+			<createDirectory target="${{NvContainerPluginDirectoryLS}}" source="${{NvidiaProgramFiles}}\NvTelemetry\plugin" symLink="true"/>
+		</standard>
+	</phases>
+</nvi>

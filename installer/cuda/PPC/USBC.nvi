@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="USBC" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2024-03-20T14:35:28" disposition="default" installerMin="2.1002.306.0" hasDriver="true" continueOnFailure="true" bare="true" diskSpaceForBare="1">
+	<strings>
+		<string name="version" value="1.52.831.832"/>
+		<string name="title" value="USBC Driver"/>
+		<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+		<string name="InstallBlockedMessage" value="${{title}} cannot be installed on this computer."/>
+	</strings>
+	<dependencies>
+		<package type="requires" package="Display.Driver"/>
+	</dependencies>
+	<extensions>
+		<extension file="USBCExt.dll"/>
+	</extensions>
+	<constraints>
+		<custom name="USBCSupportCheck" text="${{InstallBlockedMessage}}" level="silent"/>
+	</constraints>
+	<properties>
+		<string name="ArpDisplayName" value="${{arpDisplayName}}"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/PPC.exe"/></properties>
+	<manifest>
+		<file name="USBC.nvi" sizeKB="1"/><file name="nvppc.cat" sizeKB="11"/><file name="nvppc.inf" sizeKB="3"/><file name="UcmCxUcsiNvppc.sys" sizeKB="699"/><file name="USBCExt.dll" sizeKB="924"/></manifest>
+	<phases>
+		<device phase="installUSBCDriver" fixedProgress="10" deviceProgress="35" autoTick="200">
+			<inf name="nvppc.inf"/>
+		</device>
+	</phases>
+</nvi>

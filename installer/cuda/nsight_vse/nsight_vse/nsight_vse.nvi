@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="nsight_vse_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2025-05-31T14:42:46" disposition="default" installerMin="2.1002.191.1621" preserveCache="false" no-arp="true" bare="true" diskSpaceForBare="107">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="nsightVersion" value="2025.2.1.25125"/>
+		<string name="nsightShortVersion" value="2025.2"/>
+		<string name="title" value="Nsight Visual Studio Edition"/>
+		<string name="arpDisplayName" value="NVIDIA CUDA ${{title}} ${{version}}"/>
+		<string name="NotAnUpgradeMessage" value="A newer or a same version of ${{title}} is present on this computer"/>
+		<string name="NsightMSI" value="nsight_vse\nsight_visual_studio_edition-windows-x86_64-2025.2.1.25125_35935745.msi"/>
+		<string name="NsightProgramGroup" value="NVIDIA Corporation\Nsight Visual Studio Edition ${{nsightShortVersion}}"/>
+		<string name="MSBuildV100Dir" value="${{ProgramFilesX86}}\MSBuild\Microsoft.Cpp\v4.0\BuildCustomizations"/>
+		<string name="MSBuildV110Dir" value="${{ProgramFilesX86}}\MSBuild\Microsoft.Cpp\v4.0\V110\BuildCustomizations"/>
+		<string name="MSBuildV120Dir" value="${{ProgramFilesX86}}\MSBuild\Microsoft.Cpp\v4.0\V120\BuildCustomizations"/>
+		<string name="MSBuildV140Dir" value="${{ProgramFilesX86}}\MSBuild\Microsoft.Cpp\v4.0\V140\BuildCustomizations"/>
+		<string name="NVTXMSI" value="*NVTX*.msi"/>
+		<string name="ToolkitRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="ToolkitInstallDir" value="${{ToolkitRootDir}}\v${{version}}"/>
+	</strings>
+	<dependencies>
+		<package type="uninstalls" package="CUDAVisualStudioIntegration_${{version}}"/>
+	</dependencies>
+	<description/>
+	<phases>
+		<custom phase="detectMSBuild" action="DetectMSBuild"/>
+		<custom phase="detectVS" action="DetectVS"/>
+	</phases>
+	<constraints>
+		<reject tests="SAFEMODE" level="silent" text="Nsight Visual Studio Edition installation is not supported while in safe mode."/>
+	</constraints>
+	<extensions>
+		<extension file="CUDAVisualStudioIntegrationExt.DLL"/>
+	</extensions>
+	<customInstallTree>
+		<treeNode text="Nsight VSE" ordering="CUDA" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<bool name="FixedInstallLocation" value="true"/>
+		<bool name="PreInstallCustomForm" value="true"/>
+		<bool name="PostInstallCustomForm" value="true"/>
+		<string name="InstallLocation" value="${{ToolkitInstallDir}}"/>
+		<string name="ArpDisplayName" value="${{arpDisplayName}}"/>
+		<string name="NsightInstallLocation" value="${{NvidiaProgramFilesX86}}\NVIDIA Corporation\Nsight Visual Studio Edition ${{nsightVersion}}"/>
+		<string name="NsightVersion" value="${{nsightVersion}}"/>
+		<string name="NsightMSI" value="${{NsightMSI}}"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/nsight_vse.exe"/></properties>
+	<manifest>
+		<file name="CUDAVisualStudioIntegrationExt.dll" sizeKB="1048"/><file name="LICENSE" sizeKB="19"/><file name="nsight_vse\nsight_visual_studio_edition-windows-x86_64-2025.2.1.25125_35935745.msi" sizeKB="148448"/><file name="nsight_vse.nvi" sizeKB="8"/></manifest>
+	<phases>
+		<custom phase="handleExistingNsight" action="HandleExistingNsight"/>
+		<custom phase="detectDisableCallHome" action="DetectDisableCallHome"/>
+		<msi platform="x86" phase="NsightMSINoTraffic" name="${{NsightMSI}}" condition="NsightMSIActionActiveAndNoTraffic" installText="Installing Nsight Visual Studio Edition">
+			<arg name="CUDAINSTALLER" value="true"/>
+			<arg name="DISABLE_NV_CH" value="1"/>
+		</msi>
+		<msi platform="x86" phase="NsightMSITraffic" name="${{NsightMSI}}" condition="NsightMSIActionActiveAndTraffic" installText="Installing Nsight Visual Studio Edition">
+			<arg name="CUDAINSTALLER" value="true"/>
+			<arg name="DISABLE_NV_CH" value="0"/>
+		</msi>
+		<confirm phase="Confirm-install" when="install" condition="NsightMSIActionActive">
+			<fileExists target="${{CommonAppData}}\NVIDIA Corporation\Nsight\Nsight_${{nsightVersion}}_InstallSummary.xml"/>
+		</confirm>
+		<standard phase="copytemp" condition="NsightMSIActionActive">
+			<copyFile source="nsight_vse\nsight_visual_studio_edition-windows-x86_64-2025.2.1.25125_35935745.msi" target="${{CommonAppData}}\NVIDIA Corporation\Nsight\nsight_vse\nsight_visual_studio_edition-windows-x86_64-2025.2.1.25125_35935745.msi"/>
+		</standard>
+		<standard phase="createStartMenuStortcuts" condition="NsightMSIActionActive">
+			<createShortcutGroup location="startMenu" linkGroup="${{NsightProgramGroup}}"/>
+			<createShortcutLink location="startMenu" targetPath="${{CommonAppData}}\NVIDIA Corporation\Nsight\nsight_vse\nsight_visual_studio_edition-windows-x86_64-2025.2.1.25125_35935745.msi" linkGroup="${{NsightProgramGroup}}" linkName="Nsight Redistributable"/>
+		</standard>
+		<custom phase="ParseWarningPage" action="ReadWarningPage" condition="NsightMSIActionActive"/>
+	</phases>
+	<forms>
+		<form name="NsightPostInstallCustomForm" base="!PostInstallTemplate">
+			<control name="headText" text="Nsight Visual Studio Edition Summary"/>
+			<control name="description" style="label" x="137pt" y="80pt" width="294pt" height="30pt" text="The following information only pertains to Nsight Visual Studio features and does not describe CUDA toolkit install status."/>
+			<control name="nsightWarning" class="richedit" x="137pt" y="115pt" width="294pt" height="140pt" font="smallText" text="${NsightWarningContent}" readOnly="true" vScroll="true" multiLine="true" enabledTextColor="0xb7bebd" bkgndColor="0x394a4a"/>
+			<control name="hyperlink" font="standardText" class="link" x="137pt" y="260pt" enabledTextColor="0xFFFFFF" width="294pt" height="15pt" text="For more information, please click &lt;a href=&quot;https://developer.nvidia.com/install-nsight-visual-studio-edition-from-cuda-toolkit&quot;&gt;here&lt;/a&gt;!"/>
+			<control name="back" hidden="true" disabled="true"/>
+			<control name="cancel" hidden="true" disabled="true"/>
+			<bool name="!DisableCloseButton" value="true"/>
+			<control name="next" style="smallPrimaryButton" x="366pt" y="280pt" onClick="!NextFormGroup"/>
+		</form>
+		<form name="PreInstallProcessRunningForm" base="!PreInstallTemplate">
+			<properties>
+				<bool name="@WaitToConfirm" value="false"/>
+			</properties>
+			<control name="header"/>
+			<control name="warningIcon" class="image" x="137pt" y="62pt" width="18pt" height="18pt" sourceFile="${{InstallerDllDirectory}}\warning.png"/>
+			<control name="headText" style="header" x="160pt" y="62pt" width="300pt" height="18pt" text="Running Processes"/>
+			<control name="placeholder"/>
+			<control name="RunningProcessesDetails" font="standardText" enabledTextColor="0xFFFFFF" class="link" x="137pt" y="85pt" width="294pt" height="140pt" text="The following processes must be stopped before the Nsight Visual Studio Edition installation can proceed:${CustomProcessesDesc}"/>
+			<control name="next" style="smallPrimaryButton" text="&amp;RETRY" x="289pt" y="280pt" onClick="!PrevFormGroup" disabled="false"/>
+		</form>
+		<form name="NsightPreInstallCustomFormJunction" base="!PreInstallTemplate">
+			<properties>
+				<bool name="@WaitToConfirm" value="false"/>
+			</properties>
+			<control name="header"/>
+			<control name="warningIcon" class="image" x="137pt" y="62pt" width="18pt" height="18pt" sourceFile="${{InstallerDllDirectory}}\warning.png"/>
+			<control name="headText" style="header" x="160pt" y="62pt" width="300pt" height="18pt" text="NSight installation requirement"/>
+			<control name="placeholder"/>
+			<control name="JunctionInstallDetails" font="standardText" enabledTextColor="0xFFFFFF" class="link" x="137pt" y="85pt" width="294pt" height="140pt" text="The Nsight component will not be installed as a file system junction point was found in the following paths:${CustomJunctionDesc}To install the Nsight component, you must remove the junction points, and run the installer again."/>
+			<control name="next" style="smallPrimaryButton" text="&amp;NEXT" x="289pt" y="280pt" onClick="!NextFormGroup" disabled="true"/>
+		</form>
+	</forms>
+</nvi>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="nvjpeg_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:42:16" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="4">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="nvjpegRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="nvjpegInstallDir" value="${{nvjpegRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="NVJPEG Runtime"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDARuntimes_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="NVJPEG" ordering="CUDA|Runtime|Libraries" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{nvjpegInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/nvjpeg.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Runtime files" uninstallText="Deleting CUDA Runtime files">
+			<copyFile target="bin\nvjpeg64_12.dll"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="bin\nvjpeg64_12.dll" sizeKB="7485"/><file name="nvjpeg.nvi" sizeKB="1"/></manifest>
+</nvi>

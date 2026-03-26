@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="documentation_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:41:39" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="1">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="docRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="docInstallDir" value="${{docRootDir}}\v${{version}}"/>
+		<string name="CUDAProgramGroup" value="NVIDIA Corporation\CUDA Toolkit\v${{version}}"/>
+		<string name="CUDASamplesProgramGroup" value="NVIDIA Corporation\CUDA Samples\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="CUDA Documentation"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDADocument_${{version}}"/>
+	</dependencies>
+	<extensions>
+		<extension file="DocExt.dll"/>
+	</extensions>
+	<customInstallTree>
+		<treeNode text="General Documentation" ordering="CUDA|Documentation" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{docInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/Doc.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Documentation files" uninstallText="Deleting CUDA Development files">
+			<copyFile target="CUDA_Toolkit_Release_Notes.txt"/>
+			<copyFile target="DOCS"/>
+			<copyFile target="EULA.txt"/>
+			<copyFile target="README"/>
+		</standard>
+		<custom phase="LaunchDocsDirectory" when="installClose" action="LaunchDocsDirectory" condition="LaunchCUDADocumentation"/>
+	</phases>
+	<manifest>
+		<file name="CUDA_Toolkit_Release_Notes.txt" sizeKB="79"/><file name="doc.nvi" sizeKB="2"/><file name="DocExt.dll" sizeKB="853"/><file name="DOCS" sizeKB="0"/><file name="EULA.txt" sizeKB="66"/><file name="README" sizeKB="1"/></manifest>
+</nvi>

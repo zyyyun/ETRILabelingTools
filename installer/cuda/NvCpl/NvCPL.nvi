@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="Display.NvApp.NvCPL" title="${{Title}}" version="${{version}}" disposition="demand" hidden="true" installerMin="2.1002.244.2070" bare="true" diskSpaceForBare="6">
+	<strings>
+		<string name="Version" value="1.0"/>
+		<string name="Title" value="NvCpl"/>
+		<string name="version" value="${{Version}}"/>
+		<string name="InstallLocation" value="${{NvidiaProgramFiles}}\NVIDIA App"/>
+	</strings>
+	<constraints>
+	</constraints>
+	<dependencies>
+		<package type="requires" package="NvContainer.Session"/>
+		<package type="requires" package="NvContainer.LocalSystem"/>
+	</dependencies>
+	<properties>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/NvCpl.exe"/></properties>
+	<manifest>
+		<file name="NvCPL.nvi" sizeKB="4"/><file name="nvcpl.dll" sizeKB="6109"/><file name="NvUI.dll" sizeKB="6522"/><file name="NvUIR.dll" sizeKB="2578"/><file name="nvxdapix.dll" sizeKB="9295"/><file name="nvxdbat.dll" sizeKB="1606"/><file name="NvXDCore.dll" sizeKB="1923"/><file name="nvxdplcy.dll" sizeKB="1846"/><file name="nvxdsyncplugin.dll" sizeKB="1774"/></manifest>
+	<phases>
+		<standard phase="CopyFiles">
+			<copyFile source="nvcpl.dll" target="${{InstallLocation}}\NvCpl\nvcpl.dll"/>
+			<copyFile source="NvUI.dll" target="${{InstallLocation}}\NvCpl\NvUI.dll"/>
+			<copyFile source="NvUIR.dll" target="${{InstallLocation}}\NvCpl\NvUIR.dll"/>
+			<copyFile source="nvxdapix.dll" target="${{InstallLocation}}\NvCpl\nvxdapix.dll"/>
+			<copyFile source="nvxdbat.dll" target="${{InstallLocation}}\NvCpl\nvxdbat.dll"/>
+			<copyFile source="NvXDCore.dll" target="${{InstallLocation}}\NvCpl\Plugins\LocalSystem\NvXDCore.dll"/>
+			<copyFile source="nvxdplcy.dll" target="${{InstallLocation}}\NvCpl\nvxdplcy.dll"/>
+			<copyFile source="nvxdsyncplugin.dll" target="${{InstallLocation}}\NvCpl\Plugins\Session\nvxdsyncplugin.dll"/>
+		</standard>
+		<standard phase="createSessionSymlink">
+			<createDirectory target="${{NvidiaProgramFiles}}\NvContainer\plugins\Session\NvCpl" source="${{InstallLocation}}\NvCpl\Plugins\Session" symLink="true"/>
+		</standard>
+		<standard phase="createLocalSystemSymlink">
+			<createDirectory target="${{NvidiaProgramFiles}}\NvContainer\plugins\LocalSystem\NvCpl" source="${{InstallLocation}}\NvCpl\Plugins\LocalSystem" symLink="true"/>
+		</standard>
+		<exe phase="registerDLLwithRegsvr32" name="${{SystemDirectory}}\regsvr32.exe" onError="ignore" when="install">
+			<arg value="/s"/>
+			<arg value="${{InstallLocation}}\NvCpl\nvxdbat.dll"/>
+		</exe>
+		<exe phase="registerDLLwithRegsvr32" name="${{SystemDirectory}}\regsvr32.exe" onError="ignore" when="install">
+			<arg value="/s"/>
+			<arg value="${{InstallLocation}}\NvCpl\nvxdplcy.dll"/>
+		</exe>
+		<exe phase="registerDLLwithRegsvr32" name="${{SystemDirectory}}\regsvr32.exe" onError="ignore" when="install">
+			<arg value="/s"/>
+			<arg value="${{InstallLocation}}\NvCpl\nvxdapix.dll"/>
+		</exe>
+		<exe phase="UnregisterDLLwithRegsvr32" name="${{SystemDirectory}}\regsvr32.exe" onError="ignore" when="uninstall">
+			<arg value="/s"/>
+			<arg value="/u"/>
+			<arg value="${{InstallLocation}}\NvCpl\nvxdplcy.dll"/>
+		</exe>
+		<exe phase="UnregisterDLLwithRegsvr32" name="${{SystemDirectory}}\regsvr32.exe" onError="ignore" when="uninstall">
+			<arg value="/s"/>
+			<arg value="/u"/>
+			<arg value="${{InstallLocation}}\NvCpl\nvxdbat.dll"/>
+		</exe>
+		<exe phase="UnregisterDLLwithRegsvr32" name="${{SystemDirectory}}\regsvr32.exe" onError="ignore" when="uninstall">
+			<arg value="/s"/>
+			<arg value="/u"/>
+			<arg value="${{InstallLocation}}\NvCpl\nvxdapix.dll"/>
+		</exe>
+	</phases>
+</nvi>

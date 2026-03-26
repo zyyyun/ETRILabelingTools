@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="nvprof_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:43:36" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="2">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="toolsLibRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="toolsLibInstallDir" value="${{toolsLibRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="CUDA Profiler Tools"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDAToolkit_${{version}}"/>
+		<package type="requires" package="CUDADevelopment_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="Profiling Tools" ordering="CUDA|Development|Tools" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{toolsLibInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/nvprof.exe"/></properties>
+	<phases>
+		<standard phase="deleteExtras" when="uninstall">
+			<deleteDirectory target="${{toolsLibInstallDir}}\extras"/>
+		</standard>
+		<standard phase="copyFiles" installText="Copying CUDA Runtime files" uninstallText="Deleting CUDA Runtime files">
+			<copyFile target="bin\cuinj64_129.dll"/>
+			<copyFile target="bin\nvprof.exe"/>
+			<copyFile target="LICENSE"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="bin\cuinj64_129.dll" sizeKB="1482"/><file name="bin\nvprof.exe" sizeKB="2165"/><file name="LICENSE" sizeKB="62"/><file name="nvprof.nvi" sizeKB="2"/></manifest>
+</nvi>

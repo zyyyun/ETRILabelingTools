@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="NvDLISR" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2023-03-15T10:18:30" disposition="demand" hidden="true" installerMin="2.1002.215.1898" bare="true" diskSpaceForBare="22">
+	<strings>
+		<string name="title" value="NVIDIA NvDLISR"/>
+		<string name="version" value="1.0"/>
+		<string name="NvDLISRPath" value="${{NvidiaProgramFiles}}\NVIDIA App\NvDLISR"/>
+		<string name="crashDumpKey" value="HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"/>
+		<string name="nvdlisBinaryName" value="nvdlisrwrapper.exe"/>
+	</strings>
+	<dependencies>
+	</dependencies>
+	<properties>
+		<bool name="IsNvAppComponent" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/NvDLISR.exe"/></properties>
+	<manifest>
+		<file name="GfeXCode64.dll" sizeKB="4013"/><file name="nvdlisrwrapper.exe" sizeKB="1738"/><file name="nvngx_dlisr.dll" sizeKB="55421"/></manifest>
+	<phases>
+		<standard phase="createCrashDumpGenerationKeys">
+			<addRegistry keyName="${{crashDumpKey}}\${{nvdlisBinaryName}}"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{nvdlisBinaryName}}" valueName="DumpFolder" type="REG_EXPAND_SZ" value="%PROGRAMDATA%\NVIDIA Corporation\CrashDumps"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{nvdlisBinaryName}}" valueName="DumpCount" type="REG_DWORD" value="15"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{nvdlisBinaryName}}" valueName="DumpType" type="REG_DWORD" value="1"/>
+		</standard>
+		<exe phase="killNVdlisrwrapper" name="${{SystemDirectory}}\taskkill.exe" when="install" onError="ignore">
+			<arg value="/f /t /im nvdlisrwrapper.exe" quote="none"/>
+		</exe>
+		<standard phase="copyNGXFiles">
+			<createDirectory target="${{NvDLISRPath}}"/>
+			<copyFile source="GfeXCode64.dll" target="${{NvDLISRPath}}\GfeXCode64.dll"/>
+			<copyFile source="nvdlisrwrapper.exe" target="${{NvDLISRPath}}\nvdlisrwrapper.exe"/>
+			<copyFile source="nvngx_dlisr.dll" target="${{NvDLISRPath}}\nvngx_dlisr.dll"/>
+		</standard>
+		<standard phase="AddEnvSettingsForNGX" when="install">
+			<addPath position="last" target="${{NvDLISRPath}}"/>
+		</standard>
+		<standard phase="deleteOTACache" when="uninstall">
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_common_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_deepdvc_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_dlss_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_dlss_d_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_dlss_g_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_nis_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_nvperf_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_pcl_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_reflex_0"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA\NGX\models\sl_sdk_0"/>
+			<deleteFile target="${{CommonAppData}}\NVIDIA\NGX\models\nvngx_config.txt"/>
+		</standard>
+		<standard phase="RemoveEnvSettingsForNGX" when="uninstall">
+			<deletePath broadcastTimeout="100" target="${{NvDLISRPath}}"/>
+		</standard>
+		<exe phase="killNVdlisrwrapper" name="${{SystemDirectory}}\taskkill.exe" when="uninstall" onError="ignore">
+			<arg value="/f /t /im nvdlisrwrapper.exe" quote="none"/>
+		</exe>
+	</phases>
+</nvi>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="nvtx_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:43:39" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="1">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="nvtxLibRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="nvtxLibInstallDir" value="${{nvtxLibRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="NVTX Development"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDADevelopment_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="NVTX" ordering="CUDA|Development|Compiler|Libraries" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{nvtxLibInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/nvtx.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Development files" uninstallText="Deleting CUDA Development files">
+			<copyFile target="include\nvtx3\nvToolsExt.h"/>
+			<copyFile target="include\nvtx3\nvToolsExtCuda.h"/>
+			<copyFile target="include\nvtx3\nvToolsExtCudaRt.h"/>
+			<copyFile target="include\nvtx3\nvToolsExtOpenCL.h"/>
+			<copyFile target="include\nvtx3\nvToolsExtSync.h"/>
+			<copyFile target="include\nvtx3\nvtx3.hpp"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxImpl.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxImplCore.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxImplCudaRt_v3.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxImplCuda_v3.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxImplOpenCL_v3.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxImplSync_v3.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxInit.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxInitDecls.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxInitDefs.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxLinkOnce.h"/>
+			<copyFile target="include\nvtx3\nvtxDetail\nvtxTypes.h"/>
+			<copyFile target="LICENSE"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="include\nvtx3\nvToolsExt.h" sizeKB="58"/><file name="include\nvtx3\nvToolsExtCuda.h" sizeKB="5"/><file name="include\nvtx3\nvToolsExtCudaRt.h" sizeKB="4"/><file name="include\nvtx3\nvToolsExtOpenCL.h" sizeKB="8"/><file name="include\nvtx3\nvToolsExtSync.h" sizeKB="14"/><file name="include\nvtx3\nvtx3.hpp" sizeKB="102"/><file name="include\nvtx3\nvtxDetail\nvtxImpl.h" sizeKB="22"/><file name="include\nvtx3\nvtxDetail\nvtxImplCore.h" sizeKB="12"/><file name="include\nvtx3\nvtxDetail\nvtxImplCudaRt_v3.h" sizeKB="4"/><file name="include\nvtx3\nvtxDetail\nvtxImplCuda_v3.h" sizeKB="5"/><file name="include\nvtx3\nvtxDetail\nvtxImplOpenCL_v3.h" sizeKB="8"/><file name="include\nvtx3\nvtxDetail\nvtxImplSync_v3.h" sizeKB="4"/><file name="include\nvtx3\nvtxDetail\nvtxInit.h" sizeKB="22"/><file name="include\nvtx3\nvtxDetail\nvtxInitDecls.h" sizeKB="10"/><file name="include\nvtx3\nvtxDetail\nvtxInitDefs.h" sizeKB="36"/><file name="include\nvtx3\nvtxDetail\nvtxLinkOnce.h" sizeKB="4"/><file name="include\nvtx3\nvtxDetail\nvtxTypes.h" sizeKB="16"/><file name="LICENSE" sizeKB="62"/><file name="nvtx.nvi" sizeKB="4"/></manifest>
+</nvi>

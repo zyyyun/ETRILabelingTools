@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="FrameViewSdk" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2025-01-20T11:22:26" disposition="default" installerMin="2.1002.308.0" bare="true" diskSpaceForBare="6">
+	<constraints>
+		<overinstall name="FrameViewSdkDowngrade" text="${{ErrorDowngrade}}" whenCurrent="lowerversion" level="error"/>
+		<os min="10" name="FrameViewSdkMinWin10" text="${{ErrorMinWin10}}" level="error"/>
+	</constraints>
+	<dependencies>
+	</dependencies>
+	<extensions>
+		<extension file="FrameViewSdkExt.DLL"/>
+	</extensions>
+	<strings>
+		<string name="title" value="NVIDIA FrameView SDK"/>
+		<string name="version" value="1.5.10920.35420203"/>
+		<string name="arpDisplayName" value="${{title}} ${{version}}"/>
+		<string name="FrameViewSdkInstallLocation" value="${{InstallLocation}}"/>
+		<string name="ServiceName" value="FvSvc"/>
+		<string name="ServiceDisplayName" value="NVIDIA FrameView SDK service"/>
+		<string name="ServiceTimeoutMS" value="10000"/>
+		<string name="ScheduledTaskName" value="FvSDKRLATask"/>
+		<string name="FrameViewSdkProgramDataLocation" value="${{CommonAppData}}\NVIDIA Corporation\FrameViewSDK"/>
+		<string name="FrameViewSdkLocalUserAppDataLocation" value="${{LocalUserAppData}}\NVIDIA Corporation\FrameViewSDK"/>
+	</strings>
+	<properties>
+		<string name="InstallLocation" value="${{NvidiaProgramFiles}}\FrameViewSDK"/>
+		<string name="ArpDisplayName" value="${{arpDisplayName}}"/>
+		<string name="ShadowPlayAPIx86DLLPath" value="${{NvidiaProgramFilesX86}}\ShadowPlay\nvspapi.dll"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/FrameViewSDK.exe"/></properties>
+	<manifest>
+		<file name="EULA.txt" sizeKB="17"/><file name="ExcludeList.txt" sizeKB="2"/><file name="FrameView SDK License (3Sept2020).docx" sizeKB="50"/><file name="FrameViewSdk.nvi" sizeKB="9"/><file name="FrameViewSdkExt.dll" sizeKB="1654"/><file name="nvfvsdksvc_x64.exe" sizeKB="886"/><file name="README.txt" sizeKB="11"/><file name="bin\amd_ags_x64.dll" sizeKB="172"/><file name="bin\FrameViewKMD.sys" sizeKB="22"/><file name="bin\FvSDK_x64.dll" sizeKB="265"/><file name="bin\FvSDK_x86.dll" sizeKB="240"/><file name="bin\mouseLut.json" sizeKB="51"/><file name="bin\nvrla.exe" sizeKB="1219"/><file name="bin\PresentMon_x64.exe" sizeKB="1031"/><file name="bin\TestSystemDataCollectors_x64.exe" sizeKB="490"/><file name="etw_fcat\htcvive_install.bat" sizeKB="1"/><file name="etw_fcat\NvFrapsOpenVR.man" sizeKB="19"/><file name="etw_fcat\NVFTVRDLL64.dll" sizeKB="26"/><file name="etw_nv\ddETWExternal.dll" sizeKB="15"/><file name="etw_nv\ddETWExternal.xml" sizeKB="11"/><file name="etw_nv\nvinstall.cmd" sizeKB="1"/><file name="FvContainer\FvContainer.exe" sizeKB="1133"/><file name="FvContainer\FvContainer.System.exe" sizeKB="1133"/><file name="FvContainer\NvMessageBus.dll" sizeKB="3366"/><file name="FvContainer\plugins\SystemDataCollectorsContainerPlugin_x64.dll" sizeKB="602"/><file name="FvContainer\plugins.system\AggregatorContainerPlugin_x64.dll" sizeKB="179"/><file name="FvContainer\plugins.system\messagebus.conf" sizeKB="0"/><file name="FvContainer\plugins.system\NvMessageBusBroadcast.dll" sizeKB="3316"/><file name="licenses\LICENSES.txt" sizeKB="6"/><file name="SDK\FvSDKTestClient.exe" sizeKB="371"/><file name="SDK\FvSDKTestClient_Public.exe" sizeKB="88"/><file name="SDK\Public_Release\FvSDK.h" sizeKB="25"/><file name="SDK\Public_Release\FvSDK_x64.dll" sizeKB="265"/><file name="SDK\Public_Release\FvSDK_x64.lib" sizeKB="324"/><file name="SDK\Public_Release\FvSDK_x64.pdb" sizeKB="4980"/><file name="SDK\Public_Release\FvSDK_x64UWP.lib" sizeKB="322"/><file name="SDK\Public_Release\FvSDK_x86.dll" sizeKB="240"/><file name="SDK\Public_Release\FvSDK_x86.lib" sizeKB="294"/><file name="SDK\Public_Release\FvSDK_x86.pdb" sizeKB="5060"/></manifest>
+	<phases>
+		<standard phase="deleteInstallLocation" onError="ignore" when="uninstall">
+			<deleteDirectoryTree target="${{FrameViewSdkProgramDataLocation}}"/>
+			<deleteDirectoryTree target="${{FrameViewSdkInstallLocation}}"/>
+			<deleteDirectoryTree target="${{FrameViewSdkLocalUserAppDataLocation}}"/>
+		</standard>
+		<exe phase="disableFrameViewSdkService" name="${{SystemDirectory}}\sc.exe" onError="ignore" when="install">
+			<arg value="config FvSvc start= disabled" quote="none"/>
+		</exe>
+		<standard phase="stopFrameViewSdkService" onError="ignore" when="install">
+			<controlService name="${{ServiceName}}" command="129"/>
+		</standard>
+		<standard phase="stopFvSvcService" onError="ignore" when="install">
+			<stopService name="${{ServiceName}}" timeOut="${{ServiceTimeoutMS}}"/>
+		</standard>
+		<standard phase="createRootDirectory">
+			<createDirectory target="${{FrameViewSdkInstallLocation}}"/>
+		</standard>
+		<standard phase="copyBinFiles">
+			<createDirectory target="${{FrameViewSdkInstallLocation}}\bin"/>
+			<copyFile target="bin\amd_ags_x64.dll"/>
+			<copyFile target="bin\FrameViewKMD.sys"/>
+			<copyFile target="bin\FvSDK_x64.dll"/>
+			<copyFile target="bin\PresentMon_x64.exe"/>
+			<copyFile target="bin\nvrla.exe"/>
+			<copyFile target="bin\mouseLut.json"/>
+		</standard>
+		<standard phase="copy_etw_fcat_Files">
+			<createDirectory target="${{FrameViewSdkInstallLocation}}\etw_fcat"/>
+			<copyFile target="etw_fcat\htcvive_install.bat"/>
+			<copyFile target="etw_fcat\NvFrapsOpenVR.man"/>
+			<copyFile target="etw_fcat\NVFTVRDLL64.dll"/>
+		</standard>
+		<standard phase="copy_etw_nv_Files">
+			<createDirectory target="${{FrameViewSdkInstallLocation}}\etw_nv"/>
+			<copyFile target="etw_nv\ddETWExternal.dll"/>
+			<copyFile target="etw_nv\ddETWExternal.xml"/>
+			<copyFile target="etw_nv\nvinstall.cmd"/>
+		</standard>
+		<standard phase="copy_licenses_Files">
+			<createDirectory target="${{FrameViewSdkInstallLocation}}\licenses"/>
+			<copyFile target="licenses\LICENSES.txt"/>
+		</standard>
+		<standard phase="copy_etw_nv_Files">
+			<copyFile target="etw_nv\ddETWExternal.dll"/>
+			<copyFile target="etw_nv\ddETWExternal.xml"/>
+			<copyFile target="etw_nv\nvinstall.cmd"/>
+		</standard>
+		<standard phase="copy_sdk_Files">
+			<createDirectory target="${{FrameViewSdkInstallLocation}}\SDK"/>
+			<createDirectory target="${{FrameViewSdkInstallLocation}}\SDK\Public_Release"/>
+			<copyFile target="SDK\Public_Release\FvSDK.h"/>
+			<copyFile target="SDK\Public_Release\FvSDK_x64.dll"/>
+			<copyFile target="SDK\Public_Release\FvSDK_x64.lib"/>
+			<copyFile target="SDK\Public_Release\FvSDK_x64UWP.lib"/>
+			<copyFile target="SDK\Public_Release\FvSDK_x64.pdb"/>
+			<copyFile target="SDK\Public_Release\FvSDK_x86.dll"/>
+			<copyFile target="SDK\Public_Release\FvSDK_x86.lib"/>
+			<copyFile target="SDK\Public_Release\FvSDK_x86.pdb"/>
+			<copyFile target="${{SystemDirectory}}\FvSDK_x64.dll" source="bin\FvSDK_x64.dll"/>
+			<copyFile target="${{SysWowDirectory}}\FvSDK_x86.dll" source="bin\FvSDK_x86.dll"/>
+			<copyFile target="SDK\FvSDKTestClient_Public.exe"/>
+		</standard>
+		<standard phase="deleteOldFiles" when="install">
+			<deleteFile target="${{InstallLocation}}\blacklist.txt"/>
+			<deleteFile target="${{FrameViewSdkInstallLocation}}\FvContainer\plugins\AggregatorContainerPlugin_x64.dll"/>
+			<deleteFile target="${{FrameViewSdkInstallLocation}}\FvContainer\plugins\messagebus.conf"/>
+			<deleteFile target="${{FrameViewSdkInstallLocation}}\FvContainer\plugins\NvMessageBusBroadcast.dll"/>
+		</standard>
+		<standard phase="copy_ExcludeList_File">
+			<copyFile target="ExcludeList.txt"/>
+		</standard>
+		<standard phase="copy_legal_File">
+			<copyFile target="FrameView SDK License (3Sept2020).docx"/>
+			<copyFile target="EULA.txt"/>
+			<copyFile target="README.txt"/>
+		</standard>
+		<standard phase="copy_frameview_exe_File">
+			<copyFile target="nvfvsdksvc_x64.exe"/>
+		</standard>
+		<standard phase="copy_fvcontainer_Files">
+			<copyFile target="FvContainer\FvContainer.exe"/>
+			<copyFile target="FvContainer\FvContainer.System.exe"/>
+			<copyFile target="FvContainer\NvMessageBus.dll"/>
+			<copyFile target="FvContainer\plugins.system\messagebus.conf"/>
+			<copyFile target="FvContainer\plugins.system\NvMessageBusBroadcast.dll"/>
+			<copyFile target="FvContainer\plugins.system\AggregatorContainerPlugin_x64.dll"/>
+			<copyFile target="FvContainer\plugins\SystemDataCollectorsContainerPlugin_x64.dll"/>
+		</standard>
+		<standard phase="installFrameViewSdkService">
+			<createService name="${{ServiceName}}" type="16" target="${{FrameViewSdkInstallLocation}}\nvfvsdksvc_x64.exe" argument="-service" displayName="${{ServiceDisplayName}}" startCode="3" errorControl="0" description="${{ServiceDisplayName}}"/>
+		</standard>
+		<exe phase="setServiceTrigger" name="${{SystemDirectory}}\sc.exe" when="install">
+			<arg value="triggerinfo FvSvc start/strcustom/e1bdc95e-0f07-5469-8e64-061ea5be6a0d/StartSession stop/strcustom/e1bdc95e-0f07-5469-8e64-061ea5be6a0d/StopSession" quote="none"/>
+		</exe>
+		<standard phase="stopFrameViewSdkService" onError="ignore" when="uninstall">
+			<controlService name="${{ServiceName}}" command="129"/>
+		</standard>
+	</phases>
+	<strings>
+		<string name="ErrorDowngrade" value="You already have a newer version of the NVIDIA Frameview SDK installed."/>
+		<string name="ErrorMinWin10" value="${{title}} requires Windows 10 or later."/>
+	</strings>
+</nvi>

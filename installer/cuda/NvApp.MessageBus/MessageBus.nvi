@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="Display.NvApp.MessageBus" title="${{title}}" version="3.14" versionText="3.14" installerMin="2.1002.285.0" timestamp="2025-03-21T19:56:47" disposition="demand" hidden="true" continueOnFailure="false" bare="true" diskSpaceForBare="6">
+	<strings>
+		<string name="title" value="NVIDIA MessageBus 3 for NvApp"/>
+		<string name="AppFolder" value="NVIDIA App"/>
+		<string name="MessageBusInstallDirectory" value="${{NvidiaProgramFiles}}\${{AppFolder}}\MessageBus"/>
+		<string name="MessageBusInstallDirectoryX86" value="${{NvidiaProgramFilesX86}}\${{AppFolder}}\MessageBus"/>
+		<string name="MessageBusLogDirectory" value="${{CommonAppData}}\NVIDIA Corporation\${{AppFolder}}\MessageBus"/>
+		<string name="MessageBusRegistryKey" value="${{NvidiaSoftwareKey}}\NvContainer\MessageBus"/>
+		<string name="MessageBusModuleMapRegistryKey" value="${{NvidiaSoftwareKey}}\NvContainer\ModuleMap"/>
+		<string name="MessageBusClientLibraryName_v1" value="MessageBus.dll"/>
+		<string name="MessageBusClientLibraryName" value="NvMessageBus.dll"/>
+		<string name="MessageBusBroadcasterPluginName" value="NvMessageBusBroadcast.dll"/>
+		<string name="MessageBusConfigName" value="messagebus.conf"/>
+		<string name="MessageBusPluginDirectory" value="${{NvidiaProgramFiles}}\NvContainer\plugins\LocalSystem"/>
+		<string name="MessageBusWaitForUnlockPeriod" value="5000"/>
+	</strings>
+	<filter name="64bit" platform="amd64,arm64"/>
+	<dependencies>
+		<package type="requires" package="NvContainer.LocalSystem"/>
+	</dependencies>
+	<manifest>
+		<file name="MessageBus.nvi" sizeKB="7"/><file name="${{MessageBusConfigName}}"/>
+		<file name="${{MessageBusClientLibraryName}}"/>
+		<file name="${{MessageBusClientLibraryName_v1}}"/>
+		<file name="${{MessageBusBroadcasterPluginName}}"/>
+		<file name="x86\${{MessageBusClientLibraryName}}"/>
+		<file name="x86\${{MessageBusClientLibraryName_v1}}"/>
+	</manifest>
+	<phases>
+		<standard phase="messageBusCreateLogFolder" when="install">
+			<createDirectory target="${{MessageBusLogDirectory}}"/>
+		</standard>
+		<standard phase="messageBusSetupRegistryConfig">
+			<addRegistry keyName="${{MessageBusRegistryKey}}"/>
+			<addRegistry keyName="${{MessageBusRegistryKey}}" valueName="LogPath" value="${{MessageBusLogDirectory}}" type="REG_SZ"/>
+			<addRegistry keyName="${{MessageBusRegistryKey}}" valueName="LogLevel" value="4" type="REG_DWORD"/>
+			<addRegistry keyName="${{MessageBusRegistryKey}}" valueName="InstallPath" value="${{MessageBusInstallDirectory}}" type="REG_SZ"/>
+		</standard>
+		<standard phase="messageBusSetupModuleMap">
+			<addRegistry keyName="${{MessageBusModuleMapRegistryKey}}"/>
+			<addRegistry keyName="${{MessageBusModuleMapRegistryKey}}" valueName="${{MessageBusClientLibraryName_v1}}" value="${{MessageBusInstallDirectory}}\${{MessageBusClientLibraryName_v1}}" type="REG_SZ"/>
+		</standard>
+		<if filter="64bit">
+			<standard phase="messageBusSetupRegistryConfigX86onAMD64" platform="x86">
+				<addRegistry keyName="${{MessageBusRegistryKey}}"/>
+				<addRegistry keyName="${{MessageBusRegistryKey}}" valueName="LogPath" value="${{MessageBusLogDirectory}}" type="REG_SZ"/>
+				<addRegistry keyName="${{MessageBusRegistryKey}}" valueName="LogLevel" value="4" type="REG_DWORD"/>
+				<addRegistry keyName="${{MessageBusRegistryKey}}" valueName="InstallPath" value="${{MessageBusInstallDirectoryX86}}" type="REG_SZ"/>
+			</standard>
+			<standard phase="messageBusSetupModuleMapX86onAMD64" platform="x86">
+				<addRegistry keyName="${{MessageBusModuleMapRegistryKey}}"/>
+				<addRegistry keyName="${{MessageBusModuleMapRegistryKey}}" valueName="${{MessageBusClientLibraryName_v1}}" value="${{MessageBusInstallDirectoryX86}}\${{MessageBusClientLibraryName_v1}}" type="REG_SZ"/>
+			</standard>
+		</if>
+		<standard phase="messageBusDeleteLogs" onError="ignore" when="uninstall">
+			<deleteFile target="${{MessageBusLogDirectory}}\MessageBusBroadcast.log*" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusLogDirectory}}\MessageBus_*.log" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusLogDirectory}}\NvMessageBusBroadcastPlugin.log*" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+		</standard>
+		<standard phase="messageBusCopyFiles">
+			<copyFile source="${{MessageBusClientLibraryName_v1}}" target="${{MessageBusInstallDirectory}}\${{MessageBusClientLibraryName_v1}}"/>
+			<copyFile source="${{MessageBusClientLibraryName}}" target="${{MessageBusInstallDirectory}}\${{MessageBusClientLibraryName}}"/>
+			<copyFile source="${{MessageBusBroadcasterPluginName}}" target="${{MessageBusInstallDirectory}}\${{MessageBusBroadcasterPluginName}}"/>
+			<copyFile source="x86\${{MessageBusClientLibraryName}}" target="${{MessageBusInstallDirectoryX86}}\${{MessageBusClientLibraryName}}"/>
+			<copyFile source="x86\${{MessageBusClientLibraryName_v1}}" target="${{MessageBusInstallDirectoryX86}}\${{MessageBusClientLibraryName_v1}}"/>
+			<copyFile source="${{MessageBusConfigName}}" target="${{MessageBusInstallDirectory}}\${{MessageBusConfigName}}"/>
+			<copyFile source="${{MessageBusConfigName}}" target="${{MessageBusInstallDirectoryX86}}\${{MessageBusConfigName}}"/>
+		</standard>
+		<standard phase="messageBusDeleteFiles" when="uninstall">
+			<deleteFile target="${{MessageBusInstallDirectory}}\${{MessageBusClientLibraryName_v1}}" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusInstallDirectory}}\${{MessageBusClientLibraryName}}" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusInstallDirectory}}\${{MessageBusBroadcasterPluginName}}" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusInstallDirectoryX86}}\${{MessageBusClientLibraryName}}" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusInstallDirectoryX86}}\${{MessageBusClientLibraryName_v1}}" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusInstallDirectory}}\${{MessageBusConfigName}}" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+			<deleteFile target="${{MessageBusInstallDirectoryX86}}\${{MessageBusConfigName}}" waitForUnlock="${{MessageBusWaitForUnlockPeriod}}"/>
+		</standard>
+		<standard phase="messageBusSymlinkBroadcasterPluginAndConfig">
+			<copyFile target="${{MessageBusPluginDirectory}}\${{MessageBusBroadcasterPluginName}}" source="${{MessageBusInstallDirectory}}\${{MessageBusBroadcasterPluginName}}" symLink="true"/>
+			<copyFile target="${{MessageBusPluginDirectory}}\${{MessageBusConfigName}}" source="${{MessageBusInstallDirectory}}\${{MessageBusConfigName}}" symLink="true"/>
+		</standard>
+	</phases>
+	<properties><string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/NvApp.MessageBus.exe"/></properties></nvi>

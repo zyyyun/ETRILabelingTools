@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="curand_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:42:20" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="47">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="curandRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="curandInstallDir" value="${{curandRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="CURAND Runtime"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDARuntimes_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="CURAND" ordering="CUDA|Runtime|Libraries" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{curandInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/curand.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Runtime files" uninstallText="Deleting CUDA Runtime files">
+			<copyFile target="bin\curand64_10.dll"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="bin\curand64_10.dll" sizeKB="77342"/><file name="curand.nvi" sizeKB="1"/></manifest>
+</nvi>
