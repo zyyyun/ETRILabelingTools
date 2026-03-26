@@ -1765,66 +1765,50 @@ namespace WinFormsApp1
             }
             catch (Exception ex)
             {
-                string errorMessage = ex.Message;
                 string fullErrorDetails = $"에러 메시지: {ex.Message}\n\n스택 트레이스:\n{ex.StackTrace}";
+                if (ex.InnerException != null)
+                {
+                    fullErrorDetails += $"\n\n내부 예외:\n{ex.InnerException.Message}\n{ex.InnerException.StackTrace}";
+                }
+                System.Diagnostics.Debug.WriteLine($"[YOLO 초기화 실패] {fullErrorDetails}");
 
                 var missingDlls = CudaEnvironmentHelper.GetMissingCudaDependencies();
+                string reason;
+
                 if (missingDlls.Count > 0)
                 {
-                    errorMessage += "\n\n[누락된 CUDA DLL]\n - " + string.Join("\n - ", missingDlls);
-                    errorMessage += "\n\nMicrosoft.ML.OnnxRuntime.Gpu 1.22.1은 CUDA 12.x(예: 12.3/12.4)와 cuDNN 9.x 런타임 DLL을 요구합니다. " +
-                                    "NVIDIA CUDA Toolkit 12.x와 cuDNN 9.x를 설치한 뒤, 설치 경로의 bin 폴더를 PATH에 추가하거나 실행 폴더에 DLL을 복사하세요.";
+                    reason = $"CUDA 런타임 DLL이 누락되었습니다:\n - {string.Join("\n - ", missingDlls)}\n\n" +
+                             "CUDA Toolkit 12.x 및 cuDNN 9.x가 설치되어 있는지 확인하세요.";
                 }
-                
-                // ✅ CUDA 관련 에러 감지 및 상세 정보 제공
-                if (ex.Message.Contains("CUDA") || ex.Message.Contains("cuda") || 
-                    ex.Message.Contains("GPU") || ex.Message.Contains("gpu") ||
-                    ex.InnerException != null && (ex.InnerException.Message.Contains("CUDA") || 
-                                                   ex.InnerException.Message.Contains("cuda")))
+                else if (ex.Message.Contains("CUDA") || ex.Message.Contains("cuda") ||
+                         ex.Message.Contains("GPU") || ex.Message.Contains("gpu") ||
+                         ex.Message.Contains("shared library"))
                 {
-                    errorMessage += "\n\n[CUDA 관련 에러 해결 방법]\n\n" +
-                                  "1. NVIDIA 드라이버 확인:\n" +
-                                  "   - nvidia-smi 명령어로 GPU 인식 여부 확인\n" +
-                                  "   - 최신 드라이버 설치 권장\n\n" +
-                                  "2. CUDA Toolkit 확인:\n" +
-                                  "   - YoloSharp.Gpu 6.0.6은 일반적으로 CUDA 11.x 또는 12.x 필요\n" +
-                                  "   - 시스템에 설치된 CUDA 버전 확인\n\n" +
-                                  "3. cuDNN 확인:\n" +
-                                  "   - CUDA 버전에 맞는 cuDNN 설치 필요\n" +
-                                  "   - 환경 변수 PATH에 cuDNN 경로 추가\n\n" +
-                                  "4. 환경 변수 확인:\n" +
-                                  "   - CUDA_PATH 환경 변수 설정 확인\n" +
-                                  "   - PATH에 CUDA bin 폴더 경로 포함 확인\n\n" +
-                                  "5. 대안:\n" +
-                                  "   - CPU 모드로 작동 (YoloSharp.Gpu 대신 YoloSharp 사용)\n" +
-                                  "   - 또는 YOLO 기능 없이 계속 진행";
-                    
-                    // 내부 예외 정보도 포함
-                    if (ex.InnerException != null)
-                    {
-                        fullErrorDetails += $"\n\n내부 예외:\n{ex.InnerException.Message}\n{ex.InnerException.StackTrace}";
-                    }
+                    reason = "CUDA 실행 환경을 로드할 수 없습니다.\n\n" +
+                             "가능한 원인:\n" +
+                             " - NVIDIA GPU가 장착되지 않은 PC\n" +
+                             " - GPU 드라이버가 설치되지 않았거나 버전이 오래됨\n" +
+                             " - CUDA DLL 버전 불일치";
                 }
-                
-                if (errorMessage.Contains("Opset 22"))
+                else if (ex.Message.Contains("Opset"))
                 {
-                    errorMessage += "\n\n해결 방법:\n" +
-                                  "1. YOLOv8 모델을 Opset 21로 다시 변환하세요\n" +
-                                  "2. Python: model.export(format='onnx', opset=21)\n" +
-                                  "3. 또는 YOLO 기능 없이 계속 진행하세요";
+                    reason = "YOLO 모델의 Opset 버전이 호환되지 않습니다.\n" +
+                             "Python에서 model.export(format='onnx', opset=21)로 재변환하세요.";
                 }
-                
-                // 디버그 출력에 전체 에러 정보 기록
-                System.Diagnostics.Debug.WriteLine($"[YOLO 초기화 실패] {fullErrorDetails}");
-                
+                else
+                {
+                    reason = ex.Message;
+                }
+
                 MessageBox.Show(
-                        $"YOLO 모델 로딩중 에러:\n\n{errorMessage}\n\n" +
-                        "YOLO 기능 없이 계속 진행합니다.",
-                        "경고",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning);
+                    $"GPU 모드로 YOLO를 초기화할 수 없습니다.\n\n" +
+                    $"[원인]\n{reason}\n\n" +
+                    "CPU 모드로 전환하여 작업을 계속 진행합니다.\n" +
+                    "모든 기능을 정상적으로 사용할 수 있으나, GPU 대비 처리 속도가 느릴 수 있습니다.",
+                    "CPU 모드로 전환",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
                 isYoloAvailable = false;
-                // Application.Exit() 제거하여 프로그램이 계속 실행되도록 함
             }
         }
 

@@ -96,25 +96,29 @@ Source: "..\WinFormsApp1\bin\x64\Release\net8.0-windows\runtimes\win-x64\native\
 Source: "..\WinFormsApp1\bin\x64\Release\net8.0-windows\runtimes\win-x64\native\onnxruntime_providers_shared.dll"; DestDir: "{app}\runtimes\win-x64\native"; Flags: ignoreversion
 Source: "..\WinFormsApp1\bin\x64\Release\net8.0-windows\runtimes\win-x64\native\onnxruntime_providers_tensorrt.dll"; DestDir: "{app}\runtimes\win-x64\native"; Flags: ignoreversion
 
-; === 4. cuDNN DLL ===
-;   - {app} 폴더에 직접 배치
-;   - CudaEnvironmentHelper가 AppContext.BaseDirectory를 먼저 탐색하므로
-;     환경변수 설정 없이 앱이 바로 참조 가능
-; CUDA Runtime DLL (CUDA Toolkit 없이도 동작하도록 앱 폴더에 번들)
-Source: "cudnn\cublas64_12.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cublasLt64_12.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudart64_12.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cufft64_11.dll"; DestDir: "{app}"; Flags: ignoreversion
+; === 4. CUDA/cuDNN DLL (조건부 설치) ===
+;   - CUDA 12.x가 시스템에 없을 때만 설치 (Check: ShouldInstallCuda)
+;   - CUDA가 이미 있으면 시스템 버전을 사용하여 버전 충돌/용량 낭비 방지
+;   - {app} 폴더에 배치 → CudaEnvironmentHelper가 AppContext.BaseDirectory에서 탐색
+
+; CUDA Runtime DLL
+Source: "cudnn\cublas64_12.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cublasLt64_12.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudart64_12.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cufft64_11.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\nvJitLink_120_0.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\nvrtc64_120_0.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\nvrtc-builtins64_124.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
 
 ; cuDNN DLL
-Source: "cudnn\cudnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudnn_adv64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudnn_cnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudnn_engines_precompiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudnn_engines_runtime_compiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudnn_graph64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudnn_heuristic64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "cudnn\cudnn_ops64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudnn_adv64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudnn_cnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudnn_engines_precompiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudnn_engines_runtime_compiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudnn_graph64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudnn_heuristic64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+Source: "cudnn\cudnn_ops64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
 
 ; === 5. CUDA Toolkit 인스톨러 ===
 ;   - 임시 폴더에 복사, 설치 후 자동 삭제
@@ -192,23 +196,64 @@ begin
 end;
 
 // ============================================================
+// HasNvidiaGpu()
+// - NVIDIA GPU 존재 여부를 레지스트리로 확인
+// ============================================================
+function HasNvidiaGpu(): Boolean;
+var
+  SubKeys: TArrayOfString;
+  I: Integer;
+begin
+  Result := False;
+  if RegGetSubkeyNames(HKLM, 'SYSTEM\CurrentControlSet\Enum\PCI', SubKeys) then
+  begin
+    for I := 0 to GetArrayLength(SubKeys) - 1 do
+    begin
+      if Pos('VEN_10DE', SubKeys[I]) > 0 then
+      begin
+        Result := True;
+        Exit;
+      end;
+    end;
+  end;
+end;
+
+// ============================================================
 // CurStepChanged()
-// - 설치 완료 후 CUDA 설치 결과를 검증
-// - CUDA 설치를 시도했는데 실패한 경우 경고 표시
+// - 설치 완료 후 CUDA 환경을 검증
+// - 실패 원인을 구체적으로 안내
 // ============================================================
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
-    // CUDA 설치를 시도했는데 여전히 감지 안 되면 경고
     if ShouldInstallCuda() then
     begin
-      MsgBox(
-        'CUDA Toolkit 12.x 설치가 완료되지 않았을 수 있습니다.' + #13#10 +
-        'GPU 가속이 작동하지 않을 수 있으며, YOLO 기능은 비활성화됩니다.' + #13#10 + #13#10 +
-        'CUDA를 수동으로 설치하려면:' + #13#10 +
-        'https://developer.nvidia.com/cuda-downloads',
-        mbInformation, MB_OK);
+      if not HasNvidiaGpu() then
+      begin
+        // NVIDIA GPU 자체가 없는 경우
+        MsgBox(
+          '[CUDA 설치 불가] NVIDIA GPU가 감지되지 않았습니다.' + #13#10 + #13#10 +
+          '원인: 이 PC에 NVIDIA 그래픽카드가 없거나 드라이버가 설치되지 않았습니다.' + #13#10 +
+          'CUDA는 NVIDIA GPU에서만 동작합니다.' + #13#10 + #13#10 +
+          '프로그램은 CPU 모드로 작동합니다.' + #13#10 +
+          'YOLO 감지 등 모든 기능을 사용할 수 있으나, GPU 대비 속도가 느릴 수 있습니다.',
+          mbInformation, MB_OK);
+      end
+      else
+      begin
+        // GPU는 있는데 CUDA 설치에 실패한 경우
+        MsgBox(
+          '[CUDA 설치 실패] CUDA Toolkit 설치가 완료되지 않았습니다.' + #13#10 + #13#10 +
+          '가능한 원인:' + #13#10 +
+          '  - GPU 드라이버 버전이 CUDA 12.x를 지원하지 않음' + #13#10 +
+          '  - 디스크 공간 부족' + #13#10 +
+          '  - 설치 중 오류 발생' + #13#10 + #13#10 +
+          '프로그램은 CPU 모드로 작동합니다.' + #13#10 +
+          'GPU 가속을 사용하려면 CUDA를 수동 설치하세요:' + #13#10 +
+          'https://developer.nvidia.com/cuda-downloads',
+          mbInformation, MB_OK);
+      end;
     end;
   end;
 end;
