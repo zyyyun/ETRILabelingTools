@@ -16,10 +16,10 @@ namespace WinFormsApp1
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
 
-            var license = new Services.LicenseService();
-            if (!license.IsAuthorized())
+            if (!Services.LicenseService.IsAuthorized(out string denyReason))
             {
-                MessageBox.Show(license.GetDenyReason(), "인증 오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(denyReason, "AOLT - 인증 오류",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 

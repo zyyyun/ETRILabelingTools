@@ -96,12 +96,9 @@ Source: "..\WinFormsApp1\bin\x64\Release\net8.0-windows\runtimes\win-x64\native\
 Source: "..\WinFormsApp1\bin\x64\Release\net8.0-windows\runtimes\win-x64\native\onnxruntime_providers_shared.dll"; DestDir: "{app}\runtimes\win-x64\native"; Flags: ignoreversion
 Source: "..\WinFormsApp1\bin\x64\Release\net8.0-windows\runtimes\win-x64\native\onnxruntime_providers_tensorrt.dll"; DestDir: "{app}\runtimes\win-x64\native"; Flags: ignoreversion
 
-; === 4. CUDA/cuDNN DLL (조건부 설치) ===
+; === 4. CUDA Runtime DLL (조건부 설치) ===
 ;   - CUDA 12.x가 시스템에 없을 때만 설치 (Check: ShouldInstallCuda)
 ;   - CUDA가 이미 있으면 시스템 버전을 사용하여 버전 충돌/용량 낭비 방지
-;   - {app} 폴더에 배치 → CudaEnvironmentHelper가 AppContext.BaseDirectory에서 탐색
-
-; CUDA Runtime DLL
 Source: "cudnn\cublas64_12.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
 Source: "cudnn\cublasLt64_12.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
 Source: "cudnn\cudart64_12.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
@@ -110,15 +107,17 @@ Source: "cudnn\nvJitLink_120_0.dll"; DestDir: "{app}"; Flags: ignoreversion; Che
 Source: "cudnn\nvrtc64_120_0.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
 Source: "cudnn\nvrtc-builtins64_124.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
 
-; cuDNN DLL
-Source: "cudnn\cudnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
-Source: "cudnn\cudnn_adv64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
-Source: "cudnn\cudnn_cnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
-Source: "cudnn\cudnn_engines_precompiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
-Source: "cudnn\cudnn_engines_runtime_compiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
-Source: "cudnn\cudnn_graph64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
-Source: "cudnn\cudnn_heuristic64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
-Source: "cudnn\cudnn_ops64_9.dll"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallCuda
+; === 5. cuDNN DLL (항상 설치) ===
+;   - cuDNN은 CUDA Toolkit에 포함되지 않으므로 항상 번들
+;   - {app} 폴더에 배치 → CudaEnvironmentHelper가 AppContext.BaseDirectory에서 탐색
+Source: "cudnn\cudnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn_adv64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn_cnn64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn_engines_precompiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn_engines_runtime_compiled64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn_graph64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn_heuristic64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "cudnn\cudnn_ops64_9.dll"; DestDir: "{app}"; Flags: ignoreversion
 
 ; === 5. CUDA Toolkit 인스톨러 ===
 ;   - 임시 폴더에 복사, 설치 후 자동 삭제
