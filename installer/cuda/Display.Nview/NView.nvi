@@ -1,0 +1,645 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="Display.NView" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2025-05-20T02:07:10" disposition="default" installerMin="2.1002.157.1164" preserveCache="true" bare="true" diskSpaceForBare="4">
+	<filter name="XP" min="5.1" max="5"/>
+	<filter name="XP32" max="5" platform="x86"/>
+	<filter name="minVista" min="6.0"/>
+	<filter name="amd64" platform="amd64"/>
+	<filter name="NViewNext"/>
+	<strings>
+		<string name="TasksPath" value="${{SystemDirectory}}\Tasks"/>
+		<string name="taskGuid" value="_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}"/>
+		<string name="version" value="205.28"/>
+		<string name="NViewProfileDir" value="${{CommonAppData}}\NVIDIA Corporation\NView"/>
+		<localized locale="0x0409">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} software cannot be installed on this computer."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} cannot be installed in safe mode."/>
+			<string name="nViewDisplayName" value="NVIDIA RTX Desktop Manager"/>
+			<string name="nViewShortCutName" value="NVIDIA RTX Desktop Manager"/>
+			<string name="OldnViewShortCutName" value="nView Desktop Manager"/>
+			<string name="OldQuadroViewShortCutName" value="NVIDIA Quadro View"/>
+			<string name="nViewDescription" value="Configure your ${{nViewDisplayName}} settings."/>
+			<string name="KeepNViewElementsMessage" value="Uninstall options"/>
+			<string name="NViewProfilesName" value="Keep profiles"/>
+			<string name="NViewSettingsName" value="Keep settings"/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="resourceDll" value="NVWRSENU.DLL"/>
+		</localized>
+		<localized locale="0x0401">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="لا يمكن تثبيت برنامج ${{title}} على هذا الكمبيوتر."/>
+			<string name="InstallSafeModeBlockedMessage" value="لا يمكن تثبيت ${{title}} في وضع آمن."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="خيارات إلغاء التثبيت"/>
+			<string name="NViewProfilesName" value="حفظ ملفات التعريف"/>
+			<string name="NViewSettingsName" value="حفظ الإعدادات"/>
+			<string name="resourceDll" value="NVWRSAR.DLL"/>
+		</localized>
+		<localized locale="0x0405">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} software nemůže být nainstalován na tento počítač."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} nemůže být nainstalován v nouzovém režimu."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Možnosti odinstalování"/>
+			<string name="NViewProfilesName" value="Uložit profily"/>
+			<string name="NViewSettingsName" value="Uložit nastavení"/>
+			<string name="resourceDll" value="NVWRSCS.DLL"/>
+		</localized>
+		<localized locale="0x0406">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} software kan ikke installeres på denne computer."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} kan ikke installeres i sikker tilstand."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Afinstalleringsindstillinger"/>
+			<string name="NViewProfilesName" value="Behold profiler"/>
+			<string name="NViewSettingsName" value="Behold indstillinger"/>
+			<string name="resourceDll" value="NVWRSDA.DLL"/>
+		</localized>
+		<localized locale="0x0407">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Die ${{title}} Software kann auf diesem Computer nicht installiert werden."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} kann im abgesicherten Modus nicht installiert werden."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Deinstallionsoptionen"/>
+			<string name="NViewProfilesName" value="Profile beibehalten"/>
+			<string name="NViewSettingsName" value="Einstellungen beibehalten"/>
+			<string name="resourceDll" value="NVWRSDE.DLL"/>
+		</localized>
+		<localized locale="0x0408">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Το λογισμικό ${{title}} δεν είναι δυνατό να εγκατασταθεί σε αυτόν τον υπολογιστή."/>
+			<string name="InstallSafeModeBlockedMessage" value="Δεν είναι δυνατή η εγκατάσταση ${{title}} σε ασφαλή λειτουργία."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Απεγκατάσταση επιλογών"/>
+			<string name="NViewProfilesName" value="Διατήρηση προφίλ"/>
+			<string name="NViewSettingsName" value="Διατήρηση ρυθμίσεων"/>
+			<string name="resourceDll" value="NVWRSEL.DLL"/>
+		</localized>
+		<localized locale="0x0809">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} software cannot be installed on this computer."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} cannot be installed in safe mode."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Uninstall options"/>
+			<string name="NViewProfilesName" value="Keep profiles"/>
+			<string name="NViewSettingsName" value="Keep settings"/>
+			<string name="resourceDll" value="NVWRSENG.DLL"/>
+		</localized>
+		<localized locale="0x040a">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="el software ${{title}} no puede instalarse en este equipo."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} no puede instalarse en el modo seguro."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Opciones de desinstalación"/>
+			<string name="NViewProfilesName" value="Conservar perfiles"/>
+			<string name="NViewSettingsName" value="Conservar configuración"/>
+			<string name="resourceDll" value="NVWRSES.DLL"/>
+		</localized>
+		<localized locale="0x080a">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} no puede instalarse en este equipo."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} no puede instalarse en el modo seguro."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Opciones de desinstalación"/>
+			<string name="NViewProfilesName" value="Conservar perfiles"/>
+			<string name="NViewSettingsName" value="Conservar configuración"/>
+			<string name="resourceDll" value="NVWRSES.DLL"/>
+		</localized>
+		<localized locale="0x040b">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Ohjelmistoa ${{title}} ei voi asentaa tähän tietokoneeseen."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} -ohjelmaa ei voi asentaa vikasietotilassa."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Asennuksen poistoasetukset"/>
+			<string name="NViewProfilesName" value="Säilytä profiilit"/>
+			<string name="NViewSettingsName" value="Säilytä asetukset"/>
+			<string name="resourceDll" value="NVWRSFI.DLL"/>
+		</localized>
+		<localized locale="0x040c">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Impossible d’installer le logiciel ${{title}} sur cet ordinateur."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}}ne peut pas être installé en mode sans échec."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Options de désinstallation"/>
+			<string name="NViewProfilesName" value="Conserver les profils"/>
+			<string name="NViewSettingsName" value="Conserver les paramètres"/>
+			<string name="resourceDll" value="NVWRSFR.DLL"/>
+		</localized>
+		<localized locale="0x040d">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} לא ניתנת להתקנה במחשב זה."/>
+			<string name="InstallSafeModeBlockedMessage" value="לא ניתן להתקין את ${{title}} במצב בטוח."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="אפשרויות להסרת ההתקנה"/>
+			<string name="NViewProfilesName" value="שמירת פרופילים"/>
+			<string name="NViewSettingsName" value="שמירת הגדרות"/>
+			<string name="resourceDll" value="NVWRSHE.DLL"/>
+		</localized>
+		<localized locale="0x040e">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="A(z) ${{title}} szoftver nem telepíthető erre a számítógépre."/>
+			<string name="InstallSafeModeBlockedMessage" value="A(z) ${{title}} csökkentett módban nem telepíthető."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Eltávolítási beállítások"/>
+			<string name="NViewProfilesName" value="Profilok megtartása"/>
+			<string name="NViewSettingsName" value="Beállítások megtartása"/>
+			<string name="resourceDll" value="NVWRSHU.DLL"/>
+		</localized>
+		<localized locale="0x0410">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Impossibile installare il software ${{title}} su questo computer."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} non può essere installato in modalità sicura."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Opzioni di disinstallazione"/>
+			<string name="NViewProfilesName" value="Mantieni profili"/>
+			<string name="NViewSettingsName" value="Mantieni impostazioni"/>
+			<string name="resourceDll" value="NVWRSIT.DLL"/>
+		</localized>
+		<localized locale="0x0411">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} ソフトウェアはこのコンピューターにインストールできません。"/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} はセーフ モードでインストールできません。"/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="オプションのアンインストール"/>
+			<string name="NViewProfilesName" value="プロファイルの保持"/>
+			<string name="NViewSettingsName" value="設定の保持"/>
+			<string name="resourceDll" value="NVWRSJA.DLL"/>
+		</localized>
+		<localized locale="0x0412">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} 소프트웨어는 이 컴퓨터에 설치할 수 없습니다."/>
+			<string name="InstallSafeModeBlockedMessage" value="안전 모드에서는 ${{title}}을(를) 설치할 수 없습니다."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="제거 옵션"/>
+			<string name="NViewProfilesName" value="프로파일 유지"/>
+			<string name="NViewSettingsName" value="설정 유지"/>
+			<string name="resourceDll" value="NVWRSKO.DLL"/>
+		</localized>
+		<localized locale="0x0413">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} software kan niet op deze computer worden geïnstalleerd."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} kan niet in veilige modus worden geïnstalleerd."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Opties installatie ongedaan maken"/>
+			<string name="NViewProfilesName" value="Profielen behouden"/>
+			<string name="NViewSettingsName" value="Instellingen behouden"/>
+			<string name="resourceDll" value="NVWRSNL.DLL"/>
+		</localized>
+		<localized locale="0x0414">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Programvaren ${{title}} kan ikke installeres på denne datamaskinen."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} kan ikke installeres i sikkermodus."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Alternativer for avinstallering"/>
+			<string name="NViewProfilesName" value="Behold profiler"/>
+			<string name="NViewSettingsName" value="Behold innstillinger"/>
+			<string name="resourceDll" value="NVWRSNO.DLL"/>
+		</localized>
+		<localized locale="0x0415">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Oprogramowanie ${{title}} nie może zostać zainstalowane na tym komputerze."/>
+			<string name="InstallSafeModeBlockedMessage" value="Nie można zainstalować programu ${{title}} w trybie awaryjnym."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Opcje odinstalowywania"/>
+			<string name="NViewProfilesName" value="Zachowaj profile"/>
+			<string name="NViewSettingsName" value="Zachowaj ustawienia"/>
+			<string name="resourceDll" value="NVWRSPL.DLL"/>
+		</localized>
+		<localized locale="0x0816">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} não pode ser instalado neste computador."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} em modo de segurança."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Opções de desinstalação"/>
+			<string name="NViewProfilesName" value="Manter perfis"/>
+			<string name="NViewSettingsName" value="Manter definições"/>
+			<string name="resourceDll" value="NVWRSPT.DLL"/>
+		</localized>
+		<localized locale="0x0416">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="O software ${{title}} não pode ser instalado neste computador."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} não pode ser desinstalado no modo de segurança."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Opções de desinstalação"/>
+			<string name="NViewProfilesName" value="Manter perfis"/>
+			<string name="NViewSettingsName" value="Manter configurações"/>
+			<string name="resourceDll" value="NVWRSPTB.DLL"/>
+		</localized>
+		<localized locale="0x0419">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Программное обеспечение ${{title}} невозможно установить на этом компьютере."/>
+			<string name="InstallSafeModeBlockedMessage" value="Установить ${{title}} в безопасном режиме невозможно."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Параметры удаления"/>
+			<string name="NViewProfilesName" value="Сохранить профили"/>
+			<string name="NViewSettingsName" value="Сохранить настройки"/>
+			<string name="resourceDll" value="NVWRSRU.DLL"/>
+		</localized>
+		<localized locale="0x041b">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Softvér ${{title}} nie je možné na tomto počítači nainštalovať."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} nie je možné nainštalovať v núdzovom režime."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Možnosti odinštalovania"/>
+			<string name="NViewProfilesName" value="Zachovať profily"/>
+			<string name="NViewSettingsName" value="Zachovať nastavenie"/>
+			<string name="resourceDll" value="NVWRSSK.DLL"/>
+		</localized>
+		<localized locale="0x0422">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="Програмне забезпечення ${{title}} неможливо встановити на цей комп'ютер."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} неможливо встановити в безпечному режимі."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Варіанти видалення"/>
+			<string name="NViewProfilesName" value="Зберегти профілі"/>
+			<string name="NViewSettingsName" value="Зберегти налаштування"/>
+		</localized>
+		<localized locale="0x0424">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} ni mogoče namestiti na tem računalniku."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} ni mogoče namestiti v varnem načinu."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Možnosti za odstranitev"/>
+			<string name="NViewProfilesName" value="Obdrži profile"/>
+			<string name="NViewSettingsName" value="Obdrži nastavitve"/>
+			<string name="resourceDll" value="NVWRSSL.DLL"/>
+		</localized>
+		<localized locale="0x041d">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} program kan inte installeras på denna dator."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} kan inte installeras i säkert läge."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Avinstallationsalternativ"/>
+			<string name="NViewProfilesName" value="Behåll profiler"/>
+			<string name="NViewSettingsName" value="Behåll inställningar"/>
+			<string name="resourceDll" value="NVWRSSV.DLL"/>
+		</localized>
+		<localized locale="0x041e">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="ซอฟต์แวร์ ${{title}} ไม่สามารถติดตั้งได้ในคอมพิวเตอร์เครื่องนี้"/>
+			<string name="InstallSafeModeBlockedMessage" value="ระบบไม่สามารถติดตั้ง ${{title}} ในเซฟโหมดได้"/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="ตัวเลือกการถอนการติดตั้ง"/>
+			<string name="NViewProfilesName" value="เก็บโพรไฟล์ไว้"/>
+			<string name="NViewSettingsName" value="เก็บการตั้งค่าไว้"/>
+			<string name="resourceDll" value="NVWRSTH.DLL"/>
+		</localized>
+		<localized locale="0x041f">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} yazılımı bu bilgisayara kurulamaz."/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}}, güvenli modda kaldırılamaz."/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="Kaldırma seçenekleri"/>
+			<string name="NViewProfilesName" value="Profilleri koru"/>
+			<string name="NViewSettingsName" value="Ayarları koru"/>
+			<string name="resourceDll" value="NVWRSTR.DLL"/>
+		</localized>
+		<localized locale="0x0804">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} 软件无法安装到此计算机。"/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} 无法在安全模式下安装。"/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="卸载选项"/>
+			<string name="NViewProfilesName" value="保留配置文件"/>
+			<string name="NViewSettingsName" value="保留设置"/>
+			<string name="resourceDll" value="NVWRSZHC.DLL"/>
+		</localized>
+		<localized locale="0x0404">
+			<string name="title" value="RTX Desktop Manager"/>
+			<string name="InstallBlockedMessage" value="${{title}} 軟體無法安裝在此電腦上。"/>
+			<string name="InstallSafeModeBlockedMessage" value="${{title}} 無法在安全模式中安裝。"/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+			<string name="KeepNViewElementsMessage" value="解除安裝選項"/>
+			<string name="NViewProfilesName" value="保持設定檔"/>
+			<string name="NViewSettingsName" value="保持設定"/>
+			<string name="resourceDll" value="NVWRSZHT.DLL"/>
+		</localized>
+	</strings>
+	<dependencies>
+		<package type="after" package="Display.Driver"/>
+		<package type="after" package="Display.ControlPanel"/>
+		<package type="requires" package="Display.Driver"/>
+	</dependencies>
+	<description/>
+	<constraints>
+		<reject tests="SAFEMODE" level="silent" text="${{InstallSafeModeBlockedMessage}}"/>
+		<custom name="NViewSupportCheck" level="silent" text="${{InstallBlockedMessage}}"/>
+	</constraints>
+	<dependencies>
+	</dependencies>
+	<extensions>
+		<extension file="NViewExt.DLL"/>
+	</extensions>
+	<properties>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="InstallLocation" value="${{NvidiaProgramFiles}}\nview"/>
+		<string name="ArpIcon" value="&quot;${{NvidiaProgramFiles}}\nview\nwiz.exe&quot;"/>
+		<string name="ArpDisplayName" value="${{arpDisplayName}}"/>
+		<string name="ResourceDll" value="${{resourceDll}}"/>
+		<string name="class0" value="NVIDIA TwinView Window"/>
+		<string name="title0" value="nView Desktop Manager"/>
+		<string name="title1" value="Desktop Manager de nView"/>
+		<string name="title2" value="Desktop Manager nView"/>
+		<string name="title3" value="nView:s Desktop Manager"/>
+		<string name="title4" value="NVIDIA RTX Desktop Manager"/>
+		<bool name="CreateDesktopShortcut" value="false"/>
+		<bool name="UsesMsvcrt2017" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/Display.Nview.exe"/></properties>
+	<manifest>
+		<file name="NView.nvi" sizeKB="43"/><file name="nViewPlugin.dll" sizeKB="183"/><file name="nViewUIStrings.dll" sizeKB="1039"/><file name="NViewExt.dll" sizeKB="1082"/><file name="nvwdmcpl.dll" sizeKB="554"/><file name="nViewMain64.exe" sizeKB="1317"/><file name="nView64.dll" sizeKB="2393"/><file name="nViewH.dll" sizeKB="1767"/><file name="Interop.dll" sizeKB="150"/><file name="nViewMain.exe" sizeKB="1169"/><file name="nvwdmcpl.exe" sizeKB="1924"/><file name="nwiz.exe" sizeKB="1002"/><file name="nvShell.dll" sizeKB="890"/><file name="nView.dll" sizeKB="1903"/><file name="nViewH64.dll" sizeKB="2251"/></manifest>
+	<phases>
+		<setPropertyIf phase="checkNViewDLLExists" boolProperty="nViewDllExists" value="true" when="install">
+			<file name="${{InstallLocation}}\nView.dll" check="exists"/>
+		</setPropertyIf>
+		<exe phase="nViewShutdown" when="install" condition="nViewDllExists" name="${{SystemDirectory}}\rundll32.exe" dir="${{SystemDirectory}}" onError="ignore">
+			<arg value="${{InstallLocation}}\nView.dll"/>
+			<arg value=",nViewUnload" quote="none"/>
+		</exe>
+		<custom phase="decideIfRebootRequired" action="decideIfRebootRequired" condition="nViewDllExists" when="install" onError="ignore"/>
+		<standard phase="unregisterDLLs" onError="ignore" when="install">
+			<unregisterDll target="nvshell.dll"/>
+		</standard>
+		<standard phase="registryCleanup" onError="ignore" when="uninstall">
+			<deleteRegistry keyName="${{NvidiaSoftwareKey}}\Global\NVTweak" valueName="nViewShellIsRegistered"/>
+			<deleteRegistryKey keyName="${{NvidiaSoftwareKey}}\Global\NVTweak"/>
+			<deleteRegistryKey keyName="${{NvidiaSoftwareKey}}\Global"/>
+			<deleteRegistryKey keyName="${{NvidiaSoftwareKey}}"/>
+		</standard>
+		<standard phase="createDirectories">
+			<createDirectory target="${{NvidiaProgramFiles}}"/>
+			<createDirectory target="${{InstallLocation}}"/>
+			<createDirectory target="${{CommonAppData}}\NVIDIA Corporation"/>
+			<createDirectory target="${{CommonAppData}}\NVIDIA Corporation\NView"/>
+		</standard>
+		<custom phase="decideFilesToCopy" action="decideFilesToCopy" when="install"/>
+		<standard phase="copyFiles">
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPAR.chm" source="NVWCPAR.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPCS.chm" source="NVWCPCS.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPDA.chm" source="NVWCPDA.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPDE.chm" source="NVWCPDE.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPEL.chm" source="NVWCPEL.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPENG.chm" source="NVWCPENG.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPENU.chm" source="NVWCPENU.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPES.chm" source="NVWCPES.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPESM.chm" source="NVWCPESM.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPFI.chm" source="NVWCPFI.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPFR.chm" source="NVWCPFR.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPHE.chm" source="NVWCPHE.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPHU.chm" source="NVWCPHU.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPIT.chm" source="NVWCPIT.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPJA.chm" source="NVWCPJA.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPKO.chm" source="NVWCPKO.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPLEN.chm" source="NVWCPLEN.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPNL.chm" source="NVWCPNL.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPNO.chm" source="NVWCPNO.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPPL.chm" source="NVWCPPL.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPPT.chm" source="NVWCPPT.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPPTB.chm" source="NVWCPPTB.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPRU.chm" source="NVWCPRU.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPSK.chm" source="NVWCPSK.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPSL.chm" source="NVWCPSL.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPSV.chm" source="NVWCPSV.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPTH.chm" source="NVWCPTH.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPTR.chm" source="NVWCPTR.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPZHC.chm" source="NVWCPZHC.chm"/>
+			<copyFile target="${{SharedWindowsDirectory}}\help\NVWCPZHT.chm" source="NVWCPZHT.chm"/>
+			<copyFile target="NVWRSAR.dll"/>
+			<copyFile target="NVWRSCS.dll"/>
+			<copyFile target="NVWRSDA.dll"/>
+			<copyFile target="NVWRSDE.dll"/>
+			<copyFile target="NVWRSEL.dll"/>
+			<copyFile target="NVWRSENG.dll"/>
+			<copyFile target="NVWRSENU.dll"/>
+			<copyFile target="NVWRSES.dll"/>
+			<copyFile target="NVWRSESM.dll"/>
+			<copyFile target="NVWRSFI.dll"/>
+			<copyFile target="NVWRSFR.dll"/>
+			<copyFile target="NVWRSHE.dll"/>
+			<copyFile target="NVWRSHU.dll"/>
+			<copyFile target="NVWRSIT.dll"/>
+			<copyFile target="NVWRSJA.dll"/>
+			<copyFile target="NVWRSKO.dll"/>
+			<copyFile target="NVWRSNL.dll"/>
+			<copyFile target="NVWRSNO.dll"/>
+			<copyFile target="NVWRSPL.dll"/>
+			<copyFile target="NVWRSPT.dll"/>
+			<copyFile target="NVWRSPTB.dll"/>
+			<copyFile target="NVWRSRU.dll"/>
+			<copyFile target="NVWRSSK.dll"/>
+			<copyFile target="NVWRSSL.dll"/>
+			<copyFile target="NVWRSSV.dll"/>
+			<copyFile target="NVWRSTH.dll"/>
+			<copyFile target="NVWRSTR.dll"/>
+			<copyFile target="NVWRSZHC.dll"/>
+			<copyFile target="NVWRSZHT.dll"/>
+			<copyFile target="Interop.dll"/>
+			<copyFile target="nViewUIStrings.dll"/>
+			<copyFile target="nvwdmcpl.exe"/>
+			<if filter="minVista">
+				<copyFile target="nvTaskbar.exe"/>
+				<copyFile target="nviewH.dll"/>
+				<copyFile target="nviewMain.exe"/>
+				<if filter="amd64">
+					<copyFile target="nviewH64.dll"/>
+					<copyFile target="nviewMain64.exe"/>
+				</if>
+			</if>
+		</standard>
+		<standard phase="copyNviewFiles" condition="!WillRequireReboot">
+			<copyFile target="nvShell.dll"/>
+			<copyFile target="nvwdmcpl.dll"/>
+			<copyFile target="nwiz.exe"/>
+			<copyFile target="nvAppBar.exe"/>
+			<copyFile target="nView.dll"/>
+			<copyFile target="nvwimg.dll"/>
+			<if filter="amd64">
+				<copyFile target="nView64.dll"/>
+				<copyFile target="nvwimg64.dll"/>
+			</if>
+		</standard>
+		<standard phase="copyNviewFilesWithLazyReboot" condition="WillRequireReboot">
+			<copyFile target="nvShell.dll" inuse="afterRebootLazy"/>
+			<copyFile target="nvwdmcpl.dll" inuse="afterRebootLazy"/>
+			<copyFile target="nwiz.exe" inuse="afterRebootLazy"/>
+			<copyFile target="nvAppBar.exe" inuse="afterRebootLazy"/>
+			<copyFile target="nView.dll" inuse="afterRebootLazy"/>
+			<copyFile target="nvwimg.dll" inuse="afterRebootLazy"/>
+			<if filter="amd64">
+				<copyFile target="nView64.dll" inuse="afterRebootLazy"/>
+				<copyFile target="nvwimg64.dll" inuse="afterRebootLazy"/>
+			</if>
+		</standard>
+		<standard phase="copyDefaultProfiles" when="install">
+			<copyFile target="${{NViewProfileDir}}\default.tvp" source="default.tvp"/>
+			<copyFile target="${{NViewProfileDir}}\advanced.tvp" source="advanced.tvp"/>
+			<copyFile target="${{NViewProfileDir}}\cad.tvp" source="cad.tvp"/>
+			<copyFile target="${{NViewProfileDir}}\dcc.tvp" source="dcc.tvp"/>
+			<copyFile target="${{NViewProfileDir}}\finance.tvp" source="finance.tvp"/>
+		</standard>
+		<standard phase="registerTypeSupported">
+			<addRegistry keyName="HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\nview" valueName="TypesSupported" type="REG_DWORD" value="31"/>
+		</standard>
+		<if filter="amd64">
+			<standard phase="registerForEventingOn64">
+				<addRegistry keyName="HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\nview" valueName="EventMessageFile" type="REG_SZ" value="${{InstallLocation}}\nview64.dll"/>
+			</standard>
+			<else>
+				<standard phase="registerForEventingOn32">
+					<addRegistry keyName="HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\nview" valueName="EventMessageFile" type="REG_SZ" value="${{InstallLocation}}\nview.dll"/>
+				</standard>
+			</else>
+		</if>
+		<standard phase="registerDLLs">
+			<registerDll target="nvshell.dll"/>
+		</standard>
+		<standard phase="clearRegistryEntry" when="install">
+			<deleteRegistry keyName="HKLM\Software\Microsoft\Windows\CurrentVersion\Run" valueName="nwiz"/>
+		</standard>
+		<standard phase="registerControlPanel" when="install">
+			<addRegistry keyName="HKLM\Software\Microsoft\Windows\CurrentVersion\Explorer\ControlPanel\NameSpace\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}" valueName="" type="REG_SZ" value="${{nViewDisplayName}}"/>
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}" valueName="" value="${{nViewDisplayName}}" valueType="REG_SZ"/>
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}" valueName="{305CA226-D286-468E-B848-2B2E8E697B74} 2" value="0,1" valueType="REG_SZ"/>
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}\DefaultIcon" valueName="" value="${{InstallLocation}}\nview.dll" valueType="REG_SZ"/>
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}\Shell\Open\Command" valueName="" value="rundll32.exe &quot;${{InstallLocation}}\nvwdmcpl.dll&quot;, nViewMain" valueType="REG_SZ"/>
+		</standard>
+		<standard phase="setStringsUsingResDll" when="install" condition="ResourceDllExists">
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}" valueName="LocalizedString" value="@${{InstallLocation}}\${{resourceDll}},-5000" valueType="REG_SZ"/>
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}" valueName="InfoTip" value="@${{InstallLocation}}\${{resourceDll}},-5001" valueType="REG_SZ"/>
+		</standard>
+		<standard phase="setStringsUsingStrings" when="install" condition="!ResourceDllExists">
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}" valueName="LocalizedString" value="${{nViewDisplayName}}" valueType="REG_SZ"/>
+			<addRegistry keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}" valueName="InfoTip" value="Configure your ${{nViewDisplayName}} settings." valueType="REG_SZ"/>
+		</standard>
+		<if filter="amd64">
+			<standard phase="registerWithNvMcTrayOn64">
+				<addRegistry keyName="${{NvidiaSoftwareKey}}\Global\MediaCenterTray\nview.dll" valueName="FullPath" value="${{InstallLocation}}\nview64.dll" valueType="REG_SZ"/>
+			</standard>
+			<else>
+				<standard phase="registerWithNvMcTrayOn32">
+					<addRegistry keyName="${{NvidiaSoftwareKey}}\Global\MediaCenterTray\nview.dll" valueName="FullPath" value="${{InstallLocation}}\nview.dll" valueType="REG_SZ"/>
+				</standard>
+			</else>
+		</if>
+		<standard phase="DeleteOldShortcuts" onError="ignore">
+			<deleteShortcutLink location="desktop" linkName="${{OldnViewShortCutName}}"/>
+			<deleteShortcutLink location="startMenu" linkGroup="NVIDIA Corporation" linkName="${{OldnViewShortCutName}}"/>
+			<deleteShortcutLink location="desktop" linkName="${{OldQuadroViewShortCutName}}"/>
+			<deleteShortcutLink location="startMenu" linkGroup="NVIDIA Corporation" linkName="${{OldQuadroViewShortCutName}}"/>
+		</standard>
+		<standard phase="createDesktopShortcut" condition="CreateDesktopShortcut">
+			<createShortcutLink location="desktop" targetPath="${{SystemDirectory}}\rundll32.exe" arguments="&quot;${{InstallLocation}}\nvwdmcpl.dll&quot;, nViewMain" linkName="${{nViewShortCutName}}" startIn="${{InstallLocation}}" runAsAdmin="false" iconPath="${{InstallLocation}}\nViewMain.exe"/>
+		</standard>
+		<standard phase="CreateStartMenuShortcut">
+			<createShortcutGroup location="startMenu" linkGroup="NVIDIA Corporation"/>
+			<createShortcutLink location="startMenu" targetPath="${{SystemDirectory}}\rundll32.exe" arguments="&quot;${{InstallLocation}}\nvwdmcpl.dll&quot;, nViewMain" linkGroup="NVIDIA Corporation" linkName="${{nViewShortCutName}}" startIn="${{InstallLocation}}" runAsAdmin="false" iconPath="${{InstallLocation}}\nViewMain.exe"/>
+		</standard>
+		<standard phase="AddEnvSettings" condition="AddPath">
+			<addPath position="last" target="${{InstallLocation}}"/>
+		</standard>
+		<standard phase="addNViewInstalledKey" when="install">
+			<addRegistry keyName="${{NvidiaSoftwareKey}}\Global\nViewInstalled" valueName="" type="REG_SZ" value=""/>
+			<addRegistry keyName="${{NvidiaPerUserSoftwareKey}}\Global\nViewInstalled" valueName="" type="REG_SZ" value=""/>
+		</standard>
+		<standard phase="deleteCorruptedTaskFiles" when="install" onError="ignore">
+			<deleteFile target="${{TasksPath}}\nWizard${{taskGuid}}"/>
+		</standard>
+		<standard phase="scheduleWizard">
+			<scheduleTask action="create" taskName="nWizard" triggerType="logon" author="NVIDIA Corporation" description="NVIDIA NView Wizard" processPath="${{InstallLocation}}\nwiz.exe" arguments="/installquiet"/>
+		</standard>
+		<custom phase="hideOldARPEntry" action="hideOldARPEntry" when="install"/>
+		<standard phase="addNvAppLaunchHostKey" when="installClose">
+			<addRegistry keyName="HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}_Display.NView" valueName="ProductHostExeCmd " type="REG_SZ" value="${{SystemDirectory}}\rundll32.exe &quot;${{InstallLocation}}\nvwdmcpl.dll&quot;, nViewMain"/>
+		</standard>
+		<standard phase="unregisterControlPanel" onError="ignore" when="uninstall">
+			<deleteRegistryKeyTree keyName="HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\explorer\ControlPanel\NameSpace\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}"/>
+			<deleteRegistryKeyTree keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE4}"/>
+			<deleteRegistryKeyTree keyName="HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\explorer\ControlPanel\NameSpace\{002B9E07-2E10-438F-AF1E-40E6A96F1EE5}"/>
+			<deleteRegistryKeyTree keyName="HKCR\CLSID\{002B9E07-2E10-438F-AF1E-40E6A96F1EE5}"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ApplicationsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ApplicationsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.DesktopsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.DesktopsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.EffectsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.EffectsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.HotkeysPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.HotkeysPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.InfoPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.InfoPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.MousePage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.MousePage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ProfilesPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ProfilesPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ToolsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ToolsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.UIPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.UIPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.WindowsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.WindowsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ZoomPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Nvdmcpl.ZoomPage.1"/>
+			<deleteRegistryKeyTree keyName="HKLM\Software\Classes\Nvdmcpl.ApplicationsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.ApplicationsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.DesktopsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.DesktopsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.EffectsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.EffectsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.HotkeysPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.HotkeysPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.InfoPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.InfoPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.MousePage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.MousePage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.ProfilesPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.ProfilesPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.ToolsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.ToolsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.UIPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.UIPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.WindowsPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.WindowsPage.1"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.ZoomPage"/>
+			<deleteRegistryKeyTree keyName="HKCR\Software\Classes\Nvdmcpl.ZoomPage.1"/>
+			<deleteRegistry keyName="${{NvidiaSoftwareKey}}\Global\MediaCenterTray" valueName="nview.dll"/>
+			<deleteRegistryKeyTree keyName="${{NvidiaSoftwareKey}}\Global\NVTweak\nViewShellIsRegistered"/>
+			<deleteRegistry keyName="HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\nview" valueName="TypesSupported"/>
+			<deleteRegistry keyName="HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\nview" valueName="EventMessageFile"/>
+		</standard>
+		<standard phase="removeNviewSettingsInfo" onError="ignore" when="uninstall" condition="!KeepSettings">
+			<deleteRegistryKeyTree keyName="${{NvidiaSoftwareKey}}\Global\nView"/>
+			<deleteRegistryKeyTree keyName="${{NvidiaPerUserSoftwareKey}}\Global\nView"/>
+			<deleteRegistryKeyTree keyName="${{NvidiaSoftwareKey}}\Global\nViewInstalled"/>
+			<deleteRegistryKeyTree keyName="${{NvidiaPerUserSoftwareKey}}\Global\nViewInstalled"/>
+			<deleteRegistryKey keyName="${{NvidiaSoftwareKey}}\Global"/>
+			<deleteRegistryKey keyName="${{NvidiaSoftwareKey}}"/>
+			<deleteRegistryKey keyName="${{NvidiaPerUserSoftwareKey}}\Global"/>
+			<deleteRegistryKey keyName="${{NvidiaPerUserSoftwareKey}}"/>
+		</standard>
+		<standard phase="removeProfiles" when="uninstall" onError="ignore" condition="!KeepProfiles">
+			<deleteDirectoryTree target="${{SharedWindowsDirectory}}\NView"/>
+			<deleteDirectoryTree target="${{CommonAppData}}\NView_Profiles"/>
+			<deleteDirectoryTree target="${{NViewProfileDir}}"/>
+			<deleteDirectoryTree target="${{RoamingUserAppData}}\NVIDIA Corporation\NView"/>
+		</standard>
+		<custom phase="removeProfilesCustom" action="removeProfilesCustom" onError="ignore" when="uninstall" condition="!KeepProfiles"/>
+		<if filter="NViewNext">
+			<exe phase="nViewShutdown" when="uninstall" condition="nViewDllExists" name="${{SystemDirectory}}\rundll32.exe" dir="${{SystemDirectory}}" onError="ignore">
+				<arg value="${{InstallLocation}}\nView.dll"/>
+				<arg value=",nViewUnload" quote="none"/>
+			</exe>
+			<setPropertyIf phase="checkNViewDLLExists" boolProperty="nViewDllExists" value="true" when="uninstall">
+				<file name="${{InstallLocation}}\nView.dll" check="exists"/>
+			</setPropertyIf>
+			<else>
+				<custom phase="closeWindowsCustom" action="closeWindowsCustom" onError="ignore" when="uninstall"/>
+				<custom phase="notifyUninstallation" action="notifyUninstallation" onError="ignore" when="uninstall" condition="!KeepSettings"/>
+			</else>
+		</if>
+	</phases>
+	<forms>
+		<form name="PreUninstallNView" base="!PreUninstallTemplate" locale="0x0409">
+			<control name="headText" style="header" x="15pt" y="63pt" width="408pt" height="90pt" text="${{KeepNViewElementsMessage}}"/>
+			<control name="keepNViewProfiles" style="checkbox" x="15pt" y="110pt" text="${{NViewProfilesName}}" property="!KeepNViewProfiles" initSelect="true"/>
+			<control name="keepNViewSettings" style="checkbox" x="15pt" y="125pt" text="${{NViewSettingsName}}" property="!KeepNViewSettings" initSelect="true"/>
+		</form>
+	</forms>
+</nvi>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="cusparse_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:42:16" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="190">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="cusparseRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="cusparseInstallDir" value="${{cusparseRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="CUSPARSE Runtime"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDARuntimes_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="CUSPARSE" ordering="CUDA|Runtime|Libraries" accessibility="selectable"/>
+	</customInstallTree>
+	<constraints>
+	</constraints>
+	<properties>
+		<string name="InstallLocation" value="${{cusparseInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/cusparse.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Runtime files" uninstallText="Deleting CUDA Runtime files">
+			<copyFile target="bin\cusparse64_12.dll"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="bin\cusparse64_12.dll" sizeKB="466372"/><file name="cusparse.nvi" sizeKB="2"/></manifest>
+</nvi>

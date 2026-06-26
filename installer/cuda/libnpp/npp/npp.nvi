@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="npp_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:43:34" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="157">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="nppRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="nppInstallDir" value="${{nppRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="NPP Runtime"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDARuntimes_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="NPP" ordering="CUDA|Runtime|Libraries" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{nppInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/npp.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Runtime files" uninstallText="Deleting CUDA Runtime files">
+			<copyFile target="bin\nppc64_12.dll"/>
+			<copyFile target="bin\nppial64_12.dll"/>
+			<copyFile target="bin\nppicc64_12.dll"/>
+			<copyFile target="bin\nppidei64_12.dll"/>
+			<copyFile target="bin\nppif64_12.dll"/>
+			<copyFile target="bin\nppig64_12.dll"/>
+			<copyFile target="bin\nppim64_12.dll"/>
+			<copyFile target="bin\nppist64_12.dll"/>
+			<copyFile target="bin\nppisu64_12.dll"/>
+			<copyFile target="bin\nppitc64_12.dll"/>
+			<copyFile target="bin\npps64_12.dll"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="bin\nppc64_12.dll" sizeKB="289"/><file name="bin\nppial64_12.dll" sizeKB="28155"/><file name="bin\nppicc64_12.dll" sizeKB="9563"/><file name="bin\nppidei64_12.dll" sizeKB="14751"/><file name="bin\nppif64_12.dll" sizeKB="157556"/><file name="bin\nppig64_12.dll" sizeKB="66685"/><file name="bin\nppim64_12.dll" sizeKB="14098"/><file name="bin\nppist64_12.dll" sizeKB="67834"/><file name="bin\nppisu64_12.dll" sizeKB="383"/><file name="bin\nppitc64_12.dll" sizeKB="6537"/><file name="bin\npps64_12.dll" sizeKB="20671"/><file name="npp.nvi" sizeKB="2"/></manifest>
+</nvi>

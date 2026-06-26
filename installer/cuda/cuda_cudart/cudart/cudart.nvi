@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="cudart_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:41:40" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="2">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="cudartRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="cudartInstallDir" value="${{cudartRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="CUDART Runtime"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDARuntimes_${{version}}"/>
+		<package type="requires" package="thrust_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="CUDART" ordering="CUDA|Runtime|Libraries" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{cudartInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/cudart.exe"/></properties>
+	<phases>
+		<standard phase="copyFiles" installText="Copying CUDA Runtime files" uninstallText="Deleting CUDA Runtime files">
+			<copyFile target="bin\cudart64_12.dll"/>
+			<copyFile target="include\builtin_types.h"/>
+			<copyFile target="include\channel_descriptor.h"/>
+			<copyFile target="include\common_functions.h"/>
+			<copyFile target="include\cooperative_groups\details\async.h"/>
+			<copyFile target="include\cooperative_groups\details\coalesced_reduce.h"/>
+			<copyFile target="include\cooperative_groups\details\coalesced_scan.h"/>
+			<copyFile target="include\cooperative_groups\details\driver_abi.h"/>
+			<copyFile target="include\cooperative_groups\details\functional.h"/>
+			<copyFile target="include\cooperative_groups\details\helpers.h"/>
+			<copyFile target="include\cooperative_groups\details\info.h"/>
+			<copyFile target="include\cooperative_groups\details\invoke.h"/>
+			<copyFile target="include\cooperative_groups\details\memory.h"/>
+			<copyFile target="include\cooperative_groups\details\partitioning.h"/>
+			<copyFile target="include\cooperative_groups\details\reduce.h"/>
+			<copyFile target="include\cooperative_groups\details\scan.h"/>
+			<copyFile target="include\cooperative_groups\details\sync.h"/>
+			<copyFile target="include\cooperative_groups\memcpy_async.h"/>
+			<copyFile target="include\cooperative_groups\reduce.h"/>
+			<copyFile target="include\cooperative_groups\scan.h"/>
+			<copyFile target="include\cooperative_groups.h"/>
+			<copyFile target="include\cuComplex.h"/>
+			<copyFile target="include\cuda.h"/>
+			<copyFile target="include\cudaD3D10.h"/>
+			<copyFile target="include\cudaD3D10Typedefs.h"/>
+			<copyFile target="include\cudaD3D11.h"/>
+			<copyFile target="include\cudaD3D11Typedefs.h"/>
+			<copyFile target="include\cudaD3D9.h"/>
+			<copyFile target="include\cudaD3D9Typedefs.h"/>
+			<copyFile target="include\cudaGL.h"/>
+			<copyFile target="include\cudaGLTypedefs.h"/>
+			<copyFile target="include\cudaProfilerTypedefs.h"/>
+			<copyFile target="include\cudart_platform.h"/>
+			<copyFile target="include\cudaTypedefs.h"/>
+			<copyFile target="include\cuda_awbarrier.h"/>
+			<copyFile target="include\cuda_awbarrier_helpers.h"/>
+			<copyFile target="include\cuda_awbarrier_primitives.h"/>
+			<copyFile target="include\cuda_bf16.h"/>
+			<copyFile target="include\cuda_bf16.hpp"/>
+			<copyFile target="include\cuda_d3d10_interop.h"/>
+			<copyFile target="include\cuda_d3d11_interop.h"/>
+			<copyFile target="include\cuda_d3d9_interop.h"/>
+			<copyFile target="include\cuda_device_runtime_api.h"/>
+			<copyFile target="include\cuda_egl_interop.h"/>
+			<copyFile target="include\cuda_fp16.h"/>
+			<copyFile target="include\cuda_fp16.hpp"/>
+			<copyFile target="include\cuda_fp4.h"/>
+			<copyFile target="include\cuda_fp4.hpp"/>
+			<copyFile target="include\cuda_fp6.h"/>
+			<copyFile target="include\cuda_fp6.hpp"/>
+			<copyFile target="include\cuda_fp8.h"/>
+			<copyFile target="include\cuda_fp8.hpp"/>
+			<copyFile target="include\cuda_gl_interop.h"/>
+			<copyFile target="include\cuda_occupancy.h"/>
+			<copyFile target="include\cuda_pipeline.h"/>
+			<copyFile target="include\cuda_pipeline_helpers.h"/>
+			<copyFile target="include\cuda_pipeline_primitives.h"/>
+			<copyFile target="include\cuda_runtime.h"/>
+			<copyFile target="include\cuda_runtime_api.h"/>
+			<copyFile target="include\cuda_surface_types.h"/>
+			<copyFile target="include\cuda_texture_types.h"/>
+			<copyFile target="include\device_atomic_functions.h"/>
+			<copyFile target="include\device_atomic_functions.hpp"/>
+			<copyFile target="include\device_double_functions.h"/>
+			<copyFile target="include\device_functions.h"/>
+			<copyFile target="include\device_launch_parameters.h"/>
+			<copyFile target="include\device_types.h"/>
+			<copyFile target="include\driver_functions.h"/>
+			<copyFile target="include\driver_types.h"/>
+			<copyFile target="include\host_config.h"/>
+			<copyFile target="include\host_defines.h"/>
+			<copyFile target="include\library_types.h"/>
+			<copyFile target="include\math_constants.h"/>
+			<copyFile target="include\math_functions.h"/>
+			<copyFile target="include\mma.h"/>
+			<copyFile target="include\nvfunctional"/>
+			<copyFile target="include\sm_20_atomic_functions.h"/>
+			<copyFile target="include\sm_20_atomic_functions.hpp"/>
+			<copyFile target="include\sm_20_intrinsics.h"/>
+			<copyFile target="include\sm_20_intrinsics.hpp"/>
+			<copyFile target="include\sm_30_intrinsics.h"/>
+			<copyFile target="include\sm_30_intrinsics.hpp"/>
+			<copyFile target="include\sm_32_atomic_functions.h"/>
+			<copyFile target="include\sm_32_atomic_functions.hpp"/>
+			<copyFile target="include\sm_32_intrinsics.h"/>
+			<copyFile target="include\sm_32_intrinsics.hpp"/>
+			<copyFile target="include\sm_35_atomic_functions.h"/>
+			<copyFile target="include\sm_35_intrinsics.h"/>
+			<copyFile target="include\sm_60_atomic_functions.h"/>
+			<copyFile target="include\sm_60_atomic_functions.hpp"/>
+			<copyFile target="include\sm_61_intrinsics.h"/>
+			<copyFile target="include\sm_61_intrinsics.hpp"/>
+			<copyFile target="include\surface_functions.h"/>
+			<copyFile target="include\surface_indirect_functions.h"/>
+			<copyFile target="include\surface_types.h"/>
+			<copyFile target="include\texture_fetch_functions.h"/>
+			<copyFile target="include\texture_indirect_functions.h"/>
+			<copyFile target="include\texture_types.h"/>
+			<copyFile target="include\vector_functions.h"/>
+			<copyFile target="include\vector_functions.hpp"/>
+			<copyFile target="include\vector_types.h"/>
+			<copyFile target="lib\x64\cuda.lib"/>
+			<copyFile target="lib\x64\cudadevrt.lib"/>
+			<copyFile target="lib\x64\cudart.lib"/>
+			<copyFile target="lib\x64\cudart_static.lib"/>
+			<copyFile target="LICENSE"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="bin\cudart64_12.dll" sizeKB="570"/><file name="cudart.nvi" sizeKB="13"/><file name="include\builtin_types.h" sizeKB="3"/><file name="include\channel_descriptor.h" sizeKB="22"/><file name="include\common_functions.h" sizeKB="3"/><file name="include\cooperative_groups\details\async.h" sizeKB="19"/><file name="include\cooperative_groups\details\coalesced_reduce.h" sizeKB="4"/><file name="include\cooperative_groups\details\coalesced_scan.h" sizeKB="7"/><file name="include\cooperative_groups\details\driver_abi.h" sizeKB="4"/><file name="include\cooperative_groups\details\functional.h" sizeKB="9"/><file name="include\cooperative_groups\details\helpers.h" sizeKB="27"/><file name="include\cooperative_groups\details\info.h" sizeKB="13"/><file name="include\cooperative_groups\details\invoke.h" sizeKB="9"/><file name="include\cooperative_groups\details\memory.h" sizeKB="6"/><file name="include\cooperative_groups\details\partitioning.h" sizeKB="7"/><file name="include\cooperative_groups\details\reduce.h" sizeKB="23"/><file name="include\cooperative_groups\details\scan.h" sizeKB="17"/><file name="include\cooperative_groups\details\sync.h" sizeKB="11"/><file name="include\cooperative_groups\memcpy_async.h" sizeKB="3"/><file name="include\cooperative_groups\reduce.h" sizeKB="3"/><file name="include\cooperative_groups\scan.h" sizeKB="3"/><file name="include\cooperative_groups.h" sizeKB="61"/><file name="include\cuComplex.h" sizeKB="12"/><file name="include\cuda.h" sizeKB="1141"/><file name="include\cudaD3D10.h" sizeKB="31"/><file name="include\cudaD3D10Typedefs.h" sizeKB="7"/><file name="include\cudaD3D11.h" sizeKB="14"/><file name="include\cudaD3D11Typedefs.h" sizeKB="4"/><file name="include\cudaD3D9.h" sizeKB="35"/><file name="include\cudaD3D9Typedefs.h" sizeKB="8"/><file name="include\cudaGL.h" sizeKB="22"/><file name="include\cudaGLTypedefs.h" sizeKB="7"/><file name="include\cudaProfilerTypedefs.h" sizeKB="3"/><file name="include\cudart_platform.h" sizeKB="3"/><file name="include\cudaTypedefs.h" sizeKB="114"/><file name="include\cuda_awbarrier.h" sizeKB="9"/><file name="include\cuda_awbarrier_helpers.h" sizeKB="13"/><file name="include\cuda_awbarrier_primitives.h" sizeKB="5"/><file name="include\cuda_bf16.h" sizeKB="205"/><file name="include\cuda_bf16.hpp" sizeKB="137"/><file name="include\cuda_d3d10_interop.h" sizeKB="29"/><file name="include\cuda_d3d11_interop.h" sizeKB="12"/><file name="include\cuda_d3d9_interop.h" sizeKB="31"/><file name="include\cuda_device_runtime_api.h" sizeKB="47"/><file name="include\cuda_egl_interop.h" sizeKB="37"/><file name="include\cuda_fp16.h" sizeKB="207"/><file name="include\cuda_fp16.hpp" sizeKB="122"/><file name="include\cuda_fp4.h" sizeKB="14"/><file name="include\cuda_fp4.hpp" sizeKB="35"/><file name="include\cuda_fp6.h" sizeKB="14"/><file name="include\cuda_fp6.hpp" sizeKB="56"/><file name="include\cuda_fp8.h" sizeKB="19"/><file name="include\cuda_fp8.hpp" sizeKB="97"/><file name="include\cuda_gl_interop.h" sizeKB="19"/><file name="include\cuda_occupancy.h" sizeKB="72"/><file name="include\cuda_pipeline.h" sizeKB="8"/><file name="include\cuda_pipeline_helpers.h" sizeKB="14"/><file name="include\cuda_pipeline_primitives.h" sizeKB="9"/><file name="include\cuda_runtime.h" sizeKB="99"/><file name="include\cuda_runtime_api.h" sizeKB="655"/><file name="include\cuda_surface_types.h" sizeKB="4"/><file name="include\cuda_texture_types.h" sizeKB="4"/><file name="include\device_atomic_functions.h" sizeKB="9"/><file name="include\device_atomic_functions.hpp" sizeKB="10"/><file name="include\device_double_functions.h" sizeKB="3"/><file name="include\device_functions.h" sizeKB="3"/><file name="include\device_launch_parameters.h" sizeKB="4"/><file name="include\device_types.h" sizeKB="4"/><file name="include\driver_functions.h" sizeKB="5"/><file name="include\driver_types.h" sizeKB="202"/><file name="include\host_config.h" sizeKB="3"/><file name="include\host_defines.h" sizeKB="3"/><file name="include\library_types.h" sizeKB="5"/><file name="include\math_constants.h" sizeKB="8"/><file name="include\math_functions.h" sizeKB="3"/><file name="include\mma.h" sizeKB="3"/><file name="include\nvfunctional" sizeKB="3"/><file name="include\sm_20_atomic_functions.h" sizeKB="4"/><file name="include\sm_20_atomic_functions.hpp" sizeKB="4"/><file name="include\sm_20_intrinsics.h" sizeKB="57"/><file name="include\sm_20_intrinsics.hpp" sizeKB="8"/><file name="include\sm_30_intrinsics.h" sizeKB="17"/><file name="include\sm_30_intrinsics.hpp" sizeKB="25"/><file name="include\sm_32_atomic_functions.h" sizeKB="6"/><file name="include\sm_32_atomic_functions.hpp" sizeKB="7"/><file name="include\sm_32_intrinsics.h" sizeKB="33"/><file name="include\sm_32_intrinsics.hpp" sizeKB="70"/><file name="include\sm_35_atomic_functions.h" sizeKB="3"/><file name="include\sm_35_intrinsics.h" sizeKB="3"/><file name="include\sm_60_atomic_functions.h" sizeKB="13"/><file name="include\sm_60_atomic_functions.hpp" sizeKB="23"/><file name="include\sm_61_intrinsics.h" sizeKB="11"/><file name="include\sm_61_intrinsics.hpp" sizeKB="7"/><file name="include\surface_functions.h" sizeKB="7"/><file name="include\surface_indirect_functions.h" sizeKB="11"/><file name="include\surface_types.h" sizeKB="5"/><file name="include\texture_fetch_functions.h" sizeKB="12"/><file name="include\texture_indirect_functions.h" sizeKB="21"/><file name="include\texture_types.h" sizeKB="6"/><file name="include\vector_functions.h" sizeKB="8"/><file name="include\vector_functions.hpp" sizeKB="10"/><file name="include\vector_types.h" sizeKB="14"/><file name="lib\x64\cuda.lib" sizeKB="158"/><file name="lib\x64\cudadevrt.lib" sizeKB="3048"/><file name="lib\x64\cudart.lib" sizeKB="115"/><file name="lib\x64\cudart_static.lib" sizeKB="2836"/><file name="LICENSE" sizeKB="62"/></manifest>
+</nvi>

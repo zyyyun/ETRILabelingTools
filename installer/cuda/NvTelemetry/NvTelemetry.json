@@ -1,0 +1,16 @@
+{
+  "workingDirectory": "<ProgramData>/NVIDIA Corporation/NvTelemetry",
+  "clientVariantType": "Release",
+  "logFilePath": "<ProgramData>/NVIDIA Corporation/NvTelemetry/NvTelemetry.log",
+  "logSizeLimit": 25000000,
+  "productName": "NvApp",
+  "productVersion": "11.0.3.232",
+  "openTracingConfig": {
+    "accessToken": "QygpMWHOR0FCkA5L6J6/UMmCmw9De40UxhFq3k/6cTSt2KGVHASg8niSCTASbRrte/NuoRijNy6WM5S6y5U=",
+    "urlHost": "https://prod.otel.kaizen.nvidia.com/api/v2/reports",
+    "componentName": "NvTelemetry"
+  },
+  "eventsUrl": "!localized",
+  "feedbacksUrl": "!localized",
+  "feedbackAttachmentsUrl": "!localized"
+}

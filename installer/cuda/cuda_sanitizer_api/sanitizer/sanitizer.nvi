@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="sanitizer_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" hidden="ARP" timestamp="2025-05-31T14:41:58" disposition="default" installerMin="2.1002.191.1621" allowsCustomPath="true" bare="true" preserveCache="false" diskSpaceForBare="7">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="toolsLibRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="toolsLibInstallDir" value="${{toolsLibRootDir}}\v${{version}}"/>
+		<localized locale="0x0409">
+			<string name="title" value="Compute Sanitizer"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDAToolkit_${{version}}"/>
+		<package type="requires" package="CUDADevelopment_${{version}}"/>
+	</dependencies>
+	<customInstallTree>
+		<treeNode text="Compute Sanitizer" ordering="CUDA|Development|Tools" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<string name="InstallLocation" value="${{toolsLibInstallDir}}"/>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/sanitizer.exe"/></properties>
+	<phases>
+		<standard phase="deleteExtras" when="uninstall">
+			<deleteDirectory target="${{toolsLibInstallDir}}\extras"/>
+		</standard>
+		<standard phase="copyFiles" installText="Copying CUDA Runtime files" uninstallText="Deleting CUDA Runtime files">
+			<copyFile target="bin\compute-sanitizer.bat"/>
+			<copyFile target="compute-sanitizer\compute-sanitizer.exe"/>
+			<copyFile target="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___b_a_r_r_i_e_r___a_p_i.html"/>
+			<copyFile target="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___c_a_l_l_b_a_c_k___a_p_i.html"/>
+			<copyFile target="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___m_e_m_o_r_y___a_p_i.html"/>
+			<copyFile target="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___p_a_t_c_h_i_n_g___a_p_i.html"/>
+			<copyFile target="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___r_e_s_u_l_t___a_p_i.html"/>
+			<copyFile target="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___s_t_r_e_a_m___a_p_i.html"/>
+			<copyFile target="compute-sanitizer\docs\api\modules.html"/>
+			<copyFile target="compute-sanitizer\docs\api\structs.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___batch_memop_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___callback_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___event_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___external_memory_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___graph_exec_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___graph_launch_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___graph_node_launch_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___launch_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___memcpy_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___memset_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_array_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_context_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_functions_lazy_loaded_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_memory_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_mempool_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_module_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_stream_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___resource_virtual_range.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___synchronize_data.html"/>
+			<copyFile target="compute-sanitizer\docs\api\struct_sanitizer___uvm_data.html"/>
+			<copyFile target="compute-sanitizer\docs\ComputeSanitizer\index.html"/>
+			<copyFile target="compute-sanitizer\docs\content\notices.html"/>
+			<copyFile target="compute-sanitizer\docs\CopyrightAndLicenses\index.html"/>
+			<copyFile target="compute-sanitizer\docs\genindex.html"/>
+			<copyFile target="compute-sanitizer\docs\index.html"/>
+			<copyFile target="compute-sanitizer\docs\objects.inv"/>
+			<copyFile target="compute-sanitizer\docs\project.json"/>
+			<copyFile target="compute-sanitizer\docs\ReleaseNotes\index.html"/>
+			<copyFile target="compute-sanitizer\docs\SanitizerApi\table-of-contents.html"/>
+			<copyFile target="compute-sanitizer\docs\SanitizerApiGuide\index.html"/>
+			<copyFile target="compute-sanitizer\docs\SanitizerNvtxGuide\index.html"/>
+			<copyFile target="compute-sanitizer\docs\search.html"/>
+			<copyFile target="compute-sanitizer\docs\searchindex.js"/>
+			<copyFile target="compute-sanitizer\docs\VERSION"/>
+			<copyFile target="compute-sanitizer\docs\_images\no-padding.png"/>
+			<copyFile target="compute-sanitizer\docs\_images\padding.png"/>
+			<copyFile target="compute-sanitizer\docs\_images\use-after-free.png"/>
+			<copyFile target="compute-sanitizer\docs\_images\use-before-alloc.png"/>
+			<copyFile target="compute-sanitizer\docs\_sphinx_design_static\design-style.b7bb847fb20b106c3d81b95245e65545.min.css"/>
+			<copyFile target="compute-sanitizer\docs\_sphinx_design_static\design-tabs.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\api-styles-dark.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\api-styles.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\basic.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\badge_only.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.eot"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.svg"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.ttf"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.woff"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.woff2"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-bold-italic.woff"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-bold-italic.woff2"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-bold.woff"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-bold.woff2"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-normal-italic.woff"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-normal-italic.woff2"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-normal.woff"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\lato-normal.woff2"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Bold.woff"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Bold.woff2"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Regular.woff"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Regular.woff2"/>
+			<copyFile target="compute-sanitizer\docs\_static\css\theme.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\design-style.b7bb847fb20b106c3d81b95245e65545.min.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\design-tabs.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\doctools.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\documentation_options.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\favicon.ico"/>
+			<copyFile target="compute-sanitizer\docs\_static\file.png"/>
+			<copyFile target="compute-sanitizer\docs\_static\jquery-3.5.1.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\jquery.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\js\badge_only.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\js\html5shiv-printshiv.min.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\js\html5shiv.min.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\js\theme.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\language_data.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\Logo_and_CUDA.png"/>
+			<copyFile target="compute-sanitizer\docs\_static\lunr.min.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\lunr_search.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\main_ov_logo_rect.png"/>
+			<copyFile target="compute-sanitizer\docs\_static\main_ov_logo_square.png"/>
+			<copyFile target="compute-sanitizer\docs\_static\mermaid-init.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\minus.png"/>
+			<copyFile target="compute-sanitizer\docs\_static\NVIDIA-LogoBlack.svg"/>
+			<copyFile target="compute-sanitizer\docs\_static\NVIDIA-LogoWhite.svg"/>
+			<copyFile target="compute-sanitizer\docs\_static\omni-style-dark.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\omni-style.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\plus.png"/>
+			<copyFile target="compute-sanitizer\docs\_static\pygments.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\searchtools.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\social-media.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\theme-setter.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\theme-switcher-general.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\twemoji.css"/>
+			<copyFile target="compute-sanitizer\docs\_static\twemoji.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\underscore-1.13.1.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\underscore.js"/>
+			<copyFile target="compute-sanitizer\docs\_static\version.js"/>
+			<copyFile target="compute-sanitizer\EnableDebuggerInterface.bat"/>
+			<copyFile target="compute-sanitizer\include\generated_cudaD3D10_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cudaD3D11_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cudaD3D9_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cudaGL_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cuda_d3d10_interop_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cuda_d3d11_interop_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cuda_d3d9_interop_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cuda_gl_interop_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cuda_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cuda_profiler_api_meta.h"/>
+			<copyFile target="compute-sanitizer\include\generated_cuda_runtime_api_meta.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_barrier.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_callbacks.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_driver_cbid.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_memory.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_patching.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_result.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_runtime_cbid.h"/>
+			<copyFile target="compute-sanitizer\include\sanitizer_stream.h"/>
+			<copyFile target="compute-sanitizer\InterceptorInjectionTarget.dll"/>
+			<copyFile target="compute-sanitizer\sanitizer-collection.dll"/>
+			<copyFile target="compute-sanitizer\sanitizer-public.dll"/>
+			<copyFile target="compute-sanitizer\sanitizer-public.lib"/>
+			<copyFile target="compute-sanitizer\TreeLauncherTargetInjection.dll"/>
+			<copyFile target="compute-sanitizer\x86\InterceptorInjectionTarget.dll"/>
+			<copyFile target="compute-sanitizer\x86\TreeLauncherTargetInjection.dll"/>
+		</standard>
+	</phases>
+	<manifest>
+		<file name="bin\compute-sanitizer.bat" sizeKB="0"/><file name="compute-sanitizer\compute-sanitizer.exe" sizeKB="4289"/><file name="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___b_a_r_r_i_e_r___a_p_i.html" sizeKB="11"/><file name="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___c_a_l_l_b_a_c_k___a_p_i.html" sizeKB="180"/><file name="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___m_e_m_o_r_y___a_p_i.html" sizeKB="26"/><file name="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___p_a_t_c_h_i_n_g___a_p_i.html" sizeKB="229"/><file name="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___r_e_s_u_l_t___a_p_i.html" sizeKB="27"/><file name="compute-sanitizer\docs\api\group___s_a_n_i_t_i_z_e_r___s_t_r_e_a_m___a_p_i.html" sizeKB="17"/><file name="compute-sanitizer\docs\api\modules.html" sizeKB="9"/><file name="compute-sanitizer\docs\api\structs.html" sizeKB="14"/><file name="compute-sanitizer\docs\api\struct_sanitizer___batch_memop_data.html" sizeKB="16"/><file name="compute-sanitizer\docs\api\struct_sanitizer___callback_data.html" sizeKB="18"/><file name="compute-sanitizer\docs\api\struct_sanitizer___event_data.html" sizeKB="14"/><file name="compute-sanitizer\docs\api\struct_sanitizer___external_memory_data.html" sizeKB="15"/><file name="compute-sanitizer\docs\api\struct_sanitizer___graph_exec_data.html" sizeKB="16"/><file name="compute-sanitizer\docs\api\struct_sanitizer___graph_launch_data.html" sizeKB="15"/><file name="compute-sanitizer\docs\api\struct_sanitizer___graph_node_launch_data.html" sizeKB="21"/><file name="compute-sanitizer\docs\api\struct_sanitizer___launch_data.html" sizeKB="27"/><file name="compute-sanitizer\docs\api\struct_sanitizer___memcpy_data.html" sizeKB="25"/><file name="compute-sanitizer\docs\api\struct_sanitizer___memset_data.html" sizeKB="18"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_array_data.html" sizeKB="15"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_context_data.html" sizeKB="13"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_functions_lazy_loaded_data.html" sizeKB="15"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_memory_data.html" sizeKB="21"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_mempool_data.html" sizeKB="14"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_module_data.html" sizeKB="15"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_stream_data.html" sizeKB="14"/><file name="compute-sanitizer\docs\api\struct_sanitizer___resource_virtual_range.html" sizeKB="13"/><file name="compute-sanitizer\docs\api\struct_sanitizer___synchronize_data.html" sizeKB="14"/><file name="compute-sanitizer\docs\api\struct_sanitizer___uvm_data.html" sizeKB="15"/><file name="compute-sanitizer\docs\ComputeSanitizer\index.html" sizeKB="173"/><file name="compute-sanitizer\docs\content\notices.html" sizeKB="7"/><file name="compute-sanitizer\docs\CopyrightAndLicenses\index.html" sizeKB="57"/><file name="compute-sanitizer\docs\genindex.html" sizeKB="102"/><file name="compute-sanitizer\docs\index.html" sizeKB="8"/><file name="compute-sanitizer\docs\objects.inv" sizeKB="22"/><file name="compute-sanitizer\docs\project.json" sizeKB="0"/><file name="compute-sanitizer\docs\ReleaseNotes\index.html" sizeKB="52"/><file name="compute-sanitizer\docs\SanitizerApi\table-of-contents.html" sizeKB="9"/><file name="compute-sanitizer\docs\SanitizerApiGuide\index.html" sizeKB="45"/><file name="compute-sanitizer\docs\SanitizerNvtxGuide\index.html" sizeKB="66"/><file name="compute-sanitizer\docs\search.html" sizeKB="6"/><file name="compute-sanitizer\docs\searchindex.js" sizeKB="793"/><file name="compute-sanitizer\docs\VERSION" sizeKB="0"/><file name="compute-sanitizer\docs\_images\no-padding.png" sizeKB="4"/><file name="compute-sanitizer\docs\_images\padding.png" sizeKB="4"/><file name="compute-sanitizer\docs\_images\use-after-free.png" sizeKB="72"/><file name="compute-sanitizer\docs\_images\use-before-alloc.png" sizeKB="71"/><file name="compute-sanitizer\docs\_sphinx_design_static\design-style.b7bb847fb20b106c3d81b95245e65545.min.css" sizeKB="47"/><file name="compute-sanitizer\docs\_sphinx_design_static\design-tabs.js" sizeKB="1"/><file name="compute-sanitizer\docs\_static\api-styles-dark.css" sizeKB="1"/><file name="compute-sanitizer\docs\_static\api-styles.css" sizeKB="2"/><file name="compute-sanitizer\docs\_static\basic.css" sizeKB="15"/><file name="compute-sanitizer\docs\_static\css\badge_only.css" sizeKB="3"/><file name="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.eot" sizeKB="162"/><file name="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.svg" sizeKB="434"/><file name="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.ttf" sizeKB="162"/><file name="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.woff" sizeKB="96"/><file name="compute-sanitizer\docs\_static\css\fonts\fontawesome-webfont.woff2" sizeKB="75"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-bold-italic.woff" sizeKB="316"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-bold-italic.woff2" sizeKB="189"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-bold.woff" sizeKB="302"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-bold.woff2" sizeKB="181"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-normal-italic.woff" sizeKB="321"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-normal-italic.woff2" sizeKB="191"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-normal.woff" sizeKB="302"/><file name="compute-sanitizer\docs\_static\css\fonts\lato-normal.woff2" sizeKB="178"/><file name="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Bold.woff" sizeKB="86"/><file name="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Bold.woff2" sizeKB="66"/><file name="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Regular.woff" sizeKB="84"/><file name="compute-sanitizer\docs\_static\css\fonts\Roboto-Slab-Regular.woff2" sizeKB="65"/><file name="compute-sanitizer\docs\_static\css\theme.css" sizeKB="127"/><file name="compute-sanitizer\docs\_static\design-style.b7bb847fb20b106c3d81b95245e65545.min.css" sizeKB="47"/><file name="compute-sanitizer\docs\_static\design-tabs.js" sizeKB="1"/><file name="compute-sanitizer\docs\_static\doctools.js" sizeKB="11"/><file name="compute-sanitizer\docs\_static\documentation_options.js" sizeKB="0"/><file name="compute-sanitizer\docs\_static\favicon.ico" sizeKB="25"/><file name="compute-sanitizer\docs\_static\file.png" sizeKB="0"/><file name="compute-sanitizer\docs\_static\jquery-3.5.1.js" sizeKB="281"/><file name="compute-sanitizer\docs\_static\jquery.js" sizeKB="87"/><file name="compute-sanitizer\docs\_static\js\badge_only.js" sizeKB="1"/><file name="compute-sanitizer\docs\_static\js\html5shiv-printshiv.min.js" sizeKB="4"/><file name="compute-sanitizer\docs\_static\js\html5shiv.min.js" sizeKB="3"/><file name="compute-sanitizer\docs\_static\js\theme.js" sizeKB="5"/><file name="compute-sanitizer\docs\_static\language_data.js" sizeKB="0"/><file name="compute-sanitizer\docs\_static\Logo_and_CUDA.png" sizeKB="126"/><file name="compute-sanitizer\docs\_static\lunr.min.js" sizeKB="29"/><file name="compute-sanitizer\docs\_static\lunr_search.js" sizeKB="6"/><file name="compute-sanitizer\docs\_static\main_ov_logo_rect.png" sizeKB="56"/><file name="compute-sanitizer\docs\_static\main_ov_logo_square.png" sizeKB="191"/><file name="compute-sanitizer\docs\_static\mermaid-init.js" sizeKB="1"/><file name="compute-sanitizer\docs\_static\minus.png" sizeKB="0"/><file name="compute-sanitizer\docs\_static\NVIDIA-LogoBlack.svg" sizeKB="2"/><file name="compute-sanitizer\docs\_static\NVIDIA-LogoWhite.svg" sizeKB="4"/><file name="compute-sanitizer\docs\_static\omni-style-dark.css" sizeKB="14"/><file name="compute-sanitizer\docs\_static\omni-style.css" sizeKB="52"/><file name="compute-sanitizer\docs\_static\plus.png" sizeKB="0"/><file name="compute-sanitizer\docs\_static\pygments.css" sizeKB="5"/><file name="compute-sanitizer\docs\_static\searchtools.js" sizeKB="16"/><file name="compute-sanitizer\docs\_static\social-media.js" sizeKB="3"/><file name="compute-sanitizer\docs\_static\theme-setter.js" sizeKB="2"/><file name="compute-sanitizer\docs\_static\theme-switcher-general.css" sizeKB="1"/><file name="compute-sanitizer\docs\_static\twemoji.css" sizeKB="0"/><file name="compute-sanitizer\docs\_static\twemoji.js" sizeKB="0"/><file name="compute-sanitizer\docs\_static\underscore-1.13.1.js" sizeKB="67"/><file name="compute-sanitizer\docs\_static\underscore.js" sizeKB="19"/><file name="compute-sanitizer\docs\_static\version.js" sizeKB="7"/><file name="compute-sanitizer\EnableDebuggerInterface.bat" sizeKB="0"/><file name="compute-sanitizer\include\generated_cudaD3D10_meta.h" sizeKB="4"/><file name="compute-sanitizer\include\generated_cudaD3D11_meta.h" sizeKB="2"/><file name="compute-sanitizer\include\generated_cudaD3D9_meta.h" sizeKB="5"/><file name="compute-sanitizer\include\generated_cudaGL_meta.h" sizeKB="3"/><file name="compute-sanitizer\include\generated_cuda_d3d10_interop_meta.h" sizeKB="3"/><file name="compute-sanitizer\include\generated_cuda_d3d11_interop_meta.h" sizeKB="1"/><file name="compute-sanitizer\include\generated_cuda_d3d9_interop_meta.h" sizeKB="4"/><file name="compute-sanitizer\include\generated_cuda_gl_interop_meta.h" sizeKB="2"/><file name="compute-sanitizer\include\generated_cuda_meta.h" sizeKB="91"/><file name="compute-sanitizer\include\generated_cuda_profiler_api_meta.h" sizeKB="1"/><file name="compute-sanitizer\include\generated_cuda_runtime_api_meta.h" sizeKB="73"/><file name="compute-sanitizer\include\sanitizer.h" sizeKB="3"/><file name="compute-sanitizer\include\sanitizer_barrier.h" sizeKB="4"/><file name="compute-sanitizer\include\sanitizer_callbacks.h" sizeKB="58"/><file name="compute-sanitizer\include\sanitizer_driver_cbid.h" sizeKB="76"/><file name="compute-sanitizer\include\sanitizer_memory.h" sizeKB="7"/><file name="compute-sanitizer\include\sanitizer_patching.h" sizeKB="48"/><file name="compute-sanitizer\include\sanitizer_result.h" sizeKB="6"/><file name="compute-sanitizer\include\sanitizer_runtime_cbid.h" sizeKB="46"/><file name="compute-sanitizer\include\sanitizer_stream.h" sizeKB="5"/><file name="compute-sanitizer\InterceptorInjectionTarget.dll" sizeKB="1094"/><file name="compute-sanitizer\sanitizer-collection.dll" sizeKB="7680"/><file name="compute-sanitizer\sanitizer-public.dll" sizeKB="1122"/><file name="compute-sanitizer\sanitizer-public.lib" sizeKB="9"/><file name="compute-sanitizer\TreeLauncherTargetInjection.dll" sizeKB="1579"/><file name="compute-sanitizer\x86\InterceptorInjectionTarget.dll" sizeKB="900"/><file name="compute-sanitizer\x86\TreeLauncherTargetInjection.dll" sizeKB="1369"/><file name="sanitizer.nvi" sizeKB="23"/></manifest>
+</nvi>

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="${{PackageId}}" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="${{timestamp}}" disposition="demand" hidden="true" installerMin="2.1002.244.2070">
+	<strings>
+		<string name="title" value="NVIDIA Watchdog Plugin for NvContainer"/>
+		<string name="PackageId" value="NvPlugin.Watchdog"/>
+		<string name="version" value="1.42"/>
+		<string name="timestamp" value="2024-09-17T13:33:08"/>
+		<string name="InstallFolderName" value="${{NvidiaProgramFiles}}\NvContainer"/>
+		<string name="PluginBinaryName" value="NvPluginWatchdog.dll"/>
+		<string name="ContainerBinaryNameBase" value="NvContainer"/>
+		<string name="LogFilePath" value="${{CommonAppData}}\NVIDIA Corporation\NVIDIA App\NvContainer\NvContainerWatchdog.log"/>
+		<string name="RequiredPackage" value="NvContainer.LocalSystem"/>
+		<string name="NviName" value="NvPluginWatchdog.nvi"/>
+		<string name="JunctionPointName" value="Watchdog"/>
+		<string name="pluginDeleteMaxTimeout" value="10000"/>
+	</strings>
+	<strings>
+		<string name="FailureLogLocation" value="${{LogFilePath}}"/>
+		<bool name="CollectLogsOnFailure" value="true"/>
+		<string name="PluginFolderName" value="${{InstallFolderName}}\plugins\LocalSystem"/>
+		<string name="WatchdogRegistryKey" value="${{NvidiaSoftwareKey}}\${{ContainerBinaryNameBase}}\Watchdog"/>
+		<string name="LogFileWaitForUnlockPeriod" value="5000"/>
+	</strings>
+	<dependencies>
+		<package type="requires" package="${{RequiredPackage}}"/>
+	</dependencies>
+	<manifest>
+		<file name="${{NviName}}"/>
+		<file name="x86_64\${{PluginBinaryName}}"/>
+	</manifest>
+	<phases>
+		<standard phase="createRegkey">
+			<addRegistry keyName="${{WatchdogRegistryKey}}"/>
+			<addRegistry keyName="${{WatchdogRegistryKey}}" valueName="LogFile" value="${{LogFilePath}}" type="REG_SZ"/>
+		</standard>
+		<standard phase="deleteRegKey" when="uninstall" onError="ignore">
+			<deleteRegistryKeyTree keyName="${{WatchdogRegistryKey}}"/>
+		</standard>
+		<standard phase="createLogFolder" onError="ignore" when="install">
+			<createDirectory target="${{NvidiaCommonAppData}}"/>
+		</standard>
+		<standard phase="deleteOldPlugin" onError="ignore" when="install">
+			<deleteFile target="${{PluginFolderName}}\${{PluginBinaryName}}"/>
+		</standard>
+		<standard phase="deleteAppData" onError="ignore" when="uninstall">
+			<deleteFile target="${{LogFilePath}}*" waitForUnlock="${{LogFileWaitForUnlockPeriod}}"/>
+		</standard>
+		<standard phase="copyFilesAMD64" when="install">
+			<copyFile target="${{InstallFolderName}}\${{JunctionPointName}}\${{PluginBinaryName}}" source="x86_64\${{PluginBinaryName}}"/>
+		</standard>
+		<standard phase="deletePluginFolder" when="uninstall">
+			<deleteDirectoryTree target="${{InstallFolderName}}\${{JunctionPointName}}" waitForUnlock="${{pluginDeleteMaxTimeout}}"/>
+		</standard>
+		<standard phase="createJunctionPoint">
+			<createDirectory target="${{PluginFolderName}}\${{JunctionPointName}}" source="${{InstallFolderName}}\${{JunctionPointName}}" symLink="true"/>
+		</standard>
+	</phases>
+</nvi>

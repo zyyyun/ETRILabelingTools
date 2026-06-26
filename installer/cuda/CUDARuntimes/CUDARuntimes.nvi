@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="CUDARuntimes_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2025-05-31T14:44:07" hidden="ARP,UI" no-arp="false" disposition="demand" installerMin="2.1002.191.1621" allowsCustomPath="false" preserveCache="false" bare="true" diskSpaceForBare="1">
+	<strings>
+		<string name="version" value="12.9"/>
+		<localized locale="0x0409">
+			<string name="title" value="CUDA Runtime"/>
+			<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+		</localized>
+	</strings>
+	<description/>
+	<dependencies>
+		<package type="requires" package="CUDAToolkit_${{version}}"/>
+		<package type="requires" package="CUDADevelopment_${{version}}"/>
+	</dependencies>
+	<description/>
+	<properties>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="ArpDisplayName" value="${{arpDisplayName}}"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/CUDARuntimes.exe"/></properties>
+</nvi>

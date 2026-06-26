@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="${{PackageId}}" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="${{timestamp}}" disposition="demand" hidden="true" installerMin="2.1002.234.2014">
+	<strings>
+		<string name="title" value="NVIDIA Session Container"/>
+		<string name="version" value="1.42"/>
+		<string name="timestamp" value="2024-09-17T13:33:08"/>
+		<string name="PackageId" value="NvContainer.Session"/>
+		<string name="InstallFolderName" value="${{NvidiaProgramFiles}}\NvContainer"/>
+		<string name="InstallFolderNameX86" value="${{NvidiaProgramFilesX86}}\NvContainer"/>
+		<string name="ContainerBinaryNameBase" value="NvContainer"/>
+		<string name="ContainerBinaryName" value="nvcontainer.exe"/>
+		<string name="LogBaseFilePath" value="${{CommonAppData}}\NVIDIA Corporation\NVIDIA App\NvContainer\NvContainerSession"/>
+		<string name="RequiredPackage1" value="NvContainer"/>
+		<string name="RequiredPackage2" value="NvPlugin.Watchdog"/>
+		<string name="NviName" value="NvContainerSession.nvi"/>
+	</strings>
+	<strings>
+		<string name="PluginFolderName" value="${{InstallFolderName}}\plugins\Session"/>
+		<string name="LogLevel" value="3"/>
+		<string name="WatchdogRegistryKey" value="${{NvidiaSoftwareKey}}\${{ContainerBinaryNameBase}}\Watchdog"/>
+		<string name="LogFileWaitForUnlockPeriod" value="5000"/>
+		<string name="ContainerPath" value="${{InstallFolderName}}\${{ContainerBinaryName}}"/>
+		<string name="RestartPolicy" value="10/300/5"/>
+		<string name="StateTransitionMaxTime" value="30000"/>
+	</strings>
+	<properties>
+		<string name="FailureLogLocation" value="${{LogBaseFilePath}}*.log##${{LogBaseFilePath}}*.log_backup1"/>
+		<bool name="CollectLogsOnFailure" value="true"/>
+		<string name="ContainerTelemetryApiCmdLineX64" value=""/>
+		<string name="AdditionalCmdLineArguments" value="-ert"/>
+	</properties>
+	<dependencies>
+		<package type="requires" package="${{RequiredPackage1}}"/>
+		<package type="requires" package="${{RequiredPackage2}}"/>
+	</dependencies>
+	<manifest>
+		<file name="${{NviName}}"/>
+	</manifest>
+	<phases>
+		<standard phase="deleteDeperecatedUserElevated" onError="ignore" when="install">
+			<deleteDirectoryTree target="${{InstallFolderName}}\plugins\UserElevated"/>
+			<deleteDirectoryTree target="${{InstallFolderNameX86}}\plugins\UserElevated"/>
+			<deleteRegistryKeyTree keyName="${{WatchdogRegistryKey}}\UserElevatedX86"/>
+			<deleteRegistryKeyTree keyName="${{WatchdogRegistryKey}}\UserElevatedX64"/>
+		</standard>
+		<standard phase="createDirectories">
+			<createDirectory target="${{PluginFolderName}}"/>
+		</standard>
+		<standard phase="deleteInstalledFiles" onError="ignore" when="uninstall">
+			<deleteDirectoryTree target="${{PluginFolderName}}"/>
+		</standard>
+		<standard phase="createLogFolder" onError="ignore" when="install">
+			<createDirectory target="${{NvidiaCommonAppData}}"/>
+		</standard>
+		<standard phase="deleteAppData" onError="ignore" when="uninstall">
+			<deleteFile target="${{LogBaseFilePath}}*.log*" waitForUnlock="${{LogFileWaitForUnlockPeriod}}"/>
+		</standard>
+		<environment phase="getEnvVars" onError="ignore">
+			<getVariable variableName="envContainerTelemetryApiCmdLine" value="ContainerTelemetryApiCmdLineX64" type="user"/>
+		</environment>
+		<standard phase="createRegkeyAMD64">
+			<addRegistry keyName="${{WatchdogRegistryKey}}\SessionX64" valueName="" value="Session Plugins (x64)" type="REG_SZ"/>
+			<addRegistry keyName="${{WatchdogRegistryKey}}\SessionX64" valueName="Folder" value="${{PluginFolderName}}" type="REG_SZ"/>
+			<addRegistry keyName="${{WatchdogRegistryKey}}\SessionX64" valueName="Container" value="${{ContainerPath}}" type="REG_SZ"/>
+			<addRegistry keyName="${{WatchdogRegistryKey}}\SessionX64" valueName="Parameters" value="-f &quot;${{LogBaseFilePath}}%d.log&quot; -d &quot;${{PluginFolderName}}&quot; -r -l ${{LogLevel}} -p ${{StateTransitionMaxTime}} ${{@ContainerTelemetryApiCmdLineX64}} ${{@AdditionalCmdLineArguments}}" type="REG_SZ"/>
+			<addRegistry keyName="${{WatchdogRegistryKey}}\SessionX64" valueName="RunElevated" value="1" type="REG_DWORD"/>
+			<addRegistry keyName="${{WatchdogRegistryKey}}\SessionX64" valueName="Policy" value="${{RestartPolicy}}" type="REG_SZ"/>
+			<addRegistry keyName="${{WatchdogRegistryKey}}\SessionX64" valueName="GenerateDump" value="0" type="REG_DWORD"/>
+		</standard>
+	</phases>
+</nvi>

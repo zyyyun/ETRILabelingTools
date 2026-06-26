@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="nsight_systems_${{version}}" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="2025-05-31T14:43:56" disposition="default" installerMin="2.1002.191.1621" no-arp="true" preserveCache="false" bare="true" diskSpaceForBare="372">
+	<strings>
+		<string name="version" value="12.9"/>
+		<string name="nsightSystemsVersion" value="2025.1.3.140"/>
+		<string name="title" value="Nsight Systems"/>
+		<string name="arpDisplayName" value="NVIDIA ${{title}} ${{version}}"/>
+		<string name="NotAnUpgradeMessage" value="A newer or a same version of ${{title}} is present on this computer"/>
+		<string name="NsightSystemsMSI" value="NsightSystems-2025.1.3.140-3562067.msi"/>
+		<string name="NsightProgramGroup" value="NVIDIA Corporation\Nsight Systems ${{nsightShortVersion}}"/>
+		<string name="ToolkitRootDir" value="${{ProgramFiles}}\NVIDIA GPU Computing Toolkit\CUDA"/>
+		<string name="ToolkitInstallDir" value="${{ToolkitRootDir}}\v${{version}}"/>
+	</strings>
+	<dependencies>
+		<package type="uninstalls" package="CUDANsightSystems_${{version}}"/>
+	</dependencies>
+	<description/>
+	<extensions>
+		<extension file="CUDAVisualStudioIntegrationExt.DLL"/>
+	</extensions>
+	<customInstallTree>
+		<treeNode text="Nsight Systems" ordering="CUDA" accessibility="selectable"/>
+	</customInstallTree>
+	<properties>
+		<bool name="FixedInstallLocation" value="true"/>
+		<bool name="PreInstallCustomForm" value="true"/>
+		<bool name="PostInstallCustomForm" value="false"/>
+		<string name="InstallLocation" value="${{ToolkitInstallDir}}"/>
+		<string name="ArpDisplayName" value="${{arpDisplayName}}"/>
+		<string name="NsightSystemsInstallLocation" value="${{NvidiaProgramFilesX86}}\NVIDIA Corporation\Nsight Systems ${{nsightSystemsVersion}}"/>
+		<string name="NsightSystemsVersion" value="${{nsightSystemsVersion}}"/>
+		<string name="NsightSystemsMSI" value="${{NsightSystemsMSI}}"/>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/nsight_systems.exe"/></properties>
+	<manifest>
+		<file name="CUDAVisualStudioIntegrationExt.dll" sizeKB="1048"/><file name="NsightSystems-2025.1.3.140-3562067.msi" sizeKB="385944"/><file name="nsight_systems.nvi" sizeKB="4"/></manifest>
+	<phases>
+		<custom phase="handleExistingNsightSystems" action="HandleExistingNsightSystems"/>
+		<custom phase="detectDisableCallHome" action="DetectDisableCallHome"/>
+		<exe phase="NsightSystemsMSINoTraffic" name="${{SystemDirectory}}\msiexec.exe" condition="NsightSystemsMSIActionActiveAndNoTraffic" when="install" platform="x86">
+			<arg value="/i"/>
+			<arg value="${{SubPackageDirectory}}\${{NsightSystemsMSI}}"/>
+			<arg value="/q"/>
+			<arg value="CUDAINSTALLER=true"/>
+			<arg value="DISABLE_NV_CH=1"/>
+		</exe>
+		<exe phase="NsightSystemsMSITraffic" name="${{SystemDirectory}}\msiexec.exe" condition="NsightSystemsMSIActionActiveAndTraffic" when="install" platform="x86">
+			<arg value="/i"/>
+			<arg value="${{SubPackageDirectory}}\${{NsightSystemsMSI}}"/>
+			<arg value="/q"/>
+			<arg value="CUDAINSTALLER=true"/>
+			<arg value="DISABLE_NV_CH=0"/>
+		</exe>
+		<standard phase="copyFiles">
+		</standard>
+	</phases>
+	<forms>
+		<form name="PreInstallProcessRunningForm" base="!PreInstallTemplate">
+			<properties>
+				<bool name="@WaitToConfirm" value="false"/>
+			</properties>
+			<control name="header"/>
+			<control name="warningIcon" class="image" x="137pt" y="62pt" width="18pt" height="18pt" sourceFile="${{InstallerDllDirectory}}\warning.png"/>
+			<control name="headText" style="header" x="160pt" y="62pt" width="300pt" height="18pt" text="Running Processes"/>
+			<control name="placeholder"/>
+			<control name="RunningProcessesDetails" font="standardText" enabledTextColor="0xFFFFFF" class="link" x="137pt" y="85pt" width="294pt" height="140pt" text="The following processes must be stopped before the Nsight Systems installation can proceed:${CustomProcessesDesc}"/>
+			<control name="next" style="smallPrimaryButton" text="&amp;RETRY" x="289pt" y="280pt" onClick="!PrevFormGroup" disabled="false"/>
+		</form>
+	</forms>
+</nvi>

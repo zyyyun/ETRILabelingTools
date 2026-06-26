@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="Display.NvApp.NvBackend" title="${{Title}}" version="${{Version}}" versionText="${{Version}}" timestamp="2025-04-07T09:10:46" disposition="demand" hidden="true" installerMin="2.1002.244.2070" bare="true" diskSpaceForBare="5">
+	<strings>
+		<string name="Version" value="11.0.3.232"/>
+		<string name="Title" value="NVIDIA Backend"/>
+		<string name="NvOAWrapperCacheBinaryName" value="NvOAWrapperCache.exe"/>
+		<string name="crashDumpKey" value="HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps"/>
+		<string name="OAWrapperBinaryName" value="OAWrapper.exe"/>
+		<string name="InstallLocation" value="${{NvidiaProgramFiles}}\NVIDIA App\NvBackend"/>
+	</strings>
+	<constraints>
+	</constraints>
+	<dependencies>
+		<package type="requires" package="NvContainer.User"/>
+		<package type="requires" package="NvTelemetry"/>
+	</dependencies>
+	<properties>
+		<string name="DownloadUrl" value="http://developer.download.nvidia.com/compute/cuda/12.9.1/network_installers/windows/x86_64/wddm2/NvBackend.exe"/></properties>
+	<manifest>
+		<file name="NvBackend.nvi" sizeKB="4"/><file name="NvBackendAPI64.dll" sizeKB="1034"/><file name="FeatureWhitelist.json" sizeKB="25"/><file name="fingerprint.db" sizeKB="3430"/><file name="Ontology64.dll" sizeKB="3386"/><file name="NvOAWrapperCache.exe" sizeKB="418"/><file name="OAWrapper.exe" sizeKB="495"/><file name="NvBackend64.dll" sizeKB="7797"/></manifest>
+	<phases>
+		<standard phase="createCrashDumpGenerationKeys">
+			<addRegistry keyName="${{crashDumpKey}}\${{OAWrapperBinaryName}}"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{OAWrapperBinaryName}}" valueName="DumpFolder" type="REG_EXPAND_SZ" value="%PROGRAMDATA%\NVIDIA Corporation\CrashDumps"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{OAWrapperBinaryName}}" valueName="DumpCount" type="REG_DWORD" value="15"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{OAWrapperBinaryName}}" valueName="DumpType" type="REG_DWORD" value="1"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{NvOAWrapperCacheBinaryName}}"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{NvOAWrapperCacheBinaryName}}" valueName="DumpFolder" type="REG_EXPAND_SZ" value="%PROGRAMDATA%\NVIDIA Corporation\CrashDumps"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{NvOAWrapperCacheBinaryName}}" valueName="DumpCount" type="REG_DWORD" value="15"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{NvOAWrapperCacheBinaryName}}" valueName="DumpType" type="REG_DWORD" value="1"/>
+		</standard>
+		<exe phase="killNvOAWrapperCache" name="${{SystemDirectory}}\taskkill.exe" when="install" onError="ignore">
+			<arg value="/f /t /im ${{NvOAWrapperCacheBinaryName}}" quote="none"/>
+		</exe>
+		<standard phase="copyFiles">
+			<copyFile target="${{InstallLocation}}\NvBackendAPI64.dll" source="NvBackendAPI64.dll"/>
+			<copyFile target="${{InstallLocation}}\FeatureWhitelist.json" source="FeatureWhitelist.json"/>
+			<copyFile target="${{InstallLocation}}\ApplicationOntology\data\fingerprint.db" source="fingerprint.db"/>
+			<copyFile target="${{InstallLocation}}\ApplicationOntology\Ontology64.dll" source="Ontology64.dll"/>
+			<copyFile target="${{InstallLocation}}\ApplicationOntology\NvOAWrapperCache.exe" source="NvOAWrapperCache.exe"/>
+			<copyFile target="${{InstallLocation}}\ApplicationOntology\OAWrapper.exe" source="OAWrapper.exe"/>
+			<copyFile target="${{InstallLocation}}\Plugins\LocalUser\NvBackend64.dll" source="NvBackend64.dll"/>
+		</standard>
+		<standard phase="createJunctionPoint">
+			<createDirectory target="${{NvidiaProgramFiles}}\NvContainer\plugins\user\NvBackend" source="${{InstallLocation}}\Plugins\LocalUser" symLink="true"/>
+		</standard>
+		<standard phase="deleteRegKeys" when="uninstall" onError="ignore">
+			<deleteRegistryKeyTree keyName="${{NvidiaPerUserSoftwareKey}}\Global\NvApp"/>
+		</standard>
+		<standard phase="deleteAll" when="uninstall">
+			<deleteDirectoryTree target="${{CommonAppData}}\NVIDIA Corporation\NvBackend"/>
+			<deleteDirectoryTree target="${{InstallLocation}}"/>
+		</standard>
+		<exe phase="killNvOAWrapperCache" name="${{SystemDirectory}}\taskkill.exe" when="uninstall" onError="ignore">
+			<arg value="/f /t /im ${{NvOAWrapperCacheBinaryName}}" quote="none"/>
+		</exe>
+	</phases>
+</nvi>

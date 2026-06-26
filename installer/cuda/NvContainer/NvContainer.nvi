@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<nvi name="${{PackageId}}" title="${{title}}" version="${{version}}" versionText="${{version}}" timestamp="${{timestamp}}" disposition="demand" hidden="true" installerMin="2.1002.258.2238">
+	<strings>
+		<string name="PackageId" value="NvContainer"/>
+		<string name="title" value="NVIDIA Container"/>
+		<string name="version" value="1.42"/>
+		<string name="timestamp" value="2024-09-17T13:33:08"/>
+		<string name="InstallFolderName" value="NvContainer"/>
+		<string name="ContainerBinaryName" value="nvcontainer.exe"/>
+		<string name="RootServiceName" value="NvContainerLocalSystem"/>
+		<string name="nviName" value="NvContainer.nvi"/>
+		<string name="InstallLocationX86" value="${{NvidiaProgramFilesX86}}\${{InstallFolderName}}"/>
+		<string name="WerKey" value="HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting"/>
+		<string name="crashDumpKey" value="${{WerKey}}\LocalDumps"/>
+		<string name="serviceStopMaxTimeout" value="30000"/>
+		<string name="serviceProcessUnlockTimeout" value="5000"/>
+		<string name="CrashDumpFolder" value="%PROGRAMDATA%\NVIDIA Corporation\CrashDumps"/>
+		<string name="WerExcludedApplicationsKey" value="${{WerKey}}\ExcludedApplications"/>
+	</strings>
+	<filter name="minWin8.1" min="6.3"/>
+	<properties>
+		<bool name="FixedInstallLocation" value="true"/>
+		<string name="InstallLocation" value="${{NvidiaProgramFiles}}\${{InstallFolderName}}"/>
+		<bool name="NvContainerUnloaded" value="true"/>
+		<bool name="GenerateCrashDumps" value="true"/>
+	</properties>
+	<manifest>
+		<file name="${{nviName}}"/>
+		<file name="x86_64\${{ContainerBinaryName}}"/>
+	</manifest>
+	<constraints>
+		<platforms list="AMD64, ARM64" level="critical" name="SetupSupportedPlatformCheck" text="${{ErrorUnsupportedPlatform}}"/>
+	</constraints>
+	<phases>
+		<if filter="minWin8.1">
+			<standard phase="excludeErrorReporting" when="install" onError="ignore">
+				<addRegistry keyName="${{WerExcludedApplicationsKey}}" valueName="${{ContainerBinaryName}}" type="REG_SZ" value=""/>
+			</standard>
+		</if>
+		<exe phase="DeleteRecoveryPolicy" onError="ignore" when="install" timeout="5000" name="${{SystemDirectory}}\sc.exe" dir="${{SystemDirectory}}">
+			<arg value="failure"/>
+			<arg value="${{RootServiceName}}"/>
+			<arg value="reset="/>
+			<arg value="10"/>
+			<arg value="command="/>
+			<arg value=""/>
+			<arg value="actions="/>
+			<arg value=""/>
+		</exe>
+		<standard phase="stopNvContainerRootService" onError="ignore" when="install">
+			<stopService name="${{RootServiceName}}" timeOut="${{serviceStopMaxTimeout}}" waitForUnlock="${{serviceProcessUnlockTimeout}}"/>
+		</standard>
+		<standard phase="hideContainerExecutable" onError="ignore" when="install">
+			<renameFile source="${{InstallLocation}}\${{ContainerBinaryName}}" target="${{InstallLocation}}\${{ContainerBinaryName}}_"/>
+		</standard>
+		<standard phase="hideContainerExecutable32" onError="ignore" when="install">
+			<renameFile source="${{InstallLocationX86}}\${{ContainerBinaryName}}" target="${{InstallLocationX86}}\${{ContainerBinaryName}}_"/>
+		</standard>
+		<exe phase="killNvContainers" name="${{SystemDirectory}}\taskkill.exe" when="install" onError="ignore">
+			<arg value="/f /t /im ${{ContainerBinaryName}}" quote="none"/>
+			<success value="0"/>
+			<success value="128"/>
+		</exe>
+		<standard phase="deleteHiddenContainerExecutable" onError="ignore" when="install">
+			<deleteFile target="${{InstallLocation}}\${{ContainerBinaryName}}_"/>
+		</standard>
+		<standard phase="deleteHiddenContainerExecutable32" onError="ignore" when="install">
+			<deleteFile target="${{InstallLocationX86}}\${{ContainerBinaryName}}_"/>
+			<deleteDirectory target="${{InstallLocationX86}}"/>
+		</standard>
+		<setPropertyIf phase="setRebootRequiredOnContainerRunning" boolProperty="Global:RebootRequired" value="true" when="install" onError="ignore">
+			<process name="${{ContainerBinaryName}}" check="exists"/>
+		</setPropertyIf>
+		<standard phase="deleteRegKey" onError="ignore">
+			<deleteRegistryKeyTree keyName="${{crashDumpKey}}\${{ContainerBinaryName}}"/>
+		</standard>
+		<standard phase="createCrashDumpGenerationKeys" condition="GenerateCrashDumps">
+			<addRegistry keyName="${{crashDumpKey}}\${{ContainerBinaryName}}"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{ContainerBinaryName}}" valueName="DumpFolder" type="REG_EXPAND_SZ" value="${{CrashDumpFolder}}"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{ContainerBinaryName}}" valueName="DumpCount" type="REG_DWORD" value="15"/>
+			<addRegistry keyName="${{crashDumpKey}}\${{ContainerBinaryName}}" valueName="DumpType" type="REG_DWORD" value="1"/>
+		</standard>
+		<standard phase="createDirectories">
+			<createDirectory target="${{NvidiaProgramFiles}}"/>
+			<createDirectory target="${{InstallLocation}}"/>
+			<createDirectory target="${{NvidiaCommonAppData}}"/>
+		</standard>
+		<standard phase="copyFilesAMD64">
+			<copyFile target="${{InstallLocation}}\${{ContainerBinaryName}}" source="x86_64\${{ContainerBinaryName}}"/>
+		</standard>
+		<if filter="minWin8.1">
+			<standard phase="includeErrorReporting" when="install" onError="ignore">
+				<deleteRegistry keyName="${{WerExcludedApplicationsKey}}" valueName="${{ContainerBinaryName}}"/>
+			</standard>
+		</if>
+	</phases>
+</nvi>
