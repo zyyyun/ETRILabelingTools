@@ -1,226 +1,232 @@
-# Event Persistence Design
+﻿# Event 저장 안정성 설계서
 
-## Goal
-Fix the Event labeling persistence bug where Event data appears and disappears after save/reload, while preserving compatibility with the existing JSON structure used by this tool and other downstream tools.
+## 목표
+저장 후 다시 로드했을 때 Event 라벨링 데이터가 생겼다 사라지는 문제를 해결한다.
+동시에 현재 툴과 다른 후속 툴들이 사용하는 기존 JSON 구조와의 호환성을 최대한 유지한다.
 
-## Scope
-This design covers Event persistence only.
-It does not implement the Entry/Exit UI split, interpolation backend fixes, or auto-labeling freeze fixes.
+## 범위
+이 설계서는 Event 저장 안정성 문제만 다룬다.
+다음 항목은 이번 범위에 포함하지 않는다.
+- Entry/Exit UI 분할 개편
+- 보간(Interpolation) 백엔드 개선
+- 자동 라벨링 Freeze 개선
 
-## Problem Summary
-The current tool allows multiple Event instances of the same Event type, such as multiple `contact` segments in one video.
-However, several code paths still identify Events primarily by `EventId`, which represents the Event category/type rather than a unique instance.
-Because of that, different Event instances can be merged, overwritten, or restored incorrectly during save/load and waypoint operations.
+## 문제 요약
+현재 툴에서는 같은 Event 종류가 한 영상 안에 여러 번 등장할 수 있다.
+예를 들어 `contact` Event가 서로 다른 구간에 여러 개 존재하는 것이 가능하다.
 
-The most likely failure mode is:
-- multiple Event instances share the same `EventId`
-- save logic serializes them without a stable per-instance identity
-- load logic reconstructs waypoints and boxes using weak grouping rules
-- Event instances collapse together or partially overwrite each other
-- the user sees Event data appear, disappear, or reconnect incorrectly after reload
+하지만 현재 코드의 여러 경로는 Event를 `EventId` 중심으로 식별하고 있다.
+문제는 `EventId`가 개별 Event 인스턴스의 고유 식별자가 아니라, Event의 종류를 나타내는 값이라는 점이다.
+이 때문에 서로 다른 Event 인스턴스가 저장 또는 로드 과정에서 합쳐지거나 덮어써질 가능성이 있다.
 
-## Requirements
+가장 가능성이 높은 실패 흐름은 다음과 같다.
+- 서로 다른 Event 인스턴스가 같은 `EventId`를 가진다.
+- 저장 시 인스턴스별 고유 식별자 없이 직렬화된다.
+- 로드 시 Entry/Exit, 종류, 상호작용 객체 등의 약한 기준으로 다시 묶는다.
+- 서로 다른 Event가 하나로 합쳐지거나 일부 데이터가 덮어써진다.
+- 사용자는 저장 후 다시 열었을 때 Event가 생겼다 사라지거나 잘못 연결된 것으로 보게 된다.
 
-### Functional Requirements
-- Multiple Event instances of the same Event type must remain distinct.
-- Saving and reloading must preserve each Event instance without collapsing separate segments.
-- Existing JSON consumers must remain compatible.
-- Older JSON files without the new Event instance identifier must still load.
-- After an older file is re-saved, the new stable identity should be present.
+## 요구사항
 
-### Compatibility Requirements
-- Existing JSON fields such as `category_id`, `track_id`, `track_info`, and `interacting_object` must remain unchanged.
-- A single additional optional field may be added when needed.
-- Other tools that ignore unknown fields must still be able to read the JSON.
+### 기능 요구사항
+- 같은 Event 종류라도 서로 다른 Event 인스턴스는 반드시 분리되어야 한다.
+- 저장 후 다시 로드해도 각 Event 인스턴스가 정확히 유지되어야 한다.
+- 기존 JSON을 읽는 다른 툴과의 호환성을 유지해야 한다.
+- 새 식별자가 없는 기존 JSON 파일도 계속 열 수 있어야 한다.
+- 기존 파일을 다시 저장하면 이후부터는 안정적인 Event 식별 방식으로 동작해야 한다.
 
-### Non-Goals
-- No redesign of the external JSON schema beyond one optional field.
-- No migration of Person or Vehicle identity rules in this phase.
-- No interpolation or auto-labeling redesign in this phase.
+### 호환성 요구사항
+- `category_id`, `track_id`, `track_info`, `interacting_object` 같은 기존 JSON 필드는 유지해야 한다.
+- 필요하다면 추가 필드는 1개만 허용한다.
+- 다른 툴이 알 수 없는 필드를 무시하는 경우, 계속 정상적으로 JSON을 읽을 수 있어야 한다.
 
-## Recommended Approach
-Use the existing JSON structure and add one optional tool-specific field: `event_instance_id`.
+### 비목표
+- 외부 JSON 스키마를 대폭 바꾸지 않는다.
+- Person/Vehicle 식별 규칙은 이번 단계에서 변경하지 않는다.
+- Event 외 클래스의 저장 구조는 이번 단계에서 건드리지 않는다.
 
-This field will be the stable identity for one Event instance across:
-- Event bounding boxes
-- Event waypoint ranges
-- save/reload cycles
-- edit operations such as Exit adjustment or Event termination
+## 권장 접근 방식
+기존 JSON 구조는 유지하고, Event 전용 보조 식별자 `event_instance_id`를 1개 추가한다.
 
-The tool will treat `event_instance_id` as the primary identity for Event instance grouping.
-The existing `EventId` will remain the Event type/category identifier only.
+이 필드는 다음 영역에서 동일한 Event 인스턴스를 묶는 기준이 된다.
+- Event BoundingBox
+- Event Waypoint
+- 저장/재로드 과정
+- Exit 조정, 종료, 재추적, 전파 같은 편집 동작
 
-## Alternatives Considered
+즉 앞으로 `EventId`는 Event 종류를 의미하는 값으로만 사용하고, 실제 개별 Event 인스턴스는 `event_instance_id`로 식별한다.
 
-### Option 1: Keep JSON unchanged and improve only internal grouping
-Pros:
-- zero schema change
-- safest for external readers
+## 검토한 대안
 
-Cons:
-- reload must infer identity from weak signals such as type, Entry/Exit, interacting object, and trajectory
-- ambiguous cases remain difficult to resolve correctly
-- regression risk stays high
+### 대안 1: JSON 구조는 그대로 두고 내부 그룹핑만 개선
+장점:
+- 스키마 변경이 없다.
+- 외부 호환성 측면에서 가장 안전하다.
 
-### Option 2: Add `event_instance_id` while preserving all existing fields
-Pros:
-- strong instance identity
-- minimal schema change
-- straightforward backward compatibility
-- external readers can ignore the new field safely
+단점:
+- 로드 시 종류, Entry/Exit, 상호작용 객체, 궤적 같은 약한 단서를 조합해 인스턴스를 추론해야 한다.
+- 애매한 경우를 완전히 안정적으로 복원하기 어렵다.
+- 같은 문제가 다시 재발할 가능성이 높다.
 
-Cons:
-- requires a small schema extension
-- requires load fallback for legacy files
+### 대안 2: 기존 JSON 유지 + `event_instance_id` 추가
+장점:
+- 개별 Event 인스턴스를 안정적으로 식별할 수 있다.
+- 기존 필드는 유지하므로 외부 영향이 작다.
+- 기존 파일도 fallback 복원이 가능하다.
+- 다른 툴은 새 필드를 무시해도 기존처럼 동작할 가능성이 높다.
 
-### Option 3: Redesign Event serialization completely
-Pros:
-- cleanest long-term model
+단점:
+- 스키마에 작은 확장이 생긴다.
+- 레거시 파일용 복원 로직이 추가로 필요하다.
 
-Cons:
-- highest migration cost
-- unnecessary breakage for downstream consumers
+### 대안 3: Event 저장 구조를 전면 재설계
+장점:
+- 장기적으로 가장 깔끔하다.
 
-Recommended option: Option 2.
+단점:
+- 외부 도구 영향이 크다.
+- 현재 요구사항인 기존 구조 호환 우선과 맞지 않는다.
 
-## Data Model Changes
+권장안은 대안 2다.
+
+## 데이터 모델 변경
 
 ### AnnotationData
-Add an optional field:
+다음 선택적 필드를 추가한다.
 - `event_instance_id`
 
-Behavior:
-- present only for Event annotations
-- omitted for Person and Vehicle annotations
-- omitted only when exporting older data is explicitly required, otherwise written by default
+동작 원칙:
+- Event annotation에만 기록한다.
+- Person, Vehicle에는 기록하지 않는다.
+- 가능한 기본 동작으로 저장하되, 필요 시 없는 파일도 계속 읽을 수 있어야 한다.
 
 ### BoundingBox
-Add an internal property:
+내부 속성으로 다음 필드를 추가한다.
 - `EventInstanceId`
 
-Behavior:
-- used only when `Label == "event"`
-- propagated when Event boxes are copied, interpolated, retracked, or extended
+동작 원칙:
+- `Label == "event"`인 경우에만 사용한다.
+- Event 박스를 복사, 전파, 보간, 재추적할 때 함께 유지되어야 한다.
 
 ### WaypointMarker
-Add an internal property:
+내부 속성으로 다음 필드를 추가한다.
 - `EventInstanceId`
 
-Behavior:
-- used only for Event waypoints
-- the primary identity for an Event waypoint inside the tool
+동작 원칙:
+- Event Waypoint에만 사용한다.
+- 툴 내부에서 Event Waypoint의 1차 식별자로 사용한다.
 
-## Identity Rules
+## 식별 규칙
 
-### Event Type vs Event Instance
-- `EventId` continues to mean Event type such as contact/exchange/board/final_exchange/throw.
-- `EventInstanceId` means one distinct occurrence of an Event in the timeline.
+### Event 종류와 Event 인스턴스의 구분
+- `EventId`는 `contact`, `exchange`, `board` 같은 Event 종류를 나타낸다.
+- `EventInstanceId`는 타임라인 상의 개별 Event 발생 1건을 나타낸다.
 
-### Distinct Event Instances
-Events must be treated as distinct when any of the following differ materially:
-- Entry/Exit range
-- interacting object
-- bbox trajectory/position over frames
+### 서로 다른 Event로 봐야 하는 기준
+같은 종류의 Event라도 아래 기준 중 하나라도 실질적으로 다르면 별도 Event 인스턴스로 유지해야 한다.
+- Entry/Exit 구간
+- 상호작용 객체(`interacting_object`)
+- bbox 위치 또는 프레임별 궤적
 
-In practice, the tool should not try to merge Event instances once `EventInstanceId` exists.
+한 번 `EventInstanceId`가 부여된 후에는 서로 다른 Event를 다시 합치지 않는다.
 
-## Save Pipeline Design
-When exporting annotations:
-1. Determine the Event waypoint or Event instance associated with each Event bounding box.
-2. Preserve existing exported values for `category_id`, `track_id`, `track_info`, and `interacting_object`.
-3. Add `event_instance_id` for Event annotations.
-4. Ensure every Event annotation belonging to the same Event instance writes the same `event_instance_id`.
-5. Never use `EventId` alone to infer Event instance grouping during export.
+## 저장 파이프라인 설계
+Event annotation 저장 시 다음 순서를 따른다.
+1. 각 Event BoundingBox가 어떤 Event Waypoint 또는 Event 인스턴스에 속하는지 먼저 결정한다.
+2. 기존 필드인 `category_id`, `track_id`, `track_info`, `interacting_object`는 그대로 유지한다.
+3. Event annotation에는 `event_instance_id`를 추가 기록한다.
+4. 같은 Event 인스턴스에 속한 모든 annotation은 동일한 `event_instance_id`를 가져야 한다.
+5. 저장 과정에서 `EventId`만으로 Event 인스턴스를 추론하지 않는다.
 
-### Important Rule
-`track_id` remains backward-compatible and should not be repurposed into a unique Event instance key if downstream tools already interpret it differently.
-The new instance key must remain separate.
+### 중요한 원칙
+`track_id`는 기존 하위 도구와의 호환성을 위해 그대로 유지한다.
+즉 `track_id`를 새로운 Event 인스턴스 고유 키로 재해석하지 않는다.
+개별 Event 인스턴스 식별은 반드시 별도 필드 `event_instance_id`로 처리한다.
 
-## Load Pipeline Design
-When loading annotations:
-1. If an Event annotation contains `event_instance_id`, use it as the primary grouping key.
-2. Reconstruct Event boxes and Event waypoints by `event_instance_id` first.
-3. If `event_instance_id` is missing, treat the file as legacy.
-4. For legacy files, reconstruct provisional Event instances using:
-   - Event type
-   - track entry/exit range
-   - interacting object
-   - bbox continuity / trajectory proximity
-5. After reconstructing a legacy file in memory, assign fresh internal `EventInstanceId` values.
-6. On the next save, export those values as `event_instance_id`.
+## 로드 파이프라인 설계
+Event annotation 로드 시 다음 순서를 따른다.
+1. `event_instance_id`가 있으면 그것을 최우선 그룹핑 키로 사용한다.
+2. 같은 `event_instance_id`를 가진 Event bbox와 waypoint를 함께 복원한다.
+3. `event_instance_id`가 없으면 레거시 파일로 간주한다.
+4. 레거시 파일은 아래 정보를 조합해 임시 Event 그룹을 만든다.
+   - Event 종류
+   - track entry/exit 범위
+   - interacting_object
+   - bbox 연속성 및 궤적 근접성
+5. 메모리에서 복원이 끝나면 각 레거시 Event 그룹에 새로운 `EventInstanceId`를 부여한다.
+6. 이후 다시 저장하면 `event_instance_id`가 포함된 안정 포맷으로 승격된다.
 
-## In-Memory Consistency Rules
-Event operations must update the following together as one logical unit:
-- Event bounding boxes
-- Event waypoint
-- EventInstanceId linkage
+## 메모리 일관성 규칙
+Event 관련 수정은 아래 세 요소가 항상 함께 움직여야 한다.
+- Event BoundingBox 집합
+- Event Waypoint
+- EventInstanceId 연결 정보
 
-Any Event edit path that updates only one of those is invalid.
+셋 중 하나만 갱신되는 경로는 허용하지 않는다.
 
-### Commit Rules
-- Entry selection alone does not finalize an Event instance.
-- Exit confirmation finalizes or updates the Event instance.
-- Exit shortening, Event termination, propagation, and retracking must operate by `EventInstanceId` first.
-- UI selection and list rendering must not identify Event instances by `EventId` alone.
+### 커밋 규칙
+- Entry만 찍은 상태는 아직 Event 인스턴스 확정 상태로 보지 않는다.
+- Exit가 확정되는 시점에 Event 인스턴스를 확정하거나 갱신한다.
+- Exit 단축, Event 종료, Event 전파, Event 재추적은 모두 `EventInstanceId`를 우선 기준으로 동작해야 한다.
+- UI 선택, 리스트 렌더링, 프레임 이동도 `EventId` 단독이 아니라 `EventInstanceId` 우선으로 Event를 찾아야 한다.
 
-## Code Areas To Change
-The implementation should focus on these areas in `WinFormsApp1/Form1.cs`:
-- Event bounding box creation and cloning
-- waypoint creation/update paths around Entry/Exit handling
-- Event termination logic
-- Event propagation / interpolation / retracking paths
-- JSON export path where annotations are created
-- JSON load path where temp bounding boxes and temp waypoints are reconstructed
-- any lookup helper such as `FindWaypointForBox` that currently relies on weak Event identity
+## 변경 대상 코드 영역
+구현 시 [Form1.cs](C:/Users/ANNA/Documents/ETRILabelingTools/WinFormsApp1/Form1.cs)에서 다음 영역을 우선 수정한다.
+- Event BoundingBox 생성 및 복제 경로
+- Entry/Exit 처리 시 waypoint 생성/갱신 경로
+- Event 종료 로직
+- Event 전파, 보간, 재추적 경로
+- JSON export 시 annotation 생성 경로
+- JSON load 시 temp BoundingBox / temp Waypoint 복원 경로
+- `FindWaypointForBox`처럼 현재 약한 식별 규칙에 의존하는 조회 헬퍼
 
-## Error Handling
-- If duplicate `event_instance_id` values conflict across incompatible Event ranges, log a warning and split them into separate in-memory Event instances.
-- If an Event annotation is missing `track_info`, load the bbox but mark waypoint reconstruction as incomplete.
-- If a legacy file cannot be grouped unambiguously, prefer preserving separate Event groups rather than merging them aggressively.
-- Unknown extra JSON fields must continue to be ignored safely.
+## 예외 처리
+- 서로 호환되지 않는 Event들이 같은 `event_instance_id`를 가진 채 들어오면 경고 로그를 남기고 메모리에서 분리 재할당한다.
+- Event annotation에 `track_info`가 없으면 bbox는 로드하되 waypoint 복원은 불완전 상태로 처리한다.
+- 레거시 파일에서 애매한 경우, 서로 다른 Event를 공격적으로 합치기보다 분리 보존을 우선한다.
+- 알 수 없는 추가 JSON 필드는 계속 안전하게 무시되어야 한다.
 
-## Validation Plan
+## 검증 계획
 
-### Scenario 1: Same Event type repeated
-- Create two `contact` Events in separate frame ranges.
-- Save and reload.
-- Both Event instances must remain separate.
+### 시나리오 1: 같은 Event 종류 반복
+- 서로 다른 구간에 `contact` Event 2개를 만든다.
+- 저장 후 다시 로드한다.
+- 두 Event 인스턴스가 모두 독립적으로 유지되어야 한다.
 
-### Scenario 2: Same Event type with different interacting objects
-- Create two Events of the same type with different `interacting_object` values.
-- Save and reload.
-- Each Event must retain its own interacting object and waypoint.
+### 시나리오 2: 같은 Event 종류 + 다른 상호작용 객체
+- 같은 종류 Event 2개에 서로 다른 `interacting_object`를 설정한다.
+- 저장 후 다시 로드한다.
+- 각 Event가 자기 객체 정보와 waypoint를 유지해야 한다.
 
-### Scenario 3: Exit adjustment
-- Shorten one Event's Exit range.
-- Save and reload.
-- Only that Event instance should change.
-- Other same-type Event instances must remain intact.
+### 시나리오 3: Exit 조정
+- 특정 Event 하나의 Exit를 줄인다.
+- 저장 후 다시 로드한다.
+- 해당 Event만 범위가 바뀌고, 다른 동일 종류 Event는 그대로여야 한다.
 
-### Scenario 4: Legacy JSON
-- Load an older file without `event_instance_id`.
-- Verify Events still appear correctly.
-- Save and reload.
-- Verify the file now behaves stably with explicit Event instance IDs.
+### 시나리오 4: 레거시 JSON
+- `event_instance_id`가 없는 기존 파일을 연다.
+- Event가 정상 표시되는지 확인한다.
+- 다시 저장 후 재로드한다.
+- 이후부터는 Event가 안정적으로 유지되어야 한다.
 
-## Risks
-- Legacy file grouping may still have edge cases if historical data is already ambiguous.
-- Some downstream tools may validate against a strict schema and reject unknown fields.
-- Event logic may still fail if a few remaining lookup paths continue using `EventId` only.
+## 위험 요소
+- 과거 파일 자체가 이미 애매하게 저장되어 있다면 레거시 복원에 경계 사례가 남을 수 있다.
+- 일부 후속 툴이 엄격한 스키마 검증을 하면 새 필드를 허용하지 않을 수 있다.
+- 코드 일부가 여전히 `EventId`만 기준으로 Event를 찾으면 같은 문제가 부분적으로 남을 수 있다.
 
-## Mitigations
-- Keep the added field optional and non-breaking.
-- Document the new field clearly for downstream tool owners.
-- Centralize Event lookup helpers so Event identity rules are implemented once.
-- Prefer preserving too many Event groups over accidentally merging different ones.
+## 완화 방안
+- 새 필드는 선택적이고 비파괴적으로 추가한다.
+- 후속 툴 담당자에게 `event_instance_id` 의미를 명확히 문서로 전달한다.
+- Event 조회 로직을 공용 헬퍼로 모아 식별 규칙을 한 곳에서 관리한다.
+- 애매한 경우에는 잘못 합치는 것보다 과하게 분리 보존하는 쪽을 택한다.
 
-## Rollout Notes
-- Default behavior should export `event_instance_id` for new saves.
-- No manual migration step is required.
-- Legacy files should be upgraded passively on first save.
+## 적용 방침
+- 새로 저장하는 파일에는 기본적으로 `event_instance_id`를 기록한다.
+- 수동 마이그레이션 단계는 두지 않는다.
+- 기존 파일은 처음 다시 저장될 때 자연스럽게 새 방식으로 승격된다.
 
-## Open Decision Resolved In This Spec
-Adopt Option 2:
-- keep the existing JSON structure
-- add one optional field `event_instance_id`
-- use it as the stable Event instance identity in memory and across save/reload
+## 최종 결정
+이번 설계에서는 대안 2를 채택한다.
+- 기존 JSON 구조는 유지한다.
+- Event 전용 선택적 필드 `event_instance_id`를 1개 추가한다.
+- 툴 내부와 저장/재로드 과정 모두에서 이 값을 Event 인스턴스의 안정 식별자로 사용한다.
