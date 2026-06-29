@@ -9931,6 +9931,7 @@ namespace WinFormsApp1
 
                 // ✅ Annotations 순차 처리 (단순하고 빠른 처리)
                 var waypointKeySet = new Dictionary<string, WaypointMarker>(); // 중복 체크용
+                var legacyEventInstanceIdByWaypoint = new Dictionary<string, string>();
 
                 if (loadingForm != null && loadingForm.InvokeRequired)
                 {
@@ -10020,6 +10021,7 @@ namespace WinFormsApp1
                         PersonId = personId,
                         VehicleId = vehicleId,
                         EventId = eventId,
+                        EventInstanceId = annotation.EventInstanceId,
                         Action = "waypoint",
                         Skeleton3D = annotation.Skeleton3D ?? annotation.Keypoints3D // Skeleton 데이터 로드
                     };
@@ -10044,7 +10046,27 @@ namespace WinFormsApp1
                         else if (box.Label == "event") objectId = box.EventId;
 
                         // ✅ Dictionary 기반 중복 체크 (O(1) 조회) - Race Condition 방지
-                        string waypointKey = $"{box.Label}_{objectId}_{entryFrame}_{exitFrame}";
+                        // Event waypoint grouping: prefer EventInstanceId when available
+                        string waypointKey;
+                        if (box.Label == "event" && string.IsNullOrWhiteSpace(box.EventInstanceId))
+                        {
+                            string legacyWaypointKey = string.Format("{0}_{1}_{2}_{3}", box.Label, objectId, entryFrame, exitFrame);
+                            if (!legacyEventInstanceIdByWaypoint.ContainsKey(legacyWaypointKey))
+                            {
+                                legacyEventInstanceIdByWaypoint[legacyWaypointKey] = CreateEventInstanceId();
+                            }
+
+                            box.EventInstanceId = legacyEventInstanceIdByWaypoint[legacyWaypointKey];
+                        }
+
+                        if (box.Label == "event" && !string.IsNullOrWhiteSpace(box.EventInstanceId))
+                        {
+                            waypointKey = string.Format("event_{0}", box.EventInstanceId);
+                        }
+                        else
+                        {
+                            waypointKey = string.Format("{0}_{1}_{2}_{3}", box.Label, objectId, entryFrame, exitFrame);
+                        }
                         
                             System.Drawing.Color waypointColor;
                             
@@ -10076,6 +10098,7 @@ namespace WinFormsApp1
                                 EntryTime = FormatFrameTime(entryFrame),
                                 ExitTime = FormatFrameTime(exitFrame),
                                 MarkerColor = waypointColor,
+                                EventInstanceId = box.Label == "event" ? box.EventInstanceId : null,
                                 InteractingObject = (box.Label == "event") ? (annotation.InteractingObject ?? "") : null
                             };
 
@@ -10804,11 +10827,27 @@ namespace WinFormsApp1
                         int exitFrame = box.FrameIndex;
                         
                         // 현재 박스가 속한 Waypoint 찾기
-                        var matchingWaypoint = waypointMarkers.FirstOrDefault(w => 
-                            w.Label == box.Label &&
-                            w.ObjectId == boxId &&
-                            box.FrameIndex >= w.EntryFrame &&
-                            box.FrameIndex <= w.ExitFrame);
+                        WaypointMarker matchingWaypoint = null;
+
+                        // Event: EventInstanceId로 우선 매칭하고, 없으면 기존 ObjectId/range로 폴백
+                        if (box.Label == "event" && !string.IsNullOrWhiteSpace(box.EventInstanceId))
+                        {
+                            matchingWaypoint = waypointMarkers.FirstOrDefault(w =>
+                                w.Label == box.Label &&
+                                string.Equals(w.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal) &&
+                                box.FrameIndex >= w.EntryFrame &&
+                                box.FrameIndex <= w.ExitFrame);
+                        }
+
+                        if (matchingWaypoint == null)
+                        {
+                            // 기존 ObjectId + range fallback
+                            matchingWaypoint = waypointMarkers.FirstOrDefault(w =>
+                                w.Label == box.Label &&
+                                w.ObjectId == boxId &&
+                                box.FrameIndex >= w.EntryFrame &&
+                                box.FrameIndex <= w.ExitFrame);
+                        }
                         
                         if (matchingWaypoint != null)
                         {
@@ -10864,6 +10903,11 @@ namespace WinFormsApp1
                                 CurrentClipCount = 1
                             }
                         };
+
+                        if (box.Label == "event" && !string.IsNullOrWhiteSpace(box.EventInstanceId))
+                        {
+                            annotation.EventInstanceId = box.EventInstanceId;
+                        }
 
                         // Event인 경우 상호작용 객체 텍스트 포함 (해당 박스가 속한 웨이포인트에서 가져옴)
                         if (box.Label == "event" && matchingWaypoint != null && !string.IsNullOrWhiteSpace(matchingWaypoint.InteractingObject))
