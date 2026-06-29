@@ -4011,31 +4011,38 @@ namespace WinFormsApp1
                     waypointMarkers.Add(waypoint);
                     createdWaypoints.Add(waypoint);
                 }
-
                 // ✅ 2.5. Entry~Exit 범위 내 Event 박스 처리 (추적 없음)
-                // EventId별로 그룹화하여 각 EventId당 하나의 Waypoint만 생성
+                // Event 인스턴스 우선(EventInstanceId)으로 이벤트 묶음을 생성하고,
+                // EventInstanceId가 없는 기존 박스는 EventId fallback으로 그룹핑
                 var eventBoxesInRange = boundingBoxes
                     .Where(b => b.Label == "event" &&
                                 b.FrameIndex >= entryFrameIndex.Value &&
                                 b.FrameIndex <= exitFrameIndex.Value)
                     .ToList();
 
-                // EventId별로 그룹화하여 가장 작은 FrameIndex를 EntryFrame으로 사용
                 var eventGroups = eventBoxesInRange
-                    .GroupBy(b => b.EventId)
+                    .GroupBy(b => string.IsNullOrWhiteSpace(b.EventInstanceId)
+                        ? $"eid:{b.EventId}"
+                        : $"eidinst:{b.EventInstanceId}")
                     .ToList();
 
                 foreach (var eventGroup in eventGroups)
                 {
-                    int eventId = eventGroup.Key;
+                    var referenceBox = eventGroup.FirstOrDefault();
+                    if (referenceBox == null) continue;
+
+                    int eventId = referenceBox.EventId;
+                    string eventInstanceId = referenceBox.EventInstanceId;
                     // 같은 EventId를 가진 박스 중 가장 작은 FrameIndex를 EntryFrame으로 사용
                     int minFrameIndex = eventGroup.Min(b => b.FrameIndex);
                     
                     // ✅ 현재 Entry~Exit 범위와 겹치거나 포함되는 기존 waypoint 확인
-                    // 같은 EventId를 가진 waypoint 중에서 현재 Entry~Exit 범위가 기존 waypoint 범위와 겹치는 경우
+                    // 같은 EventId/EventInstanceId를 가진 waypoint 중에서 현재 Entry~Exit 범위가 기존 waypoint 범위와 겹치는 경우
                     var overlappingWaypoint = waypointMarkers.FirstOrDefault(w =>
                         w.Label == "event" &&
                         w.ObjectId == eventId &&
+                        ((string.IsNullOrWhiteSpace(eventInstanceId) && string.IsNullOrWhiteSpace(w.EventInstanceId)) ||
+                         string.Equals(w.EventInstanceId, eventInstanceId, StringComparison.Ordinal)) &&
                         // 범위가 겹치는 경우: 
                         // 1. 현재 Entry가 기존 Entry~Exit 범위 내에 있음
                         // 2. 현재 Exit가 기존 Entry~Exit 범위 내에 있음
@@ -4043,14 +4050,14 @@ namespace WinFormsApp1
                         ((currentEntryFrame >= w.EntryFrame && currentEntryFrame <= w.ExitFrame) ||
                          (currentExitFrame >= w.EntryFrame && currentExitFrame <= w.ExitFrame) ||
                          (currentEntryFrame <= w.EntryFrame && currentExitFrame >= w.ExitFrame)));
-                    
+
                     if (overlappingWaypoint != null)
                     {
                         // 이미 같은 EventId의 waypoint가 현재 Entry~Exit 범위와 겹치면 중복 생성하지 않음
                         System.Diagnostics.Debug.WriteLine($"[Event Waypoint 중복 방지] EventId={eventId}: 기존 waypoint({overlappingWaypoint.EntryFrame}~{overlappingWaypoint.ExitFrame})와 겹치는 범위({currentEntryFrame}~{currentExitFrame})여서 새로 생성하지 않음");
                         continue;
                     }
-                    
+
                     // 새로운 waypoint 생성
                     // Entry 프레임의 Event 박스 찾기 (가장 작은 FrameIndex)
                     var entryEventBox = eventGroup.FirstOrDefault(b => b.FrameIndex == minFrameIndex);
@@ -4064,7 +4071,7 @@ namespace WinFormsApp1
                             EntryTime = TimeSpan.FromSeconds(minFrameIndex / fps).ToString(@"hh\:mm\:ss"),
                             ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                             ObjectId = eventId,
-                            EventInstanceId = entryEventBox?.EventInstanceId,
+                            EventInstanceId = eventInstanceId,
                             Label = "event",
                             InteractingObject = "" // BoundingBox에는 InteractingObject 속성이 없으므로 빈 문자열로 설정
                         };
@@ -7350,10 +7357,20 @@ namespace WinFormsApp1
             if (box.Label != "event" || waypoint.Label != "event")
                 return false;
 
-            if (!string.IsNullOrWhiteSpace(box.EventInstanceId) && !string.IsNullOrWhiteSpace(waypoint.EventInstanceId))
-                return string.Equals(box.EventInstanceId, waypoint.EventInstanceId, StringComparison.Ordinal);
+            bool boxHasInstanceId = !string.IsNullOrWhiteSpace(box.EventInstanceId);
+            bool waypointHasInstanceId = !string.IsNullOrWhiteSpace(waypoint.EventInstanceId);
 
-            return box.EventId == waypoint.ObjectId;
+            if (boxHasInstanceId && waypointHasInstanceId)
+            {
+                return string.Equals(box.EventInstanceId, waypoint.EventInstanceId, StringComparison.Ordinal);
+            }
+
+            if (!boxHasInstanceId && !waypointHasInstanceId)
+            {
+                return box.EventId == waypoint.ObjectId;
+            }
+
+            return false;
         }
 
         // 박스의 현재 라벨에 해당하는 ID 가져오기
@@ -7366,27 +7383,38 @@ namespace WinFormsApp1
         }
         
         // 선택된 박스가 속한 기존 Waypoint 찾기
-        // 선택된 박스가 속한 기존 Waypoint 찾기
         private WaypointMarker FindWaypointForBox(BoundingBox box)
         {
             if (box == null) return null;
 
             int boxId = GetBoxId(box);
 
-            // Event: 같은 인스턴스가 있으면 우선 매칭
+            // Event: 동일 EventInstanceId가 있으면 우선 정확 매칭
             if (box.Label == "event")
             {
-                var sameInstanceWaypoint = waypointMarkers.FirstOrDefault(w =>
+                if (!string.IsNullOrWhiteSpace(box.EventInstanceId))
+                {
+                    var sameInstanceWaypoint = waypointMarkers.FirstOrDefault(w =>
+                        w.Label == box.Label &&
+                        w.EntryFrame <= box.FrameIndex &&
+                        w.ExitFrame >= box.FrameIndex &&
+                        string.Equals(w.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal));
+
+                    if (sameInstanceWaypoint != null)
+                        return sameInstanceWaypoint;
+                }
+
+                var sameTypeWaypoint = waypointMarkers.FirstOrDefault(w =>
                     w.Label == box.Label &&
                     w.EntryFrame <= box.FrameIndex &&
                     w.ExitFrame >= box.FrameIndex &&
                     IsSameEventInstance(box, w));
 
-                if (sameInstanceWaypoint != null)
-                    return sameInstanceWaypoint;
+                if (sameTypeWaypoint != null)
+                    return sameTypeWaypoint;
             }
 
-            // 현재 프레임에 해당하는 waypoint (기존 동작 fallback)
+            // 기존 동작 fallback
             var waypoint = waypointMarkers.FirstOrDefault(w =>
                 w.Label == box.Label &&
                 w.ObjectId == boxId &&
