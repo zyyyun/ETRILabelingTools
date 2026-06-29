@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -9931,7 +9931,46 @@ namespace WinFormsApp1
 
                 // ✅ Annotations 순차 처리 (단순하고 빠른 처리)
                 var waypointKeySet = new Dictionary<string, WaypointMarker>(); // 중복 체크용
-                var legacyEventInstanceIdByWaypoint = new Dictionary<string, string>();
+                var legacyEventGroupsByWaypoint = new Dictionary<string, List<(string EventInstanceId, Rectangle AnchorRect, int LastFrame)>>(StringComparer.Ordinal);
+
+                string NormalizeLegacyInteractingObject(string value)
+                {
+                    return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToLowerInvariant();
+                }
+
+                bool IsLikelySameLegacyEventGeometry(Rectangle rectA, int frameA, Rectangle rectB, int frameB)
+                {
+                    int frameGap = Math.Abs(frameA - frameB);
+                    if (frameGap > 12)
+                        return false;
+
+                    int x1 = Math.Max(rectA.Left, rectB.Left);
+                    int y1 = Math.Max(rectA.Top, rectB.Top);
+                    int x2 = Math.Min(rectA.Right, rectB.Right);
+                    int y2 = Math.Min(rectA.Bottom, rectB.Bottom);
+                    int overlapWidth = Math.Max(0, x2 - x1);
+                    int overlapHeight = Math.Max(0, y2 - y1);
+                    int overlapArea = overlapWidth * overlapHeight;
+
+                    double areaA = Math.Max(1, rectA.Width * rectA.Height);
+                    double areaB = Math.Max(1, rectB.Width * rectB.Height);
+                    double overlapRatio = overlapArea / Math.Min(areaA, areaB);
+
+                    if (overlapRatio >= 0.25)
+                        return true;
+
+                    float centerAx = rectA.X + (rectA.Width / 2f);
+                    float centerAy = rectA.Y + (rectA.Height / 2f);
+                    float centerBx = rectB.X + (rectB.Width / 2f);
+                    float centerBy = rectB.Y + (rectB.Height / 2f);
+                    float centerDistance = (float)Math.Sqrt(Math.Pow(centerAx - centerBx, 2) + Math.Pow(centerAy - centerBy, 2));
+
+                    float maxDimension = Math.Max(Math.Max(rectA.Width, rectA.Height), Math.Max(rectB.Width, rectB.Height));
+                    if (centerDistance <= (maxDimension * 2.0f) && overlapRatio >= 0.08)
+                        return true;
+
+                    return false;
+                }
 
                 if (loadingForm != null && loadingForm.InvokeRequired)
                 {
@@ -10050,13 +10089,33 @@ namespace WinFormsApp1
                         string waypointKey;
                         if (box.Label == "event" && string.IsNullOrWhiteSpace(box.EventInstanceId))
                         {
-                            string legacyWaypointKey = string.Format("{0}_{1}_{2}_{3}", box.Label, objectId, entryFrame, exitFrame);
-                            if (!legacyEventInstanceIdByWaypoint.ContainsKey(legacyWaypointKey))
+                            string legacyWaypointKey = string.Format("{0}_{1}_{2}_{3}_{4}", box.Label, objectId, entryFrame, exitFrame, NormalizeLegacyInteractingObject(annotation.InteractingObject));
+                            string legacyEventInstanceId = null;
+
+                            if (!legacyEventGroupsByWaypoint.TryGetValue(legacyWaypointKey, out var legacyEventGroups))
                             {
-                                legacyEventInstanceIdByWaypoint[legacyWaypointKey] = CreateEventInstanceId();
+                                legacyEventGroups = new List<(string EventInstanceId, Rectangle AnchorRect, int LastFrame)>();
+                                legacyEventGroupsByWaypoint[legacyWaypointKey] = legacyEventGroups;
                             }
 
-                            box.EventInstanceId = legacyEventInstanceIdByWaypoint[legacyWaypointKey];
+                            for (int i = 0; i < legacyEventGroups.Count; i++)
+                            {
+                                var candidate = legacyEventGroups[i];
+                                if (IsLikelySameLegacyEventGeometry(candidate.AnchorRect, candidate.LastFrame, box.Rectangle, actualFrameNumber))
+                                {
+                                    legacyEventInstanceId = candidate.EventInstanceId;
+                                    legacyEventGroups[i] = (candidate.EventInstanceId, box.Rectangle, actualFrameNumber);
+                                    break;
+                                }
+                            }
+
+                            if (string.IsNullOrWhiteSpace(legacyEventInstanceId))
+                            {
+                                legacyEventInstanceId = CreateEventInstanceId();
+                                legacyEventGroups.Add((legacyEventInstanceId, box.Rectangle, actualFrameNumber));
+                            }
+
+                            box.EventInstanceId = legacyEventInstanceId;
                         }
 
                         if (box.Label == "event" && !string.IsNullOrWhiteSpace(box.EventInstanceId))
@@ -10067,7 +10126,7 @@ namespace WinFormsApp1
                         {
                             waypointKey = string.Format("{0}_{1}_{2}_{3}", box.Label, objectId, entryFrame, exitFrame);
                         }
-                        
+
                             System.Drawing.Color waypointColor;
                             
                             // Label별로 색상 지정
@@ -10842,26 +10901,22 @@ namespace WinFormsApp1
                         if (matchingWaypoint == null)
                         {
                             // 기존 ObjectId + range fallback
-                            matchingWaypoint = waypointMarkers.FirstOrDefault(w =>
-                                w.Label == box.Label &&
-                                w.ObjectId == boxId &&
-                                box.FrameIndex >= w.EntryFrame &&
-                                box.FrameIndex <= w.ExitFrame);
-                        }
-                        
-                        if (matchingWaypoint != null)
-                        {
-                            // Waypoint가 있으면 그 Entry/Exit 사용
-                            entryFrame = matchingWaypoint.EntryFrame;
-                            exitFrame = matchingWaypoint.ExitFrame;
-                        }
-                        else
-                        {
-                            // Waypoint가 없으면 같은 ObjectId의 모든 박스 범위 사용
                             var sameObjectBoxes = boundingBoxes
-                            .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
+                                .Where(b =>
+                                    b.Label == box.Label &&
+                                    ((box.Label == "event" && !string.IsNullOrWhiteSpace(box.EventInstanceId) &&
+                                      string.Equals(b.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal)) ||
+                                     ((box.Label != "event" || string.IsNullOrWhiteSpace(box.EventInstanceId)) &&
+                                      GetBoxId(b) == boxId)))
                                 .ToList();
-                            
+
+                            if (!sameObjectBoxes.Any() && box.Label == "event" && !string.IsNullOrWhiteSpace(box.EventInstanceId))
+                            {
+                                sameObjectBoxes = boundingBoxes
+                                    .Where(b => b.Label == box.Label && GetBoxId(b) == boxId)
+                                    .ToList();
+                            }
+
                             if (sameObjectBoxes.Any())
                             {
                                 entryFrame = sameObjectBoxes.Min(b => b.FrameIndex);
@@ -10869,6 +10924,12 @@ namespace WinFormsApp1
                             }
                         }
 
+                        if (matchingWaypoint != null)
+                        {
+                            // Waypoint가 있으면 그 Entry/Exit 사용
+                            entryFrame = matchingWaypoint.EntryFrame;
+                            exitFrame = matchingWaypoint.ExitFrame;
+                        }
                         // 자막에서 타임스탬프 추출 시도
                         string entryTimestamp = GetSubtitleTimestampForFrame(entryFrame);
                         string exitTimestamp = GetSubtitleTimestampForFrame(exitFrame);
