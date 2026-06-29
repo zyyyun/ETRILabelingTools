@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -3766,12 +3766,15 @@ namespace WinFormsApp1
                     // ✅ ExitFrame이 짧아진 경우 (새로운 ExitFrame이 기존보다 작음)
                     if (exitFrameShortened)
                     {
-                        // 새로운 ExitFrame 이후부터 기존 ExitFrame까지의 해당 ID 박스 삭제
+                        // 새로운 ExitFrame 이후부터 기존 ExitFrame까지의 해당 인스턴스 박스 삭제
+                        // Event는 EventInstanceId 우선으로 동일 인스턴스만 삭제 (같은 종류 Event 다중 인스턴스 섞임 방지)
                         int boxId = GetBoxId(selectedBox);
                         var boxesToDelete = boundingBoxes
-                            .Where(b => 
+                            .Where(b =>
                                 b.Label == selectedBox.Label &&
-                                GetBoxId(b) == boxId &&
+                                (selectedBox.Label != "event"
+                                    ? GetBoxId(b) == boxId
+                                    : IsSameEventInstance(b, selectedBox)) &&
                                 b.FrameIndex > currentFrameIndex &&
                                 b.FrameIndex <= oldExitFrame &&
                                 !b.IsDeleted)
@@ -3799,15 +3802,16 @@ namespace WinFormsApp1
                     existingWaypoint.ExitTime = exitTime.ToString(@"hh\:mm\:ss");
                     
                     // Event 박스 전파 (Event인 경우)
+                    // EventInstanceId 우선으로 동일 인스턴스 박스만 전파 대상 (같은 종류 Event 다중 인스턴스 섞임 방지)
                     if (selectedBox.Label == "event")
                     {
                         var eventBoxes = boundingBoxes
                             .Where(b => b.Label == "event" &&
-                                       b.EventId == selectedBox.EventId &&
+                                       IsSameEventInstance(b, selectedBox) &&
                                        b.FrameIndex >= existingWaypoint.EntryFrame &&
                                        b.FrameIndex <= existingWaypoint.ExitFrame)
                             .ToList();
-                        
+
                         if (eventBoxes.Count > 0)
                         {
                             var entryEventBox = eventBoxes.OrderBy(b => b.FrameIndex).First();
@@ -4513,11 +4517,12 @@ namespace WinFormsApp1
                 }
                 else if (waypoint.Label == "event")
                 {
+                    // EventInstanceId 우선으로 동일 인스턴스만 삭제 (같은 종류 Event 다중 인스턴스 섞임 방지)
                     boxesToDelete = boundingBoxes
-                        .Where(b => 
+                        .Where(b =>
                             b.Label == "event" &&
-                            b.EventId == waypoint.ObjectId &&
-                            b.FrameIndex >= waypoint.EntryFrame && 
+                            IsSameEventInstance(b, waypoint) &&
+                            b.FrameIndex >= waypoint.EntryFrame &&
                             b.FrameIndex <= waypoint.ExitFrame)
                         .ToList();
                 }
@@ -7273,23 +7278,21 @@ namespace WinFormsApp1
                                 int oldEventId = currentBox.EventId;
                                 SetBoxId(currentBox, "event", eventId);
                             
-                                // Event 타입 변경 시 동일한 EventId와 Rectangle을 가진 박스만 업데이트
+                                // Event 타입 변경 시 동일한 EventInstanceId(없으면 EventId+Rectangle fallback)를 가진 박스만 업데이트
+                                // 같은 종류 Event가 여러 개일 때 서로 다른 인스턴스가 섞이지 않도록 인스턴스 우선 매칭
                                 var waypoint = waypointMarkers.FirstOrDefault(w =>
+                                    w.Label == "event" &&
                                     currentBox.FrameIndex >= w.EntryFrame &&
                                     currentBox.FrameIndex <= w.ExitFrame);
-                                
+
                                 if (waypoint != null)
                                 {
                                     var relatedBoxes = boundingBoxes.Where(b =>
                                         b.Label == "event" &&
-                                        b.EventId == oldEventId &&
-                                        b.Rectangle.X == currentBox.Rectangle.X &&
-                                        b.Rectangle.Y == currentBox.Rectangle.Y &&
-                                        b.Rectangle.Width == currentBox.Rectangle.Width &&
-                                        b.Rectangle.Height == currentBox.Rectangle.Height &&
+                                        IsSameEventInstance(b, currentBox) &&
                                         b.FrameIndex >= waypoint.EntryFrame &&
                                         b.FrameIndex <= waypoint.ExitFrame).ToList();
-                                    
+
                                     foreach (var relatedBox in relatedBoxes)
                                     {
                                         SetBoxId(relatedBox, "event", eventId);
@@ -7349,6 +7352,17 @@ namespace WinFormsApp1
             return $"event-{Guid.NewGuid().ToString("N")}";
         }
 
+        private void EnsureEventInstanceId(BoundingBox box)
+        {
+            if (box == null) return;
+            if (box.Label != "event") return;
+
+            if (string.IsNullOrWhiteSpace(box.EventInstanceId))
+            {
+                box.EventInstanceId = CreateEventInstanceId();
+            }
+        }
+
         private bool IsSameEventInstance(BoundingBox box, WaypointMarker waypoint)
         {
             if (box == null || waypoint == null)
@@ -7360,17 +7374,51 @@ namespace WinFormsApp1
             bool boxHasInstanceId = !string.IsNullOrWhiteSpace(box.EventInstanceId);
             bool waypointHasInstanceId = !string.IsNullOrWhiteSpace(waypoint.EventInstanceId);
 
-            if (boxHasInstanceId && waypointHasInstanceId)
+            if (boxHasInstanceId || waypointHasInstanceId)
             {
-                return string.Equals(box.EventInstanceId, waypoint.EventInstanceId, StringComparison.Ordinal);
+                return boxHasInstanceId &&
+                       waypointHasInstanceId &&
+                       string.Equals(box.EventInstanceId, waypoint.EventInstanceId, StringComparison.Ordinal);
             }
 
-            if (!boxHasInstanceId && !waypointHasInstanceId)
+            return box.EventId == waypoint.ObjectId;
+        }
+
+        private bool IsSameEventInstance(BoundingBox boxA, BoundingBox boxB)
+        {
+            if (boxA == null || boxB == null)
+                return false;
+
+            if (boxA.Label != "event" || boxB.Label != "event")
+                return false;
+
+            bool hasInstanceA = !string.IsNullOrWhiteSpace(boxA.EventInstanceId);
+            bool hasInstanceB = !string.IsNullOrWhiteSpace(boxB.EventInstanceId);
+
+            if (hasInstanceA || hasInstanceB)
             {
-                return box.EventId == waypoint.ObjectId;
+                return hasInstanceA &&
+                       hasInstanceB &&
+                       string.Equals(boxA.EventInstanceId, boxB.EventInstanceId, StringComparison.Ordinal);
             }
 
-            return false;
+            return boxA.EventId == boxB.EventId &&
+                   boxA.Rectangle == boxB.Rectangle;
+        }
+
+        private bool IsSameEventGeometryWithinWaypoint(BoundingBox box, WaypointMarker waypoint)
+        {
+            if (box == null || waypoint == null)
+                return false;
+
+            if (box.Label != "event" || waypoint.Label != "event")
+                return false;
+
+            if (!IsSameEventInstance(box, waypoint))
+                return false;
+
+            return box.FrameIndex >= waypoint.EntryFrame &&
+                   box.FrameIndex <= waypoint.ExitFrame;
         }
 
         // 박스의 현재 라벨에 해당하는 ID 가져오기
@@ -7562,8 +7610,26 @@ namespace WinFormsApp1
         {
             if (selectedBox != null)
             {
+                // event로 라벨이 변경되면 새 EventInstanceId를 보장한다.
+                // 단, 기존에 이미 동일한 EventInstanceId를 가진 박스가 같은 인스턴스를 유지해야 하는 경우(예: 같은 종류 event 내 ID만 변경)는 유지한다.
+                bool changingToEvent = newLabel == "event";
+                bool changingFromEvent = oldLabel == "event";
+                bool wasEvent = selectedBox.Label == "event";
+
                 selectedBox.Label = newLabel;
                 SetBoxId(selectedBox, newLabel, newId);
+
+                if (changingToEvent)
+                {
+                    // event로 전환: 인스턴스 ID가 없으면 새로 발급
+                    EnsureEventInstanceId(selectedBox);
+                }
+                else if (wasEvent && !changingToEvent)
+                {
+                    // event -> 다른 라벨 전환: 이제 더 이상 event가 아니므로 인스턴스 ID를 비운다
+                    selectedBox.EventInstanceId = null;
+                }
+
                 labelObjectLabel.Text = $"Label: {newLabel}_{newId:D2}";
 
                 AddUndoAction(new UndoAction
@@ -8109,11 +8175,12 @@ namespace WinFormsApp1
                 // Entry 다음 프레임부터 Exit까지 전파
                 for (int frame = entryFrame + 1; frame <= exitFrame; frame++)
                 {
-                    // 이미 해당 프레임에 동일한 Event 박스가 있는지 확인
+                    // 이미 해당 프레임에 동일한 Event 인스턴스 박스가 있는지 확인
+                    // EventInstanceId 우선 매칭 (같은 종류 Event 다중 인스턴스 섞임 방지)
                     bool exists = boundingBoxes.Any(b =>
                         b.FrameIndex == frame &&
                         b.Label == "event" &&
-                        b.EventId == eventBox.EventId);
+                        IsSameEventInstance(b, eventBox));
 
                     if (!exists)
                     {
@@ -8210,15 +8277,12 @@ namespace WinFormsApp1
 
             for (int frame = startFrame; frame <= endFrame; frame++)
             {
-                // 같은 EventId와 위치를 가진 박스가 이미 있는지 확인
+                // 같은 Event 인스턴스(위치 포함) 박스가 이미 있는지 확인
+                // EventInstanceId 우선 매칭 (같은 종류 Event 다중 인스턴스 섞임 방지)
                 bool exists = boundingBoxes.Any(b =>
                     b.FrameIndex == frame &&
                     b.Label == "event" &&
-                    b.EventId == box.EventId &&
-                    b.Rectangle.X == box.Rectangle.X &&
-                    b.Rectangle.Y == box.Rectangle.Y &&
-                    b.Rectangle.Width == box.Rectangle.Width &&
-                    b.Rectangle.Height == box.Rectangle.Height);
+                    IsSameEventInstance(b, box));
 
                 if (!exists)
                 {
@@ -8256,14 +8320,12 @@ namespace WinFormsApp1
 
             for (int frame = startFrame; frame <= endFrame; frame++)
             {
+                // 같은 Event 인스턴스(위치 포함) 박스가 이미 있는지 확인
+                // EventInstanceId 우선 매칭 (같은 종류 Event 다중 인스턴스 섞임 방지)
                 bool exists = boundingBoxes.Any(b =>
                     b.FrameIndex == frame &&
                     b.Label == "event" &&
-                    b.EventId == box.EventId &&
-                    b.Rectangle.X == box.Rectangle.X &&
-                    b.Rectangle.Y == box.Rectangle.Y &&
-                    b.Rectangle.Width == box.Rectangle.Width &&
-                    b.Rectangle.Height == box.Rectangle.Height);
+                    IsSameEventInstance(b, box));
 
                 if (!exists)
                 {
@@ -8299,28 +8361,37 @@ namespace WinFormsApp1
                 return;
             }
 
-            // 현재 프레임 이후의 같은 EventId, Rectangle을 가진 박스들 찾기
+            // 현재 프레임 이후의 같은 Event 인스턴스 박스들 찾기
+            // box.EventInstanceId가 남아있으면 그것으로 우선 매칭, 없으면 EventId + Rectangle fallback
+            // (같은 종류 Event 다중 인스턴스 섞임 방지)
+            string instanceId = box.EventInstanceId;
+            bool hasInstanceId = !string.IsNullOrWhiteSpace(instanceId);
             var boxesToRemove = boundingBoxes.Where(b =>
                 b.Label == "event" &&
-                b.EventId == box.EventId &&
-                b.Rectangle.X == box.Rectangle.X &&
-                b.Rectangle.Y == box.Rectangle.Y &&
-                b.Rectangle.Width == box.Rectangle.Width &&
-                b.Rectangle.Height == box.Rectangle.Height &&
+                (hasInstanceId
+                    ? string.Equals(b.EventInstanceId, instanceId, StringComparison.Ordinal)
+                    : (b.EventId == box.EventId &&
+                       b.Rectangle.X == box.Rectangle.X &&
+                       b.Rectangle.Y == box.Rectangle.Y &&
+                       b.Rectangle.Width == box.Rectangle.Width &&
+                       b.Rectangle.Height == box.Rectangle.Height)) &&
                 b.FrameIndex > box.FrameIndex).ToList();
 
             if (boxesToRemove.Count > 0)
             {
-                
+
+
                 foreach (var boxToRemove in boxesToRemove)
                 {
                     boundingBoxes.Remove(boxToRemove);
                 }
 
-                // 관련된 Event Waypoint 삭제
+                // 관련된 Event Waypoint 삭제 (EventInstanceId 우선, fallback EntryFrame)
                 var eventWaypoint = waypointMarkers.FirstOrDefault(w =>
                     w.Label == "event" &&
-                    w.EntryFrame == box.FrameIndex);
+                    (hasInstanceId
+                        ? string.Equals(w.EventInstanceId, instanceId, StringComparison.Ordinal)
+                        : w.EntryFrame == box.FrameIndex));
 
                 if (eventWaypoint != null)
                 {
@@ -8390,15 +8461,12 @@ namespace WinFormsApp1
             int createdCount = 0;
             for (int frame = startFrame; frame <= endFrame; frame++)
             {
-                // 이미 동일한 EventId와 Rectangle을 가진 박스가 존재하는지 확인
+                // 이미 동일한 Event 인스턴스(위치 포함) 박스가 존재하는지 확인
+                // EventInstanceId 우선 매칭 (같은 종류 Event 다중 인스턴스 섞임 방지)
                 bool exists = boundingBoxes.Any(b =>
                     b.FrameIndex == frame &&
                     b.Label == "event" &&
-                    b.EventId == box.EventId &&
-                    b.Rectangle.X == box.Rectangle.X &&
-                    b.Rectangle.Y == box.Rectangle.Y &&
-                    b.Rectangle.Width == box.Rectangle.Width &&
-                    b.Rectangle.Height == box.Rectangle.Height);
+                    IsSameEventInstance(b, box));
 
                 if (!exists)
                 {
@@ -8459,12 +8527,17 @@ namespace WinFormsApp1
 
             System.Diagnostics.Debug.WriteLine($"[Event 전파] 프레임 {box.FrameIndex}에서 수정 감지, {startFrame}~{endFrame}까지 전파 시작");
 
-            // 현재 프레임 이후의 동일한 Event 박스들을 찾아서 업데이트
+            // 현재 프레임 이후의 동일한 Event 인스턴스 박스들을 찾아서 업데이트
+            // EventInstanceId가 있으면 인스턴스 ID로만 매칭(위치 무관),
+            // 없으면 기존 EventId 기반 fallback (레거시 호환)
+            bool hasInstanceId = !string.IsNullOrWhiteSpace(box.EventInstanceId);
             var boxesToUpdate = boundingBoxes.Where(b =>
                 b.FrameIndex > box.FrameIndex &&
                 b.FrameIndex <= endFrame &&
                 b.Label == "event" &&
-                b.EventId == box.EventId).ToList();
+                (hasInstanceId
+                    ? string.Equals(b.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal)
+                    : b.EventId == box.EventId)).ToList();
 
             int updatedCount = 0;
             foreach (var targetBox in boxesToUpdate)
@@ -8481,7 +8554,9 @@ namespace WinFormsApp1
                     bool exists = boundingBoxes.Any(b =>
                         b.FrameIndex == frame &&
                         b.Label == "event" &&
-                        b.EventId == box.EventId);
+                        (hasInstanceId
+                            ? string.Equals(b.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal)
+                            : b.EventId == box.EventId));
 
                     if (!exists)
                     {
@@ -11232,12 +11307,14 @@ namespace WinFormsApp1
                 targetEvent = eventBoxesAtFrame[0];
             }
             
-            // 현재 Event의 Waypoint 찾기 (Event Label, EventId로 매칭)
+            // 현재 Event의 Waypoint 찾기 (EventInstanceId 우선 매칭, fallback EventId)
+            // 같은 종류 Event가 여러 개일 때 targetEvent 인스턴스에 해당하는 waypoint만 정확히 찾는다
             var eventWaypoint = waypointMarkers.FirstOrDefault(w =>
                 w.Label == "event" &&
                 currentFrameIndex >= w.EntryFrame &&
-                currentFrameIndex <= w.ExitFrame);
-            
+                currentFrameIndex <= w.ExitFrame &&
+                IsSameEventInstance(targetEvent, w));
+
             if (eventWaypoint == null)
             {
                 MessageBox.Show(
@@ -11247,16 +11324,13 @@ namespace WinFormsApp1
                     MessageBoxIcon.Error);
                 return;
             }
-            
+
             // 현재 프레임부터 영상 끝까지 삭제 (Q키로 종료)
+            // targetEvent와 동일한 인스턴스(EventInstanceId 우선, fallback EventId+Rectangle)인 박스만 삭제
             var boxesToDelete = boundingBoxes
-                .Where(b => 
+                .Where(b =>
                     b.Label == "event" &&
-                    b.EventId == targetEvent.EventId &&
-                    b.Rectangle.X == targetEvent.Rectangle.X &&
-                    b.Rectangle.Y == targetEvent.Rectangle.Y &&
-                    b.Rectangle.Width == targetEvent.Rectangle.Width &&
-                    b.Rectangle.Height == targetEvent.Rectangle.Height &&
+                    IsSameEventInstance(b, targetEvent) &&
                     b.FrameIndex >= currentFrameIndex)
                 .ToList();
             
@@ -13002,3 +13076,4 @@ namespace WinFormsApp1
 
     #endregion
 }
+
