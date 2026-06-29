@@ -41,6 +41,7 @@ namespace WinFormsApp1
         public string EntryTime { get; set; }
         public string ExitTime { get; set; }
         public int ObjectId { get; set; } // PersonId, VehicleId, EventId 중 하나
+        public string EventInstanceId { get; set; }
         public string Label { get; set; }
         public string InteractingObject { get; set; } // Event 전용: 객체(P/V) 텍스트
     }
@@ -73,6 +74,7 @@ namespace WinFormsApp1
         public int VehicleId { get; set; }
         public int EventId { get; set; }
         public string Action { get; set; }
+        public string EventInstanceId { get; set; }
         public string VehicleName { get; set; }
         public string EventName { get; set; }
         public bool IsDeleted { get; set; } // ✅ 삭제된 박스 표시 (흔적 유지)
@@ -125,6 +127,8 @@ namespace WinFormsApp1
         // Event 전용: 상호작용 객체 텍스트 (person/vehicle 등)
         [JsonProperty("interacting_object", NullValueHandling = NullValueHandling.Ignore)]
         public string InteractingObject { get; set; }
+        [JsonProperty("event_instance_id", NullValueHandling = NullValueHandling.Ignore)]
+        public string EventInstanceId { get; set; }
         // Person 전용: 변경된 속성 정보 (null 값 제외)
         [JsonProperty("person_attributes", NullValueHandling = NullValueHandling.Ignore)]
         public Dictionary<string, object> PersonAttributes { get; set; }
@@ -1012,6 +1016,7 @@ namespace WinFormsApp1
             int fixedIdPerson = startBox.PersonId;
             int fixedIdVehicle = startBox.VehicleId;
             int fixedIdEvent = startBox.EventId;
+            string fixedEventInstanceId = startBox.EventInstanceId;
 
             // ✅ 추적 대상의 기본 카테고리를 미리 추출합니다. 
             // vehicle의 경우 실제 종류(car, motorcycle 등)를 반환하여 COCO 데이터셋과 매칭
@@ -1185,6 +1190,7 @@ namespace WinFormsApp1
                             PersonId = fixedIdPerson,
                             VehicleId = fixedIdVehicle,
                             EventId = fixedIdEvent,
+                            EventInstanceId = fixedEventInstanceId,
                             Action = startBox.Action,
                             VehicleName = startBox.VehicleName,
                             EventName = startBox.EventName
@@ -1241,6 +1247,7 @@ namespace WinFormsApp1
                         PersonId = fixedIdPerson,
                         VehicleId = fixedIdVehicle,
                         EventId = fixedIdEvent,
+                            EventInstanceId = fixedEventInstanceId,
                             Action = startBox.Action,
                             VehicleName = startBox.VehicleName,
                             EventName = startBox.EventName
@@ -4057,6 +4064,7 @@ namespace WinFormsApp1
                             EntryTime = TimeSpan.FromSeconds(minFrameIndex / fps).ToString(@"hh\:mm\:ss"),
                             ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                             ObjectId = eventId,
+                            EventInstanceId = entryEventBox?.EventInstanceId,
                             Label = "event",
                             InteractingObject = "" // BoundingBox에는 InteractingObject 속성이 없으므로 빈 문자열로 설정
                         };
@@ -4651,6 +4659,7 @@ namespace WinFormsApp1
                     PersonId = currentSelectedLabel == "person" ? currentAssignedId : 0,
                     VehicleId = currentSelectedLabel == "vehicle" ? currentAssignedId : 0,
                     EventId = currentSelectedLabel == "event" ? currentAssignedId : 0,
+                    EventInstanceId = currentSelectedLabel == "event" ? CreateEventInstanceId() : null,
                     Action = "waypoint"
                 };
             }
@@ -7328,6 +7337,25 @@ namespace WinFormsApp1
             pictureBoxVideo.Invalidate();
         }
 
+        private string CreateEventInstanceId()
+        {
+            return $"event-{Guid.NewGuid().ToString("N")}";
+        }
+
+        private bool IsSameEventInstance(BoundingBox box, WaypointMarker waypoint)
+        {
+            if (box == null || waypoint == null)
+                return false;
+
+            if (box.Label != "event" || waypoint.Label != "event")
+                return false;
+
+            if (!string.IsNullOrWhiteSpace(box.EventInstanceId) && !string.IsNullOrWhiteSpace(waypoint.EventInstanceId))
+                return string.Equals(box.EventInstanceId, waypoint.EventInstanceId, StringComparison.Ordinal);
+
+            return box.EventId == waypoint.ObjectId;
+        }
+
         // 박스의 현재 라벨에 해당하는 ID 가져오기
         private int GetBoxId(BoundingBox box)
         {
@@ -7338,25 +7366,35 @@ namespace WinFormsApp1
         }
         
         // 선택된 박스가 속한 기존 Waypoint 찾기
+        // 선택된 박스가 속한 기존 Waypoint 찾기
         private WaypointMarker FindWaypointForBox(BoundingBox box)
         {
             if (box == null) return null;
-            
+
             int boxId = GetBoxId(box);
-            
-            // 현재 프레임에 해당하는 waypoint 찾기
-            // 같은 Label과 ObjectId를 가진 waypoint 중에서
-            // 현재 프레임이 EntryFrame과 ExitFrame 사이에 있는 경우
+
+            // Event: 같은 인스턴스가 있으면 우선 매칭
+            if (box.Label == "event")
+            {
+                var sameInstanceWaypoint = waypointMarkers.FirstOrDefault(w =>
+                    w.Label == box.Label &&
+                    w.EntryFrame <= box.FrameIndex &&
+                    w.ExitFrame >= box.FrameIndex &&
+                    IsSameEventInstance(box, w));
+
+                if (sameInstanceWaypoint != null)
+                    return sameInstanceWaypoint;
+            }
+
+            // 현재 프레임에 해당하는 waypoint (기존 동작 fallback)
             var waypoint = waypointMarkers.FirstOrDefault(w =>
                 w.Label == box.Label &&
                 w.ObjectId == boxId &&
                 box.FrameIndex >= w.EntryFrame &&
                 box.FrameIndex <= w.ExitFrame);
-            
+
             return waypoint;
         }
-
-        // Person 속성 읽기 메서드
         private object GetPersonAttribute(int personId, int frameIndex, string attributeName)
         {
             return personAttributeStore.GetAttribute(personId, frameIndex, attributeName, waypointMarkers, currentVideoFile);
@@ -8059,6 +8097,7 @@ namespace WinFormsApp1
                             PersonId = eventBox.PersonId,
                             VehicleId = eventBox.VehicleId,
                             EventId = eventBox.EventId,
+                            EventInstanceId = eventBox.EventInstanceId,
                             Action = "waypoint"
                         };
                         boundingBoxes.Add(newBox);
@@ -8119,6 +8158,7 @@ namespace WinFormsApp1
                 EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                 ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
                 ObjectId = box.EventId,
+                EventInstanceId = box.EventInstanceId,
                 Label = "event"
             };
 
@@ -8162,6 +8202,7 @@ namespace WinFormsApp1
                         PersonId = 0,
                         VehicleId = 0,
                         EventId = box.EventId,
+                        EventInstanceId = box.EventInstanceId,
                         Action = box.Action,
                         VehicleName = box.VehicleName,
                         EventName = box.EventName
@@ -8206,6 +8247,7 @@ namespace WinFormsApp1
                         PersonId = 0,
                         VehicleId = 0,
                         EventId = box.EventId,
+                        EventInstanceId = box.EventInstanceId,
                         Action = box.Action,
                         VehicleName = box.VehicleName,
                         EventName = box.EventName
@@ -8340,6 +8382,7 @@ namespace WinFormsApp1
                         PersonId = box.PersonId,
                         VehicleId = box.VehicleId,
                         EventId = box.EventId,
+                        EventInstanceId = box.EventInstanceId,
                         Action = "waypoint"
                     };
                     boundingBoxes.Add(newBox);
@@ -8422,6 +8465,7 @@ namespace WinFormsApp1
                             PersonId = box.PersonId,
                             VehicleId = box.VehicleId,
                             EventId = box.EventId,
+                            EventInstanceId = box.EventInstanceId,
                             Action = "waypoint"
                         };
                         boundingBoxes.Add(newBox);
@@ -8697,6 +8741,7 @@ namespace WinFormsApp1
                 PersonId = templateBox.PersonId,
                 VehicleId = templateBox.VehicleId,
                 EventId = templateBox.EventId,
+                EventInstanceId = templateBox.EventInstanceId,
                 Rectangle = templateBox.Rectangle, // 임시값, 보간으로 업데이트됨
                 Action = "waypoint"
             };
@@ -12593,6 +12638,7 @@ namespace WinFormsApp1
                 PersonId = box.PersonId,
                 VehicleId = box.VehicleId,
                 EventId = box.EventId,
+                EventInstanceId = box.EventInstanceId,
                 Action = box.Action,
                 VehicleName = box.VehicleName,
                 EventName = box.EventName
