@@ -77,13 +77,6 @@ namespace WinFormsApp1
         public string EventInstanceId { get; set; }
         public string VehicleName { get; set; }
         public string EventName { get; set; }
-        public string PersonPartType { get; set; } // "body" | "face" | null
-        public int? FaceId { get; set; }
-        public int? LinkedPersonId { get; set; }
-        public string VehicleSubPart { get; set; } // "plate" | null
-        public int? LinkedVehicleId { get; set; }
-        public int? BoxEntryFrame { get; set; }
-        public int? BoxExitFrame { get; set; }
         public bool IsDeleted { get; set; } // ✅ 삭제된 박스 표시 (흔적 유지)
         public Dictionary<string, object> PersonAttributes { get; set; } // Person 전용: 속성 정보
         public List<List<double>> Skeleton3D { get; set; } // Skeleton 데이터: 17개 관절의 [x, y, z] 좌표
@@ -1524,8 +1517,6 @@ namespace WinFormsApp1
         
         // ID 관리 변수 제거 - 사용자가 수동으로 Ctrl+1~14로 지정
         private int currentAssignedId = 1; // 현재 할당할 ID (Ctrl+1~14로 변경됨)
-        private int currentFaceAssignedId = 1;
-        private MouseButtons? currentDrawMouseButton = null;
 
         private TrackingEngine trackingEngine = null;  
         private bool isYoloAvailable = false;
@@ -4660,15 +4651,11 @@ namespace WinFormsApp1
             
             if (currentMode == DrawMode.Draw)
             {
-                // Entry ?? ?? ?? - YOLO ?? ??? ??
+                // Entry 마커 체크 제거 - YOLO 추적 시에만 필요
                 isDrawing = true;
-                currentDrawMouseButton = e.Button;
-                drawStartPoint = e.Location; // ? ??? ??
+                drawStartPoint = e.Location; // 뷰 좌표로 저장
 
-                bool isPersonFace = currentSelectedLabel == "person" && e.Button == MouseButtons.Right;
-                bool isVehiclePlate = currentSelectedLabel == "vehicle" && e.Button == MouseButtons.Right;
-
-                // ??? ??? ???? ??
+                // 이미지 좌표로 변환하여 저장
                 var imagePoint = ViewToImage(new PointF(e.X, e.Y));
                 
                 drawingBox = new BoundingBox
@@ -4676,18 +4663,11 @@ namespace WinFormsApp1
                     FrameIndex = currentFrameIndex,
                     Rectangle = new Rectangle((int)imagePoint.X, (int)imagePoint.Y, 0, 0),
                     Label = currentSelectedLabel,
-                    PersonId = currentSelectedLabel == "person" && !isPersonFace ? currentAssignedId : 0,
-                    VehicleId = currentSelectedLabel == "vehicle" && !isVehiclePlate ? currentAssignedId : 0,
+                    PersonId = currentSelectedLabel == "person" ? currentAssignedId : 0,
+                    VehicleId = currentSelectedLabel == "vehicle" ? currentAssignedId : 0,
                     EventId = currentSelectedLabel == "event" ? currentAssignedId : 0,
                     EventInstanceId = currentSelectedLabel == "event" ? CreateEventInstanceId() : null,
-                    Action = "waypoint",
-                    PersonPartType = currentSelectedLabel == "person" ? (isPersonFace ? "face" : "body") : null,
-                    FaceId = isPersonFace ? currentFaceAssignedId : null,
-                    LinkedPersonId = isPersonFace ? currentAssignedId : null,
-                    VehicleSubPart = isVehiclePlate ? "plate" : null,
-                    LinkedVehicleId = isVehiclePlate ? currentAssignedId : null,
-                    BoxEntryFrame = (isPersonFace || isVehiclePlate) ? currentFrameIndex : null,
-                    BoxExitFrame = (isPersonFace || isVehiclePlate) ? currentFrameIndex : null
+                    Action = "waypoint"
                 };
             }
             else if (currentMode == DrawMode.Select)
@@ -4934,7 +4914,6 @@ namespace WinFormsApp1
 
                 drawingBox = null;
                 isDrawing = false;
-                currentDrawMouseButton = null;
                 pictureBoxVideo.Invalidate();
             }
             else if (isResizing)
@@ -5047,9 +5026,10 @@ namespace WinFormsApp1
             foreach (var box in cachedCurrentFrameBoxes)
             {
                 // 선택된 박스는 나중에 그리므로 건너뛰기
-                // ??? ?? ????? ??? ???. ?? ID? ?? ??? ????.
-                if (ReferenceEquals(box, selectedBox))
+                if (box == selectedBox || (selectedBox != null && box.FrameIndex == currentFrameIndex && 
+                    box.Label == selectedBox.Label && GetBoxId(box) == GetBoxId(selectedBox)))
                     continue;
+
                 // 현재 프레임의 박스만 표시 (box.FrameIndex == currentFrameIndex)
                 // currentFrameBoxes에서 이미 필터링되었으므로 추가 체크 불필요
 
@@ -6814,22 +6794,10 @@ namespace WinFormsApp1
         {
             if (box.Label == "person")
             {
-                if (box.PersonPartType == "face")
-                {
-                    string parentText = box.LinkedPersonId.HasValue ? box.LinkedPersonId.Value.ToString("D2") : "--";
-                    return $"person_face_{box.FaceId.GetValueOrDefault():D2}->body_{parentText}";
-                }
-
-                return $"person_body_{box.PersonId:D2}";
+                return $"person_{box.PersonId:D2}";
             }
             else if (box.Label == "vehicle")
             {
-                if (box.VehicleSubPart == "plate")
-                {
-                    string parentText = box.LinkedVehicleId.HasValue ? box.LinkedVehicleId.Value.ToString() : "--";
-                    return $"vehicle_plate->vehicle_{parentText}";
-                }
-
                 if (box.VehicleId > 0 && box.VehicleId <= VehicleTypes.Length)
                     return $"vehicle_{VehicleTypes[box.VehicleId - 1]}";
                 else
@@ -7408,16 +7376,8 @@ namespace WinFormsApp1
         // 박스의 현재 라벨에 해당하는 ID 가져오기
         private int GetBoxId(BoundingBox box)
         {
-            if (box.Label == "person")
-            {
-                if (box.PersonPartType == "face") return box.FaceId ?? 0;
-                return box.PersonId;
-            }
-            if (box.Label == "vehicle")
-            {
-                if (box.VehicleSubPart == "plate") return box.LinkedVehicleId ?? box.VehicleId;
-                return box.VehicleId;
-            }
+            if (box.Label == "person") return box.PersonId;
+            if (box.Label == "vehicle") return box.VehicleId;
             if (box.Label == "event") return box.EventId;
             return 0;
         }
@@ -7428,16 +7388,6 @@ namespace WinFormsApp1
             if (box == null) return null;
 
             int boxId = GetBoxId(box);
-
-            if (box.Label == "person" && box.PersonPartType == "face" && box.LinkedPersonId.HasValue)
-            {
-                boxId = box.LinkedPersonId.Value;
-            }
-
-            if (box.Label == "vehicle" && box.VehicleSubPart == "plate" && box.LinkedVehicleId.HasValue)
-            {
-                boxId = box.LinkedVehicleId.Value;
-            }
 
             // Event: 동일 EventInstanceId가 있으면 우선 정확 매칭
             if (box.Label == "event")
@@ -7479,200 +7429,6 @@ namespace WinFormsApp1
         }
 
         // Person 속성 저장 메서드
-        private void ApplySubPartMetadataToAttributes(BoundingBox box, Dictionary<string, object> attributes)
-        {
-            if (box == null || attributes == null)
-                return;
-
-            if (box.Label == "person")
-            {
-                attributes["person_part_type"] = string.IsNullOrWhiteSpace(box.PersonPartType) ? "body" : box.PersonPartType;
-
-                if (box.PersonPartType == "face")
-                {
-                    if (box.FaceId.HasValue)
-                        attributes["face_id"] = box.FaceId.Value;
-                    if (box.LinkedPersonId.HasValue)
-                        attributes["linked_person_id"] = box.LinkedPersonId.Value;
-                }
-            }
-
-            if (box.Label == "vehicle" && box.VehicleSubPart == "plate")
-            {
-                attributes["vehicle_sub_part"] = "plate";
-                if (box.LinkedVehicleId.HasValue)
-                    attributes["linked_vehicle_id"] = box.LinkedVehicleId.Value;
-            }
-
-            if (box.BoxEntryFrame.HasValue)
-                attributes["box_entry_frame"] = box.BoxEntryFrame.Value;
-            if (box.BoxExitFrame.HasValue)
-                attributes["box_exit_frame"] = box.BoxExitFrame.Value;
-        }
-
-        private void ApplySubPartMetadataFromAttributes(BoundingBox box, Dictionary<string, object> attributes)
-        {
-            if (box == null || attributes == null || attributes.Count == 0)
-                return;
-
-            if (attributes.TryGetValue("person_part_type", out object personPartType))
-                box.PersonPartType = personPartType?.ToString();
-            else if (box.Label == "person" && string.IsNullOrWhiteSpace(box.PersonPartType))
-                box.PersonPartType = "body";
-
-            if (attributes.TryGetValue("face_id", out object faceId) && int.TryParse(faceId?.ToString(), out int parsedFaceId))
-                box.FaceId = parsedFaceId;
-            if (attributes.TryGetValue("linked_person_id", out object linkedPersonId) && int.TryParse(linkedPersonId?.ToString(), out int parsedLinkedPersonId))
-                box.LinkedPersonId = parsedLinkedPersonId;
-            if (attributes.TryGetValue("vehicle_sub_part", out object vehicleSubPart))
-                box.VehicleSubPart = vehicleSubPart?.ToString();
-            if (attributes.TryGetValue("linked_vehicle_id", out object linkedVehicleId) && int.TryParse(linkedVehicleId?.ToString(), out int parsedLinkedVehicleId))
-                box.LinkedVehicleId = parsedLinkedVehicleId;
-            if (attributes.TryGetValue("box_entry_frame", out object boxEntryFrame) && int.TryParse(boxEntryFrame?.ToString(), out int parsedBoxEntryFrame))
-                box.BoxEntryFrame = parsedBoxEntryFrame;
-            if (attributes.TryGetValue("box_exit_frame", out object boxExitFrame) && int.TryParse(boxExitFrame?.ToString(), out int parsedBoxExitFrame))
-                box.BoxExitFrame = parsedBoxExitFrame;
-        }
-
-        private bool IsSubPartBox(BoundingBox box)
-        {
-            return box != null &&
-                   ((box.Label == "person" && box.PersonPartType == "face") ||
-                    (box.Label == "vehicle" && box.VehicleSubPart == "plate"));
-        }
-
-        private int CalculateOverlapArea(Rectangle a, Rectangle b)
-        {
-            Rectangle overlap = Rectangle.Intersect(a, b);
-            if (overlap.IsEmpty)
-                return 0;
-
-            return overlap.Width * overlap.Height;
-        }
-
-        private double CalculateCenterDistance(Rectangle a, Rectangle b)
-        {
-            double ax = a.Left + (a.Width / 2.0);
-            double ay = a.Top + (a.Height / 2.0);
-            double bx = b.Left + (b.Width / 2.0);
-            double by = b.Top + (b.Height / 2.0);
-            double dx = ax - bx;
-            double dy = ay - by;
-            return Math.Sqrt(dx * dx + dy * dy);
-        }
-
-        private List<BoundingBox> FindParentCandidatesForSubPart(BoundingBox subPartBox)
-        {
-            if (subPartBox == null || !subPartBox.BoxEntryFrame.HasValue || !subPartBox.BoxExitFrame.HasValue)
-                return new List<BoundingBox>();
-
-            int startFrame = subPartBox.BoxEntryFrame.Value;
-            int endFrame = subPartBox.BoxExitFrame.Value;
-
-            if (subPartBox.Label == "person" && subPartBox.PersonPartType == "face")
-            {
-                return boundingBoxes
-                    .Where(b => b.Label == "person" &&
-                                b.PersonPartType != "face" &&
-                                b.FrameIndex >= startFrame &&
-                                b.FrameIndex <= endFrame &&
-                                !b.IsDeleted)
-                    .ToList();
-            }
-
-            if (subPartBox.Label == "vehicle" && subPartBox.VehicleSubPart == "plate")
-            {
-                return boundingBoxes
-                    .Where(b => b.Label == "vehicle" &&
-                                b.VehicleSubPart != "plate" &&
-                                b.FrameIndex >= startFrame &&
-                                b.FrameIndex <= endFrame &&
-                                !b.IsDeleted)
-                    .ToList();
-            }
-
-            return new List<BoundingBox>();
-        }
-
-        private BoundingBox FindNearestParentBoxForSubPart(BoundingBox subPartBox, IEnumerable<BoundingBox> candidates)
-        {
-            BoundingBox bestBox = null;
-            int bestOverlap = -1;
-            double bestDistance = double.MaxValue;
-
-            foreach (var candidate in candidates)
-            {
-                int overlap = CalculateOverlapArea(subPartBox.Rectangle, candidate.Rectangle);
-                double distance = CalculateCenterDistance(subPartBox.Rectangle, candidate.Rectangle);
-
-                if (overlap > bestOverlap || (overlap == bestOverlap && distance < bestDistance))
-                {
-                    bestBox = candidate;
-                    bestOverlap = overlap;
-                    bestDistance = distance;
-                }
-            }
-
-            return bestBox;
-        }
-
-        private void ResolveParentLinkageForSubPart(BoundingBox subPartBox)
-        {
-            if (subPartBox == null || !IsSubPartBox(subPartBox))
-                return;
-
-            var candidates = FindParentCandidatesForSubPart(subPartBox);
-            var parentBox = FindNearestParentBoxForSubPart(subPartBox, candidates);
-            if (parentBox == null)
-                return;
-
-            if (subPartBox.Label == "person" && subPartBox.PersonPartType == "face")
-            {
-                subPartBox.LinkedPersonId = parentBox.PersonId;
-            }
-            else if (subPartBox.Label == "vehicle" && subPartBox.VehicleSubPart == "plate")
-            {
-                subPartBox.LinkedVehicleId = parentBox.VehicleId;
-            }
-        }
-
-        private BoundingBox FindMatchingSubPartBoxAtFrame(BoundingBox templateBox, int frameIndex)
-        {
-            return boundingBoxes.FirstOrDefault(b =>
-                b.FrameIndex == frameIndex &&
-                b.Label == templateBox.Label &&
-                b.PersonPartType == templateBox.PersonPartType &&
-                b.VehicleSubPart == templateBox.VehicleSubPart &&
-                b.FaceId == templateBox.FaceId &&
-                b.LinkedPersonId == templateBox.LinkedPersonId &&
-                b.LinkedVehicleId == templateBox.LinkedVehicleId &&
-                !b.IsDeleted);
-        }
-
-        private void PropagateSubPartBoxWithinRange(BoundingBox subPartBox)
-        {
-            if (subPartBox == null || !IsSubPartBox(subPartBox) || !subPartBox.BoxEntryFrame.HasValue || !subPartBox.BoxExitFrame.HasValue)
-                return;
-
-            for (int frame = subPartBox.BoxEntryFrame.Value; frame <= subPartBox.BoxExitFrame.Value; frame++)
-            {
-                var existingBox = FindMatchingSubPartBoxAtFrame(subPartBox, frame);
-                if (existingBox != null)
-                {
-                    existingBox.Rectangle = new Rectangle(subPartBox.Rectangle.Location, subPartBox.Rectangle.Size);
-                    existingBox.BoxEntryFrame = subPartBox.BoxEntryFrame;
-                    existingBox.BoxExitFrame = subPartBox.BoxExitFrame;
-                    existingBox.LinkedPersonId = subPartBox.LinkedPersonId;
-                    existingBox.LinkedVehicleId = subPartBox.LinkedVehicleId;
-                    continue;
-                }
-
-                var clonedBox = CloneBoundingBox(subPartBox);
-                clonedBox.FrameIndex = frame;
-                boundingBoxes.Add(clonedBox);
-            }
-        }
-
         private void SetPersonAttribute(int personId, int waypointEntryFrame, string attributeName, object value)
         {
             int applyFromFrame;
@@ -7745,28 +7501,8 @@ namespace WinFormsApp1
         // 박스의 특정 라벨 타입에 ID 설정
         private void SetBoxId(BoundingBox box, string label, int id)
         {
-            if (label == "person")
-            {
-                if (box.PersonPartType == "face")
-                {
-                    box.FaceId = id;
-                }
-                else
-                {
-                    box.PersonId = id;
-                }
-            }
-            else if (label == "vehicle")
-            {
-                if (box.VehicleSubPart == "plate")
-                {
-                    box.LinkedVehicleId = id;
-                }
-                else
-                {
-                    box.VehicleId = id;
-                }
-            }
+            if (label == "person") box.PersonId = id;
+            else if (label == "vehicle") box.VehicleId = id;
             else if (label == "event") box.EventId = id;
         }
 
@@ -11391,9 +11127,6 @@ namespace WinFormsApp1
                                 {
                                     annotation.PersonAttributes = changedAttributes;
                                 }
-
-                                annotation.Attributes = new Dictionary<string, object>();
-                                ApplySubPartMetadataToAttributes(box, annotation.Attributes);
                                 
                                 // ✅ 이전 속성 업데이트: 현재 프레임의 모든 속성을 업데이트 (다음 프레임 비교용)
                                 // 변경되지 않은 속성도 유지해야 정확한 비교 가능
@@ -12511,21 +12244,7 @@ namespace WinFormsApp1
             string oldLabel = selectedBox.Label;
             Rectangle oldRect = selectedBox.Rectangle;
 
-            if (selectedBox.Label == "person" && selectedBox.PersonPartType == "face")
-            {
-                selectedBox.FaceId = id;
-                currentFaceAssignedId = id;
-            }
-            else if (selectedBox.Label == "vehicle" && selectedBox.VehicleSubPart == "plate")
-            {
-                selectedBox.LinkedVehicleId = id;
-                currentAssignedId = id;
-            }
-            else
-            {
-                SetBoxId(selectedBox, selectedBox.Label, id);
-                currentAssignedId = id;
-            }
+            SetBoxId(selectedBox, selectedBox.Label, id);
 
             AddUndoAction(new UndoAction
             {
@@ -12536,15 +12255,18 @@ namespace WinFormsApp1
                 OriginalRectangle = oldRect
             });
 
+            // ✅ UI 업데이트: 선택된 박스의 정보도 갱신
             UpdateObjectInfo(selectedBox);
             UpdateBboxListDisplay();
-            labelObjectLabel.Text = $"Label: {GetBoxLabelText(selectedBox)}";
+            labelObjectLabel.Text = $"Label: {selectedBox.Label}_{id:D2}";
             pictureBoxVideo.Invalidate();
 
             currentMode = DrawMode.Draw;
             btnEdit.BackColor = Color.FromArgb(59, 130, 246);
             btnSelectAll.BackColor = SystemColors.Control;
             pictureBoxVideo.Cursor = Cursors.Cross;
+
+            // ❌ selectedBox를 null로 초기화하지 않음 (선택 상태 유지)
         }
         #endregion
 
@@ -13052,17 +12774,7 @@ namespace WinFormsApp1
                 EventInstanceId = box.EventInstanceId,
                 Action = box.Action,
                 VehicleName = box.VehicleName,
-                EventName = box.EventName,
-                PersonPartType = box.PersonPartType,
-                FaceId = box.FaceId,
-                LinkedPersonId = box.LinkedPersonId,
-                VehicleSubPart = box.VehicleSubPart,
-                LinkedVehicleId = box.LinkedVehicleId,
-                BoxEntryFrame = box.BoxEntryFrame,
-                BoxExitFrame = box.BoxExitFrame,
-                IsDeleted = box.IsDeleted,
-                PersonAttributes = box.PersonAttributes != null ? new Dictionary<string, object>(box.PersonAttributes) : null,
-                Skeleton3D = box.Skeleton3D != null ? box.Skeleton3D.Select(j => new List<double>(j)).ToList() : null
+                EventName = box.EventName
             };
         }
 
@@ -13290,4 +13002,3 @@ namespace WinFormsApp1
 
     #endregion
 }
-

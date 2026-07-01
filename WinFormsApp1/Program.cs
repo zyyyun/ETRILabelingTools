@@ -1,4 +1,5 @@
-using System;
+﻿using System;
+using System.Runtime.InteropServices;
 
 namespace WinFormsApp1
 {
@@ -11,19 +12,38 @@ namespace WinFormsApp1
         static void Main()
         {
             CudaEnvironmentHelper.EnsureCudaPathOnProcess();
+            WinmmTimer.BeginPeriod(1);
 
             // To customize application configuration such as set high DPI settings or default font,
             // see https://aka.ms/applicationconfiguration.
-            ApplicationConfiguration.Initialize();
-
-            if (!Services.LicenseService.IsAuthorized(out string denyReason))
+            try
             {
-                MessageBox.Show(denyReason, "AOLT - 인증 오류",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
+                ApplicationConfiguration.Initialize();
+                Application.Run(new Form1());
             }
+            finally
+            {
+                WinmmTimer.EndPeriod(1);
+            }
+        }
+    }
 
-            Application.Run(new Form1());
+    internal static class WinmmTimer
+    {
+        [DllImport("winmm.dll", ExactSpelling = true)]
+        public static extern int timeBeginPeriod(int period);
+
+        [DllImport("winmm.dll", ExactSpelling = true)]
+        public static extern int timeEndPeriod(int period);
+
+        public static void BeginPeriod(int period)
+        {
+            try { timeBeginPeriod(period); } catch { }
+        }
+
+        public static void EndPeriod(int period)
+        {
+            try { timeEndPeriod(period); } catch { }
         }
     }
 }
