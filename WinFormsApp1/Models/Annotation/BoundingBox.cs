@@ -15,8 +15,13 @@ namespace WinFormsApp1
         public string EventInstanceId { get; set; }
         public string VehicleName { get; set; }
         public string EventName { get; set; }
+        public string PersonPartType { get; set; }
+        public int? LinkedPersonId { get; set; }
+        public int? BoxEntryFrame { get; set; }
+        public int? BoxExitFrame { get; set; }
         public bool IsDeleted { get; set; }
         public Dictionary<string, object> PersonAttributes { get; set; }
         public List<List<double>> Skeleton3D { get; set; }
     }
 }
+
