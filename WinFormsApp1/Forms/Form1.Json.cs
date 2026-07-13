@@ -209,6 +209,8 @@ namespace WinFormsApp1
                 var tempCategoryMap = new Dictionary<int, CategoryData>();
                 var tempFrameTimestampMap = new Dictionary<int, string>();
                 var tempWaypointFailureRanges = new Dictionary<string, List<(int start, int end)>>();
+                var tempAnnotationsById = new Dictionary<int, AnnotationData>();
+                var tempBoxesByAnnotationId = new Dictionary<int, BoundingBox>();
                 int tempNextAnnotationId = 1;
 
                 // ✅ 실패 구간 정보 복원 (임시)
@@ -385,6 +387,8 @@ namespace WinFormsApp1
                     };
 
                     tempBoundingBoxes.Add(box);
+                    tempAnnotationsById[annotation.Id] = annotation;
+                    tempBoxesByAnnotationId[annotation.Id] = box;
 
                     if (annotation.Id >= tempNextAnnotationId)
                         tempNextAnnotationId = annotation.Id + 1;
@@ -511,6 +515,8 @@ namespace WinFormsApp1
                     }
                     waypointIndex++;
                 }
+
+                FaceLinkHelper.ApplyFaceLinks(labelingData.FaceLinks, tempBoxesByAnnotationId, tempAnnotationsById);
 
                 // ✅ Person attributes 복원 (최적화: waypoint 매핑 미리 생성 + 일괄 처리)
                 // Waypoint 매핑을 미리 생성하여 반복 검색 제거
@@ -1105,6 +1111,7 @@ namespace WinFormsApp1
             {
                 var images = new List<ImageInfo>();
                 var annotations = new List<AnnotationData>();
+                var faceLinks = new List<FaceLinkData>();
                 var categories = new Dictionary<int, CategoryData>();
 
                 // 모든 속성 목록 정의 (Weight/BodyShape로 통합)
@@ -1181,6 +1188,7 @@ namespace WinFormsApp1
                     };
 
                     images.Add(imageInfo);
+                    var currentFrameAnnotations = new Dictionary<BoundingBox, AnnotationData>();
 
                     foreach (var box in frameGroup)
                     {
@@ -1520,6 +1528,24 @@ namespace WinFormsApp1
                         }
 
                         annotations.Add(annotation);
+                        currentFrameAnnotations[box] = annotation;
+                    }
+
+                    foreach (var faceBox in frameGroup.Where(box => string.Equals(box.Label, "person", StringComparison.OrdinalIgnoreCase) && string.Equals(box.PersonPartType, "face", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var faceLink = FaceLinkHelper.TryCreateFaceLink(faceBox, currentFrameAnnotations.Values, currentFrameAnnotations);
+                        if (faceLink != null)
+                        {
+                            faceLinks.Add(faceLink);
+                        }
+                        else if (!faceBox.LinkedPersonId.HasValue)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[FaceLinkExport] Missing linked body id for face box at frame {faceBox.FrameIndex}.");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[FaceLinkExport] Failed to match body annotation for linked face box at frame {faceBox.FrameIndex}.");
+                        }
                     }
 
                     imageId++;
@@ -1539,7 +1565,8 @@ namespace WinFormsApp1
                     Images = images,
                     Annotations = annotations,
                     Categories = categories.Values.ToList(),
-                    FailureRanges = waypointFailureRanges
+                    FailureRanges = waypointFailureRanges,
+                    FaceLinks = faceLinks.Count > 0 ? faceLinks : null
                 };
 
                 // null 값도 포함하여 직렬화
@@ -1681,6 +1708,8 @@ namespace WinFormsApp1
 
     }
 }
+
+
 
 
 

@@ -286,7 +286,7 @@
             // panelVideoControls (Bottom control bar)
             // 
             this.panelVideoControls.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.panelVideoControls.Height = 120;
+            this.panelVideoControls.Height = 132;
             this.panelVideoControls.BackColor = System.Drawing.Color.White;
             this.panelVideoControls.Padding = new System.Windows.Forms.Padding(12);
             this.panelVideoControls.Controls.Add(this.groupBoxObjectInfo);
@@ -408,7 +408,7 @@
             // panelTimeline (Progress bar with markers - 좌측에 고정)
             // 
             this.panelTimeline.Location = new System.Drawing.Point(70, 70);
-            this.panelTimeline.Size = new System.Drawing.Size(1000, 30);
+            this.panelTimeline.Size = new System.Drawing.Size(1000, 56);
             this.panelTimeline.Anchor = System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right;
             this.panelTimeline.BackColor = System.Drawing.Color.FromArgb(229, 231, 235);
             this.panelTimeline.Paint += new System.Windows.Forms.PaintEventHandler(this.panelTimeline_Paint);
@@ -837,4 +837,6 @@
         private System.Windows.Forms.Timer timerPlayback;
     }
 }
+
+
 

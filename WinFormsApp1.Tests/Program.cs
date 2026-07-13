@@ -17,12 +17,17 @@ static class Program
             ("timeline layout maps labels to separate rows", TimelineLayoutMapsLabelsToRows),
             ("timeline segments keep a minimum visible width", TimelineSegmentsKeepMinimumWidth),
             ("timeline hit testing returns matching waypoint", TimelineHitTestingReturnsMatchingWaypoint),
-                        ("timeline width stops before object info", TimelineWidthStopsBeforeObjectInfo),
+            ("video controls height preserves object info", VideoControlsHeightPreservesObjectInfo),
+            ("timeline panel height fits all rows", TimelinePanelHeightFitsAllRows),
+            ("timeline width stops before object info", TimelineWidthStopsBeforeObjectInfo),
             ("clip resolver keeps disjoint person clips separate", ClipResolverKeepsDisjointPersonClipsSeparate),
             ("clip resolver chooses latest containing clip for nested waypoints", ClipResolverChoosesLatestContainingClip),
             ("clip resolver prefers event instance id", ClipResolverPrefersEventInstanceId),
             ("clip resolver supports bounding box input", ClipResolverSupportsBoundingBoxInput),
-            ("clip resolver falls back to single frame without waypoint", ClipResolverFallsBackToSingleFrame)
+            ("clip resolver falls back to single frame without waypoint", ClipResolverFallsBackToSingleFrame),
+            ("face link export connects face annotation to body annotation", FaceLinkExportConnectsFaceToBody),
+            ("face link import marks linked face boxes", FaceLinkImportMarksLinkedFaceBoxes),
+            ("face link import ignores malformed links", FaceLinkImportIgnoresMalformedLinks)
         };
 
         try
@@ -144,6 +149,16 @@ static class Program
         AssertTrue(hit == target, "Hit testing should return the waypoint in the clicked row.");
     }
 
+
+    private static void VideoControlsHeightPreservesObjectInfo()
+    {
+        AssertEqual(132, TimelineLayoutHelper.GetMinimumVideoControlsHeight(), "Video controls height should leave room for object info without clipping.");
+    }
+
+    private static void TimelinePanelHeightFitsAllRows()
+    {
+        AssertEqual(56, TimelineLayoutHelper.GetRequiredTimelinePanelHeight(), "Timeline panel height should fit header plus three rows.");
+    }
     private static void TimelineWidthStopsBeforeObjectInfo()
     {
         int width = TimelineLayoutHelper.CalculateTimelineWidth(panelTimelineLeft: 70, objectInfoLeft: 1230, reservedGap: 8, minimumWidth: 100);
@@ -215,6 +230,105 @@ static class Program
         AssertEqual(320, clip.ExitFrame, "Missing waypoint should fall back to the current frame exit.");
     }
 
+
+    private static void FaceLinkExportConnectsFaceToBody()
+    {
+        var body = new BoundingBox
+        {
+            Label = "person",
+            PersonId = 3,
+            FrameIndex = 120,
+            PersonPartType = "body"
+        };
+
+        var face = new BoundingBox
+        {
+            Label = "person",
+            PersonId = 3,
+            FrameIndex = 120,
+            PersonPartType = "face",
+            LinkedPersonId = 3
+        };
+
+        var annotations = new Dictionary<BoundingBox, AnnotationData>
+        {
+            [body] = new() { Id = 101, TrackId = 3 },
+            [face] = new() { Id = 102, TrackId = 3 }
+        };
+
+        var link = FaceLinkHelper.TryCreateFaceLink(face, annotations.Values, annotations);
+        AssertTrue(link != null, "Face link should be created when face and body annotations share the frame.");
+        AssertEqual(102, link!.FaceAnnotationId, "Face link should point to the face annotation id.");
+        AssertEqual(101, link.BodyAnnotationId, "Face link should point to the linked body annotation id.");
+    }
+
+    private static void FaceLinkImportMarksLinkedFaceBoxes()
+    {
+        var body = new BoundingBox
+        {
+            Label = "person",
+            PersonId = 7,
+            FrameIndex = 30
+        };
+
+        var face = new BoundingBox
+        {
+            Label = "person",
+            PersonId = 99,
+            FrameIndex = 30
+        };
+
+        var boxesByAnnotationId = new Dictionary<int, BoundingBox>
+        {
+            [101] = body,
+            [102] = face
+        };
+
+        var annotationsById = new Dictionary<int, AnnotationData>
+        {
+            [101] = new() { Id = 101, TrackId = 7, TrackInfo = new TrackInfo { Entry = new TrackEntry { Frame = 20 }, Exit = new TrackEntry { Frame = 40 } } },
+            [102] = new() { Id = 102, TrackId = 99, TrackInfo = new TrackInfo { Entry = new TrackEntry { Frame = 30 }, Exit = new TrackEntry { Frame = 30 } } }
+        };
+
+        FaceLinkHelper.ApplyFaceLinks(
+            new List<FaceLinkData> { new() { FaceAnnotationId = 102, BodyAnnotationId = 101 } },
+            boxesByAnnotationId,
+            annotationsById);
+
+        AssertEqual("body", body.PersonPartType, "Linked body should be marked as body.");
+        AssertEqual("face", face.PersonPartType, "Linked face should be marked as face.");
+        AssertEqual(7, face.PersonId, "Face should inherit the linked body person id.");
+        AssertEqual(7, face.LinkedPersonId, "Face should retain the linked body id.");
+        AssertEqual(30, face.BoxEntryFrame, "Face should keep its track entry frame.");
+        AssertEqual(30, face.BoxExitFrame, "Face should keep its track exit frame.");
+    }
+
+    private static void FaceLinkImportIgnoresMalformedLinks()
+    {
+        var body = new BoundingBox
+        {
+            Label = "person",
+            PersonId = 7,
+            FrameIndex = 30
+        };
+
+        var boxesByAnnotationId = new Dictionary<int, BoundingBox>
+        {
+            [101] = body
+        };
+
+        var annotationsById = new Dictionary<int, AnnotationData>
+        {
+            [101] = new() { Id = 101, TrackId = 7 }
+        };
+
+        FaceLinkHelper.ApplyFaceLinks(
+            new List<FaceLinkData> { new() { FaceAnnotationId = 999, BodyAnnotationId = 101 } },
+            boxesByAnnotationId,
+            annotationsById);
+
+        AssertTrue(string.IsNullOrEmpty(body.PersonPartType), "Malformed links should leave unrelated boxes unchanged.");
+    }
     private static void AssertEqual<T>(T expected, T actual, string message)
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -231,6 +345,16 @@ static class Program
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

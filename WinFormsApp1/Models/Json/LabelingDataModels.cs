@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace WinFormsApp1
@@ -23,6 +23,12 @@ namespace WinFormsApp1
         [JsonProperty("entry")] public TrackEntry Entry { get; set; }
         [JsonProperty("exit")] public TrackEntry Exit { get; set; }
         [JsonProperty("current_clip_count")] public int CurrentClipCount { get; set; }
+    }
+
+    public class FaceLinkData
+    {
+        [JsonProperty("face_annotation_id")] public int FaceAnnotationId { get; set; }
+        [JsonProperty("body_annotation_id")] public int BodyAnnotationId { get; set; }
     }
 
     public class AnnotationData
@@ -68,5 +74,6 @@ namespace WinFormsApp1
         [JsonProperty("annotations")] public List<AnnotationData> Annotations { get; set; }
         [JsonProperty("categories")] public List<CategoryData> Categories { get; set; }
         [JsonProperty("failure_ranges")] public Dictionary<string, List<(int start, int end)>>? FailureRanges { get; set; }
+        [JsonProperty("face_links", NullValueHandling = NullValueHandling.Ignore)] public List<FaceLinkData>? FaceLinks { get; set; }
     }
 }

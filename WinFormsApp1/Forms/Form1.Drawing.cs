@@ -450,6 +450,11 @@ namespace WinFormsApp1
 
         private void panelVideoControls_Resize(object sender, EventArgs e)
         {
+            if (panelVideoControls != null && panelVideoControls.Height < TimelineLayoutHelper.GetMinimumVideoControlsHeight())
+            {
+                panelVideoControls.Height = TimelineLayoutHelper.GetMinimumVideoControlsHeight();
+            }
+
             if (panelVideoControls == null)
             {
                 return;
@@ -3104,6 +3109,8 @@ namespace WinFormsApp1
 
     }
 }
+
+
 
 
 

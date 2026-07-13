@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -18,6 +18,10 @@ namespace WinFormsApp1
         public const int LabelWidth = 16;
         public const int SegmentRadius = 3;
         public const int MinSegmentWidth = 4;
+        public const int VideoControlsTopMargin = 16;
+        public const int VideoControlsBottomMargin = 16;
+        public const int ObjectInfoHeight = 100;
+        public const int TimelinePanelTop = 70;
 
         public static Color BackgroundColor => Color.FromArgb(249, 250, 251);
         public static Color DividerColor => Color.FromArgb(229, 231, 235);
@@ -72,6 +76,16 @@ namespace WinFormsApp1
             return $"{prefix}{waypoint.ObjectId:D2}";
         }
 
+
+        public static int GetRequiredTimelinePanelHeight()
+        {
+            return HeaderHeight + RowHeight * 3;
+        }
+
+        public static int GetMinimumVideoControlsHeight()
+        {
+            return Math.Max(VideoControlsTopMargin + ObjectInfoHeight + VideoControlsBottomMargin, TimelinePanelTop + GetRequiredTimelinePanelHeight() + 6);
+        }
         public static int CalculateTimelineWidth(int panelTimelineLeft, int objectInfoLeft, int reservedGap, int minimumWidth)
         {
             return Math.Max(minimumWidth, objectInfoLeft - panelTimelineLeft - reservedGap);
@@ -150,3 +164,5 @@ namespace WinFormsApp1
         }
     }
 }
+
+
