@@ -14,7 +14,7 @@ namespace WinFormsApp1
         #region SRT Subtitle Extraction
         private async Task<bool> ExtractSrtFromVideo(string videoPath, CancellationToken cancellationToken = default)
         {
-            // FFmpeg°¡ ¾øÀ¸¸é ÀÚ¸· ÃßÃâ °Ç³Ê¶Ù±â
+            // FFmpegê°€ ì—†ìœ¼ë©´ ìë§‰ ì¶”ì¶œ ê±´ë„ˆë›°ê¸°
             if (!isFFmpegAvailable)
             {
                 return false;
@@ -26,19 +26,19 @@ namespace WinFormsApp1
                 string videoName = Path.GetFileNameWithoutExtension(videoPath);
                 string srtPath = Path.Combine(videoDir, $"{videoName}.srt");
 
-                // ±âÁ¸ SRT ÆÄÀÏÀÌ ÀÖÀ¸¸é »èÁ¦
+                // ê¸°ì¡´ SRT íŒŒì¼ì´ ìˆìœ¼ë©´ ì‚­ì œ
                 if (File.Exists(srtPath))
                 {
                     File.Delete(srtPath);
                 }
 
-                // FFmpeg¸¦ »ç¿ëÇÏ¿© ÀÚ¸· ÃßÃâ (ºñµğ¿À ³»ºÎ¿¡ Æ÷ÇÔµÈ ÀÚ¸· ½ºÆ®¸²)
+                // FFmpegë¥¼ ì‚¬ìš©í•˜ì—¬ ìë§‰ ì¶”ì¶œ (ë¹„ë””ì˜¤ ë‚´ë¶€ì— í¬í•¨ëœ ìë§‰ ìŠ¤íŠ¸ë¦¼)
                 var ffTask = FFMpegArguments
                     .FromFileInput(videoPath)
                     .OutputToFile(srtPath, true, options => options
-                        .WithCustomArgument("-loglevel error")  // °æ°í ¸Ş½ÃÁö ¼û±â±â
-                        .WithCustomArgument("-map 0:s:0")  // Ã¹ ¹øÂ° ÀÚ¸· ½ºÆ®¸² ¼±ÅÃ
-                        .WithCustomArgument("-c:s srt")    // SRT Çü½ÄÀ¸·Î Ãâ·Â
+                        .WithCustomArgument("-loglevel error")  // ê²½ê³  ë©”ì‹œì§€ ìˆ¨ê¸°ê¸°
+                        .WithCustomArgument("-map 0:s:0")  // ì²« ë²ˆì§¸ ìë§‰ ìŠ¤íŠ¸ë¦¼ ì„ íƒ
+                        .WithCustomArgument("-c:s srt")    // SRT í˜•ì‹ìœ¼ë¡œ ì¶œë ¥
                     )
                     .ProcessAsynchronously();
 
@@ -53,7 +53,7 @@ namespace WinFormsApp1
                 }
                 else
                 {
-                    // ÀÚ¸· ½ºÆ®¸²ÀÌ ¾ø´Â °æ¿ì (Á¤»ó »óÈ²)
+                    // ìë§‰ ìŠ¤íŠ¸ë¦¼ì´ ì—†ëŠ” ê²½ìš° (ì •ìƒ ìƒí™©)
                     return false;
                 }
             }
@@ -63,7 +63,7 @@ namespace WinFormsApp1
             }
             catch (Exception ex)
             {
-                // ÀÚ¸·ÀÌ ¾ø°Å³ª ÃßÃâ ½ÇÆĞ ½Ã Á¶¿ëÈ÷ ½ÇÆĞ
+                // ìë§‰ì´ ì—†ê±°ë‚˜ ì¶”ì¶œ ì‹¤íŒ¨ ì‹œ ì¡°ìš©íˆ ì‹¤íŒ¨
                 return false;
             }
         }
@@ -77,16 +77,16 @@ namespace WinFormsApp1
 
                 for (int i = 0; i < lines.Length; i++)
                 {
-                    // ºó ÁÙ °Ç³Ê¶Ù±â
+                    // ë¹ˆ ì¤„ ê±´ë„ˆë›°ê¸°
                     if (string.IsNullOrWhiteSpace(lines[i]))
                         continue;
 
-                    // ÀÎµ¦½º ¹øÈ£ È®ÀÎ
+                    // ì¸ë±ìŠ¤ ë²ˆí˜¸ í™•ì¸
                     if (int.TryParse(lines[i], out int index))
                     {
-                        i++; // ´ÙÀ½ ÁÙ·Î ÀÌµ¿
+                        i++; // ë‹¤ìŒ ì¤„ë¡œ ì´ë™
 
-                        // ½Ã°£ Á¤º¸ ÆÄ½Ì
+                        // ì‹œê°„ ì •ë³´ íŒŒì‹±
                         if (i < lines.Length && lines[i].Contains("-->"))
                         {
                             string[] timeParts = lines[i].Split(new[] { " --> " }, StringSplitOptions.None);
@@ -95,9 +95,9 @@ namespace WinFormsApp1
                                 TimeSpan startTime = ParseSrtTime(timeParts[0]);
                                 TimeSpan endTime = ParseSrtTime(timeParts[1]);
 
-                                i++; // ´ÙÀ½ ÁÙ·Î ÀÌµ¿
+                                i++; // ë‹¤ìŒ ì¤„ë¡œ ì´ë™
 
-                                // ÀÚ¸· ÅØ½ºÆ® ¼öÁı
+                                // ìë§‰ í…ìŠ¤íŠ¸ ìˆ˜ì§‘
                                 List<string> textLines = new List<string>();
                                 while (i < lines.Length && !string.IsNullOrWhiteSpace(lines[i]))
                                 {
@@ -120,8 +120,8 @@ namespace WinFormsApp1
                     }
                 }
 
-                MessageBox.Show($"ÀÚ¸· ÆÄÀÏÀ» ¼º°øÀûÀ¸·Î ·ÎµåÇß½À´Ï´Ù.\nÃÑ {subtitleEntries.Count}°³ÀÇ ÀÚ¸· Ç×¸ñÀ» Ã£¾Ò½À´Ï´Ù.", 
-                    "ÀÚ¸· ·Îµå ¿Ï·á", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"ìë§‰ íŒŒì¼ì„ ì„±ê³µì ìœ¼ë¡œ ë¡œë“œí–ˆìŠµë‹ˆë‹¤.\nì´ {subtitleEntries.Count}ê°œì˜ ìë§‰ í•­ëª©ì„ ì°¾ì•˜ìŠµë‹ˆë‹¤.",
+                    "ìë§‰ ë¡œë“œ ì™„ë£Œ", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (OperationCanceledException)
             {
@@ -129,14 +129,14 @@ namespace WinFormsApp1
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"ÀÚ¸· ÆÄÀÏ ·Îµå Áß ¿À·ù°¡ ¹ß»ıÇß½À´Ï´Ù:\n{ex.Message}", 
-                    "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"ìë§‰ íŒŒì¼ ë¡œë“œ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤:\n{ex.Message}",
+                    "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private TimeSpan ParseSrtTime(string timeString)
         {
-            // SRT ½Ã°£ Çü½Ä: 00:00:00,000
+            // SRT ì‹œê°„ í˜•ì‹: 00:00:00,000
             string[] parts = timeString.Split(',');
             if (parts.Length == 2)
             {
@@ -162,25 +162,25 @@ namespace WinFormsApp1
             double currentSeconds = currentFrameIndex / fps;
             TimeSpan currentTime = TimeSpan.FromSeconds(currentSeconds);
 
-            var currentSubtitle = subtitleEntries.FirstOrDefault(s => 
+            var currentSubtitle = subtitleEntries.FirstOrDefault(s =>
                 currentTime >= s.StartTime && currentTime <= s.EndTime);
 
             return currentSubtitle?.Text ?? "";
         }
 
-        // ÀÚ¸·¿¡¼­ ³¯Â¥-½Ã°£ Çü½Ä(YYYY-MM-DD HH:mm:ss) ÃßÃâ
+        // ìë§‰ì—ì„œ ë‚ ì§œ-ì‹œê°„ í˜•ì‹(YYYY-MM-DD HH:mm:ss) ì¶”ì¶œ
         private string ExtractTimestampFromSubtitle(string subtitleText)
         {
             if (string.IsNullOrEmpty(subtitleText))
                 return null;
 
-            // Á¤±Ô½Ä ÆĞÅÏ: YYYY-MM-DD HH:mm:ss
+            // ì •ê·œì‹ íŒ¨í„´: YYYY-MM-DD HH:mm:ss
             var regex = new System.Text.RegularExpressions.Regex(@"\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}");
             var match = regex.Match(subtitleText);
 
             if (match.Success)
             {
-                // ISO 8601 Çü½ÄÀ¸·Î º¯È¯ (YYYY-MM-DDTHH:mm:ss)
+                // ISO 8601 í˜•ì‹ìœ¼ë¡œ ë³€í™˜ (YYYY-MM-DDTHH:mm:ss)
                 string timestamp = match.Value.Replace(" ", "T");
                 return timestamp;
             }
@@ -188,7 +188,7 @@ namespace WinFormsApp1
             return null;
         }
 
-        // Æ¯Á¤ ÇÁ·¹ÀÓÀÇ ÀÚ¸· Å¸ÀÓ½ºÅÆÇÁ °¡Á®¿À±â
+        // íŠ¹ì • í”„ë ˆì„ì˜ ìë§‰ íƒ€ì„ìŠ¤íƒ¬í”„ ê°€ì ¸ì˜¤ê¸°
         private string GetSubtitleTimestampForFrame(int frameIndex)
         {
             if (subtitleEntries.Count == 0)
@@ -197,7 +197,7 @@ namespace WinFormsApp1
             double frameSeconds = frameIndex / fps;
             TimeSpan frameTime = TimeSpan.FromSeconds(frameSeconds);
 
-            var subtitle = subtitleEntries.FirstOrDefault(s => 
+            var subtitle = subtitleEntries.FirstOrDefault(s =>
                 frameTime >= s.StartTime && frameTime <= s.EndTime);
 
             if (subtitle != null)
@@ -210,18 +210,18 @@ namespace WinFormsApp1
         private void btnToggleSubtitle_Click(object sender, EventArgs e)
         {
             isSubtitleVisible = !isSubtitleVisible;
-            btnToggleSubtitle.Text = isSubtitleVisible ? "ÀÚ¸· ´İ±â" : "ÀÚ¸· ¿­±â";
-            btnToggleSubtitle.BackColor = isSubtitleVisible 
-                ? System.Drawing.Color.FromArgb(239, 68, 68) // »¡°­ (´İ±â)
-                : System.Drawing.Color.FromArgb(100, 116, 139); // È¸»ö (¿­±â)
-            
-            // ÀÚ¸· ·¹ÀÌºí Ç¥½Ã/¼û±â±â
+            btnToggleSubtitle.Text = isSubtitleVisible ? "ìë§‰ ë‹«ê¸°" : "ìë§‰ ì—´ê¸°";
+            btnToggleSubtitle.BackColor = isSubtitleVisible
+                ? System.Drawing.Color.FromArgb(239, 68, 68) // ë¹¨ê°• (ë‹«ê¸°)
+                : System.Drawing.Color.FromArgb(100, 116, 139); // íšŒìƒ‰ (ì—´ê¸°)
+
+            // ìë§‰ ë ˆì´ë¸” í‘œì‹œ/ìˆ¨ê¸°ê¸°
             if (labelSubtitleTimestamp != null)
             {
                 labelSubtitleTimestamp.Visible = isSubtitleVisible;
             }
-            
-            // ½Ã°£ Á¤º¸ ¾÷µ¥ÀÌÆ®ÇÏ¿© ÀÚ¸· ÅØ½ºÆ® ¹İ¿µ
+
+            // ì‹œê°„ ì •ë³´ ì—…ë°ì´íŠ¸í•˜ì—¬ ìë§‰ í…ìŠ¤íŠ¸ ë°˜ì˜
             UpdateTimeLabels();
         }
 

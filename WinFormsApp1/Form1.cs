@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -75,7 +75,7 @@ namespace WinFormsApp1
         public static readonly HashSet<string> singleSelectAttributeNames = new HashSet<string>
         {
             // 보임/가림/행동 탭
-            "Occlusion", "BodyView", "ActionType",
+            "Occlusion", "BodyView", "ActionType", "Camouflage",
             // 생체 정보 탭
             "Age", "Gender", "Height", "Weight/BodyShape", "Face",
             // 머리/헤어 탭
@@ -845,12 +845,8 @@ namespace WinFormsApp1
             _predictor = new YoloPredictor(modelPath);
             
             // 임시 파일 경로 설정 및 디렉토리 확인
-            string tempDir = Path.GetTempPath();
-            if (!Directory.Exists(tempDir))
-            {
-                Directory.CreateDirectory(tempDir);
-            }
-            _tempImagePath = Path.Combine(tempDir, "yolo_frame.jpg");
+            YoloTempFileHelper.CleanupStaleFiles();
+            _tempImagePath = YoloTempFileHelper.CreateFramePath("yolo_tracking_frame");
         }
 
         public override List<BoundingBox> TrackObjects(
@@ -889,6 +885,10 @@ namespace WinFormsApp1
             string fixedLabel = startBox.Label;
             int fixedIdPerson = startBox.PersonId;
             int fixedIdVehicle = startBox.VehicleId;
+            int fixedVehicleInstanceId = startBox.VehicleInstanceId;
+            int? fixedLinkedVehicleInstanceId = startBox.LinkedVehicleInstanceId;
+            string fixedVehiclePartType = startBox.VehiclePartType;
+            int? fixedLinkedPersonId = startBox.LinkedPersonId;
             int fixedIdEvent = startBox.EventId;
             string fixedEventInstanceId = startBox.EventInstanceId;
 
@@ -1063,6 +1063,10 @@ namespace WinFormsApp1
                             Label = fixedLabel, // 라벨과 ID는 고정
                             PersonId = fixedIdPerson,
                             VehicleId = fixedIdVehicle,
+                            VehicleInstanceId = fixedVehicleInstanceId,
+                            LinkedVehicleInstanceId = fixedLinkedVehicleInstanceId,
+                            VehiclePartType = fixedVehiclePartType,
+                            LinkedPersonId = fixedLinkedPersonId,
                             EventId = fixedIdEvent,
                             EventInstanceId = fixedEventInstanceId,
                             Action = startBox.Action,
@@ -1120,6 +1124,10 @@ namespace WinFormsApp1
                         Label = fixedLabel,
                         PersonId = fixedIdPerson,
                         VehicleId = fixedIdVehicle,
+                        VehicleInstanceId = fixedVehicleInstanceId,
+                        LinkedVehicleInstanceId = fixedLinkedVehicleInstanceId,
+                        VehiclePartType = fixedVehiclePartType,
+                        LinkedPersonId = fixedLinkedPersonId,
                         EventId = fixedIdEvent,
                             EventInstanceId = fixedEventInstanceId,
                             Action = startBox.Action,
@@ -1148,12 +1156,7 @@ namespace WinFormsApp1
 
             frame.Dispose();
 
-            try
-            {
-                if (File.Exists(_tempImagePath))
-                    File.Delete(_tempImagePath);
-            }
-            catch { }
+            YoloTempFileHelper.TryDelete(_tempImagePath);
 
             // ? 추적 종료 시 미종료된 실패 구간 처리
             if (consecutiveFailures >= FAILURE_THRESHOLD && thresholdFailureStart != -1)
@@ -1398,18 +1401,15 @@ namespace WinFormsApp1
         
         private static string GetYoloModelPath()
         {
-            // 먼저 실행 파일과 같은 폴더에서 찾기
-            string sameFolderPath = Path.Combine(Application.StartupPath, "yolov8n.onnx");
-            if (File.Exists(sameFolderPath))
+            var candidates = new[]
             {
-                return sameFolderPath;
-            }
-            
-            // 없으면 개발 환경 경로로 찾기 (상위 4단계)
-            string devPath = Path.Combine(Application.StartupPath, @"..\..\..\..\yolov8n.onnx");
-            return devPath;
-        }
+                Path.Combine(AppContext.BaseDirectory, "yolov8n.onnx"),
+                Path.Combine(Application.StartupPath, "yolov8n.onnx"),
+                Path.GetFullPath(Path.Combine(Application.StartupPath, @"..\..\..\..\yolov8n.onnx"))
+            };
 
+            return candidates.FirstOrDefault(File.Exists) ?? candidates[0];
+        }
         // SRT 자막 관련
         private string currentSrtFile = "";
         private List<SubtitleEntry> subtitleEntries = new List<SubtitleEntry>();
@@ -1475,8 +1475,12 @@ namespace WinFormsApp1
             // Vehicle categories (21~24)
             {"car", 21}, {"motorcycle", 22}, {"e_scooter", 23}, {"bicycle", 24},
             
-            // Event categories (25~28)
-            {"contact", 25}, {"exchange", 26}, {"board", 27}, {"final_exchange", 28}
+            // Event categories (25~32)
+            {"contact", 25}, {"exchange", 26}, {"board", 27}, {"final_exchange", 28},
+            {"disembark", 29}, {"controlled_delivery", 30}, {"camouflage", 31}, {"throw", 32},
+
+            // Vehicle plate category (33)
+            {"plate", 33}
         };
 
 

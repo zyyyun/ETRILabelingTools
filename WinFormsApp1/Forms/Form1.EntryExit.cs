@@ -12,13 +12,13 @@ namespace WinFormsApp1
         #region Entry/Exit Markers
         private void btnEntry_Click(object sender, EventArgs e)
         {
-            // E?¤ì? ?™ì¼??ê¸°ëŠ¥: Entry ë§ˆì»¤ ?¤ì •
+            // E?ã…¼? ?ìˆˆì”ª??æ¹²ê³•ë’«: Entry ï§ë‰ë¹± ?ã…¼ì ™
             SetEntryMarker();
         }
 
         private void SetEntryMarker()
         {
-            // ê°ì²´ ? íƒ ?†ì´??Entry ?„ë ˆ???¤ì • ê°€??
+            // åª›ì•¹ê»œ ?ì¢ê¹® ?ë†ì” ??Entry ?ê¾¨ì …???ã…¼ì ™ åª›Â€??
             entryFrameIndex = currentFrameIndex;
             TimeSpan entryTime = TimeSpan.FromSeconds(currentFrameIndex / fps);
             btnEntry.Text = $"Entry: {entryTime:hh\\:mm\\:ss}";
@@ -32,10 +32,10 @@ namespace WinFormsApp1
                 // Block Exit action while YOLO is running.
                 if (IsYoloOperationInProgress())
                 {
-                    System.Diagnostics.Debug.WriteLine("[Exit] YOLO ÀÛ¾÷ ÁøÇà Áß: Exit µ¿ÀÛ ºñÈ°¼ºÈ­");
+                    System.Diagnostics.Debug.WriteLine("[Exit] YOLO ì‘ì—… ì§„í–‰ ì¤‘: Exit ë™ì‘ ë¹„í™œì„±í™”");
                     MessageBox.Show(
-                        "YOLO ÃßÀû ¶Ç´Â Å½Áö°¡ ÁøÇà ÁßÀÔ´Ï´Ù.\nÀÛ¾÷ÀÌ ¿Ï·áµÉ ¶§±îÁö ±â´Ù·Á ÁÖ¼¼¿ä.",
-                        "ÀÛ¾÷ Áß",
+                        "YOLO ì¶”ì  ë˜ëŠ” íƒì§€ê°€ ì§„í–‰ ì¤‘ì…ë‹ˆë‹¤.\nì‘ì—…ì´ ì™„ë£Œë  ë•Œê¹Œì§€ ê¸°ë‹¤ë ¤ ì£¼ì„¸ìš”.",
+                        "ì‘ì—… ì¤‘",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                     return;
@@ -48,8 +48,8 @@ namespace WinFormsApp1
             {
                 AppendFaceDebugLog("ExitButtonError", ex.ToString());
                 MessageBox.Show(
-                    $"Exit ¼³Á¤ Áß ¿À·ù ¹ß»ı:\n{ex.Message}",
-                    "¿À·ù",
+                    $"Exit ì„¤ì • ì¤‘ ì˜¤ë¥˜ ë°œìƒ:\n{ex.Message}",
+                    "ì˜¤ë¥˜",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
@@ -64,9 +64,9 @@ namespace WinFormsApp1
                     string.Equals(selectedBox.PersonPartType, "face", StringComparison.OrdinalIgnoreCase))
                 {
                     MessageBox.Show(
-                        "Face Æ®·¡Å·Àº Exit °æ·Î(¶Ç´Â ¹öÆ°/´ÜÃàÅ°)·Î ¿Ï·áÇÏÁö ¾Ê½À´Ï´Ù.\n\n" +
-                        "Face´Â R·Î aÇÁ·¹ÀÓÀ» ¼³Á¤ÇÑ µÚ Shift+T·Î º¸°£ÇÏ¼¼¿ä.",
-                        "¾Ë¸²",
+                        "Face íŠ¸ë˜í‚¹ì€ Exit ê²½ë¡œ(ë˜ëŠ” ë²„íŠ¼/ë‹¨ì¶•í‚¤)ë¡œ ì™„ë£Œí•˜ì§€ ì•ŠìŠµë‹ˆë‹¤.\n\n" +
+                        "FaceëŠ” Rë¡œ aí”„ë ˆì„ì„ ì„¤ì •í•œ ë’¤ Shift+Të¡œ ë³´ê°„í•˜ì„¸ìš”.",
+                        "ì•Œë¦¼",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                     return;
@@ -81,18 +81,19 @@ namespace WinFormsApp1
                         TimeSpan entryTimeCheck = TimeSpan.FromSeconds(entryFrameIndex.Value / fps);
 
                         MessageBox.Show(
-                            $"Exit ÇÁ·¹ÀÓÀº Entry ÇÁ·¹ÀÓ ÀÌÈÄ¿©¾ß ÇÕ´Ï´Ù.\n\n" +
+                            $"Exit í”„ë ˆì„ì€ Entry í”„ë ˆì„ ì´í›„ì—¬ì•¼ í•©ë‹ˆë‹¤.\n\n" +
                             $"Entry: {entryTimeCheck:hh\\:mm\\:ss} (frame {entryFrameIndex.Value})\n" +
-                            $"ÇöÀç: {currentTimeCheck:hh\\:mm\\:ss} (frame {currentFrameIndex})\n\n" +
-                            "Entryº¸´Ù ¸ÕÀú ExitÀ» ¼³Á¤ÇÒ ¼ö ¾ø½À´Ï´Ù.",
-                            "°æ°í",
+                            $"í˜„ì¬: {currentTimeCheck:hh\\:mm\\:ss} (frame {currentFrameIndex})\n\n" +
+                            "Entryë³´ë‹¤ ë¨¼ì € Exitì„ ì„¤ì •í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.",
+                            "ê²½ê³ ",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Warning);
                         return;
                     }
 
+                    WaypointNormalizer.NormalizeInPlace(waypointMarkers);
                     var entryPersonBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "person").ToList();
-                    var entryVehicleBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "vehicle").ToList();
+                    var entryVehicleBoxes = WaypointGroupingHelper.GetVehicleWaypointBodies(boundingBoxes, entryFrameIndex.Value);
                     var entryEventBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "event").ToList();
 
                     if (entryPersonBoxes.Count == 0 && entryVehicleBoxes.Count == 0 && entryEventBoxes.Count == 0)
@@ -106,10 +107,10 @@ namespace WinFormsApp1
                         if (eventBoxesInRangeCheck.Count == 0)
                         {
                             MessageBox.Show(
-                                "Entry¿¡¼­ Person, Vehicle, Event ¹Ú½º Áß ÇÏ³ª°¡ ÀÖ¾î¾ß ÇÕ´Ï´Ù.\n" +
-                                "¶Ç´Â Entry~Exit ±¸°£¿¡ Event ¹Ú½º°¡ ÀÖ¾î¾ß ÇÕ´Ï´Ù.\n" +
-                                "È®ÀÎ ÈÄ ´Ù½Ã ½ÃµµÇØ ÁÖ¼¼¿ä.",
-                                "°æ°í",
+                                "Entryì—ì„œ Person, Vehicle, Event ë°•ìŠ¤ ì¤‘ í•˜ë‚˜ê°€ ìˆì–´ì•¼ í•©ë‹ˆë‹¤.\n" +
+                                "ë˜ëŠ” Entry~Exit êµ¬ê°„ì— Event ë°•ìŠ¤ê°€ ìˆì–´ì•¼ í•©ë‹ˆë‹¤.\n" +
+                                "í™•ì¸ í›„ ë‹¤ì‹œ ì‹œë„í•´ ì£¼ì„¸ìš”.",
+                                "ê²½ê³ ",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Warning);
                             return;
@@ -138,11 +139,11 @@ namespace WinFormsApp1
                                 TimeSpan currentExitTime = TimeSpan.FromSeconds(currentExitFrame / fps);
                                 TimeSpan oldExitTime = TimeSpan.FromSeconds(overlappingWaypoint.ExitFrame / fps);
                                 MessageBox.Show(
-                                    "Exit ÇÁ·¹ÀÓÀº ±âÁ¸ WaypointÀÇ Exit ÇÁ·¹ÀÓº¸´Ù µÚ·Î ¿¬ÀåÇÒ ¼ö ¾ø½À´Ï´Ù.\n\n" +
-                                    $"°´Ã¼: {GetCategoryName("person", personId)}\n" +
-                                    $"±âÁ¸ Waypoint: Entry={TimeSpan.FromSeconds(overlappingWaypoint.EntryFrame / fps):hh\\:mm\\:ss}, Exit={oldExitTime:hh\\:mm\\:ss}\n" +
-                                    $"¿äÃ» Exit: {currentExitTime:hh\\:mm\\:ss}\n\n" +
-                                    "Á¸ÀçÇÏ´Â ±¸°£À» È®ÀÎÇÏ°í ´Ù½Ã ¼³Á¤ÇØ ÁÖ¼¼¿ä.",
+                                    "Exit í”„ë ˆì„ì€ ê¸°ì¡´ Waypointì˜ Exit í”„ë ˆì„ë³´ë‹¤ ë’¤ë¡œ ì—°ì¥í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n\n" +
+                                    $"ê°ì²´: {GetCategoryName("person", personId)}\n" +
+                                    $"ê¸°ì¡´ Waypoint: Entry={TimeSpan.FromSeconds(overlappingWaypoint.EntryFrame / fps):hh\\:mm\\:ss}, Exit={oldExitTime:hh\\:mm\\:ss}\n" +
+                                    $"ìš”ì²­ Exit: {currentExitTime:hh\\:mm\\:ss}\n\n" +
+                                    "ì¡´ì¬í•˜ëŠ” êµ¬ê°„ì„ í™•ì¸í•˜ê³  ë‹¤ì‹œ ì„¤ì •í•´ ì£¼ì„¸ìš”.",
                                     "Warning",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Warning);
@@ -170,46 +171,66 @@ namespace WinFormsApp1
 
                     foreach (var vehicleBox in entryVehicleBoxes)
                     {
-                        int vehicleId = vehicleBox.VehicleId;
+                        int vehicleInstanceId = TrackingIdentityHelper.GetNumericIdentity(vehicleBox);
+                        if (vehicleInstanceId <= 0)
+                        {
+                            continue;
+                        }
 
-                        var overlappingWaypoint = WaypointOverlapHelper.FindOverlappingWaypoint(waypointMarkers, "vehicle", vehicleId, currentEntryFrame, currentExitFrame);
+                        var overlappingWaypoint = WaypointOverlapHelper.FindOverlappingWaypoint(
+                            waypointMarkers,
+                            "vehicle",
+                            vehicleInstanceId,
+                            currentEntryFrame,
+                            currentExitFrame);
 
                         if (overlappingWaypoint != null)
                         {
-                            if (currentExitFrame > overlappingWaypoint.ExitFrame)
+                            bool changed = false;
+                            if (currentEntryFrame < overlappingWaypoint.EntryFrame)
                             {
-                                TimeSpan currentExitTime = TimeSpan.FromSeconds(currentExitFrame / fps);
-                                TimeSpan oldExitTime = TimeSpan.FromSeconds(overlappingWaypoint.ExitFrame / fps);
-                                MessageBox.Show(
-                                    "Exit ÇÁ·¹ÀÓÀº ±âÁ¸ WaypointÀÇ Exit ÇÁ·¹ÀÓº¸´Ù µÚ·Î ¿¬ÀåÇÒ ¼ö ¾ø½À´Ï´Ù.\n\n" +
-                                    $"°´Ã¼: {GetCategoryName("vehicle", vehicleId)}\n" +
-                                    $"±âÁ¸ Waypoint: Entry={TimeSpan.FromSeconds(overlappingWaypoint.EntryFrame / fps):hh\\:mm\\:ss}, Exit={oldExitTime:hh\\:mm\\:ss}\n" +
-                                    $"¿äÃ» Exit: {currentExitTime:hh\\:mm\\:ss}\n\n" +
-                                    "Á¸ÀçÇÏ´Â ±¸°£À» È®ÀÎÇÏ°í ´Ù½Ã ¼³Á¤ÇØ ÁÖ¼¼¿ä.",
-                                    "Warning",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxIcon.Warning);
-                                continue;
+                                overlappingWaypoint.EntryFrame = currentEntryFrame;
+                                overlappingWaypoint.EntryTime = entryTime.ToString(@"hh\:mm\:ss");
+                                changed = true;
                             }
 
-                            System.Diagnostics.Debug.WriteLine($"[Vehicle Waypoint Overlap] VehicleId={vehicleId}: existing({overlappingWaypoint.EntryFrame}~{overlappingWaypoint.ExitFrame}) vs requested({currentEntryFrame}~{currentExitFrame})");
+                            if (currentExitFrame > overlappingWaypoint.ExitFrame)
+                            {
+                                overlappingWaypoint.ExitFrame = currentExitFrame;
+                                overlappingWaypoint.ExitTime = exitTime.ToString(@"hh\:mm\:ss");
+                                changed = true;
+                            }
+
+                            if (changed)
+                            {
+                                System.Diagnostics.Debug.WriteLine(
+                                    $"[Vehicle Waypoint Merge] instance={vehicleInstanceId}, range={overlappingWaypoint.EntryFrame}~{overlappingWaypoint.ExitFrame}");
+                            }
+
+                            if (!createdWaypoints.Contains(overlappingWaypoint))
+                            {
+                                createdWaypoints.Add(overlappingWaypoint);
+                            }
+
                             continue;
                         }
 
                         var waypoint = new WaypointMarker
                         {
-                            EntryFrame = entryFrameIndex.Value,
-                            ExitFrame = exitFrameIndex.Value,
+                            EntryFrame = currentEntryFrame,
+                            ExitFrame = currentExitFrame,
                             MarkerColor = Color.FromArgb(107, 158, 255),
                             EntryTime = entryTime.ToString(@"hh\:mm\:ss"),
                             ExitTime = exitTime.ToString(@"hh\:mm\:ss"),
-                            ObjectId = vehicleId,
+                            ObjectId = vehicleInstanceId,
                             Label = "vehicle"
                         };
 
                         waypointMarkers.Add(waypoint);
                         createdWaypoints.Add(waypoint);
                     }
+
+                    WaypointNormalizer.NormalizeInPlace(waypointMarkers);
 
                     var eventBoxesInRange = boundingBoxes
                         .Where(b => b.Label == "event" &&
@@ -275,12 +296,12 @@ namespace WinFormsApp1
                         int vehicleWaypointCount = createdWaypoints.Count(w => w.Label == "vehicle");
                         int eventWaypointCount = createdWaypoints.Count(w => w.Label == "event");
 
-                        string summary = $"{createdWaypoints.Count}°³ÀÇ Waypoint°¡ »ı¼ºµÇ¾ú½À´Ï´Ù.\n" +
+                        string summary = $"{createdWaypoints.Count}ê°œì˜ Waypointê°€ ìƒì„±ë˜ì—ˆìŠµë‹ˆë‹¤.\n" +
                                         $"(Person: {personWaypointCount}, Vehicle: {vehicleWaypointCount}, Event: {eventWaypointCount})";
 
                         var result = MessageBox.Show(
-                            $"{summary}\n\nÁï½Ã ÃßÀûÀ» ÁøÇàÇÒ±î¿ä?",
-                            "Waypoint »ı¼º È®ÀÎ",
+                            $"{summary}\n\nì¦‰ì‹œ ì¶”ì ì„ ì§„í–‰í• ê¹Œìš”?",
+                            "Waypoint ìƒì„± í™•ì¸",
                             MessageBoxButtons.YesNo,
                             MessageBoxIcon.Question);
 
@@ -292,15 +313,15 @@ namespace WinFormsApp1
                 }
                 else
                 {
-                    MessageBox.Show("¸ÕÀú Entry ¹öÆ°À» ´­·¯ ½ÃÀÛ ÇÁ·¹ÀÓÀ» ÁöÁ¤ÇØ ÁÖ¼¼¿ä.", "¾È³»", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("ë¨¼ì € Entry ë²„íŠ¼ì„ ëˆŒëŸ¬ ì‹œì‘ í”„ë ˆì„ì„ ì§€ì •í•´ ì£¼ì„¸ìš”.", "ì•ˆë‚´", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
                 AppendFaceDebugLog("ExitMarkerError", ex.ToString());
                 MessageBox.Show(
-                    $"Exit ¼³Á¤ Áß ¿À·ù ¹ß»ı:\n{ex.Message}",
-                    "¿À·ù",
+                    $"Exit ì„¤ì • ì¤‘ ì˜¤ë¥˜ ë°œìƒ:\n{ex.Message}",
+                    "ì˜¤ë¥˜",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }

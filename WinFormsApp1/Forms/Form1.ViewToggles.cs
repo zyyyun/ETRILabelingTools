@@ -1,4 +1,4 @@
-﻿using OpenCvSharp;
+using OpenCvSharp;
 using Compunet.YoloSharp;
 using Compunet.YoloSharp.Data;
 using System.Drawing;
@@ -407,7 +407,8 @@ namespace WinFormsApp1
                             // ??痍⑥냼 ?좏겙 ?ы솗??
                             token.ThrowIfCancellationRequested();
                             
-                            tempImagePath = Path.Combine(Path.GetTempPath(), $"yolo_detection_frame_{targetFrame}_{DateTime.Now.Ticks}.jpg");
+                            YoloTempFileHelper.CleanupStaleFiles();
+                            tempImagePath = YoloTempFileHelper.CreateFramePath("yolo_detection_frame", targetFrame);
                             frame = new Mat();
                             
                             try
@@ -532,13 +533,15 @@ namespace WinFormsApp1
                                     // 由ъ냼???뺣━
                                     try
                                     {
+                                        predictor?.Dispose();
+                                        predictor = null;
                                         frame?.Dispose();
                                         
                                         if (!string.IsNullOrEmpty(tempImagePath) && File.Exists(tempImagePath))
                                         {
                                             try
                                             {
-                                                File.Delete(tempImagePath);
+                                                YoloTempFileHelper.TryDelete(tempImagePath);
                                             }
                                             catch (Exception delEx)
                                             {
@@ -713,7 +716,8 @@ namespace WinFormsApp1
                             return;
                         }
                         
-                        tempImagePath = Path.Combine(Path.GetTempPath(), "yolo_detection_frame.jpg");
+                        YoloTempFileHelper.CleanupStaleFiles();
+                        tempImagePath = YoloTempFileHelper.CreateFramePath("yolo_detection_frame");
                         frame = new Mat();
                         
                         try
@@ -860,13 +864,15 @@ namespace WinFormsApp1
                             {
                                 videoCaptureCopy?.Release();
                                 videoCaptureCopy?.Dispose();
+                                predictor?.Dispose();
+                                predictor = null;
                                 frame?.Dispose();
                                 
                                 if (!string.IsNullOrEmpty(tempImagePath) && File.Exists(tempImagePath))
                                 {
                                     try
                                     {
-                                        File.Delete(tempImagePath);
+                                        YoloTempFileHelper.TryDelete(tempImagePath);
                                     }
                                     catch (Exception delEx)
                                     {

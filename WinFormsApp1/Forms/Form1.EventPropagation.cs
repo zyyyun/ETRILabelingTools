@@ -63,7 +63,24 @@ namespace WinFormsApp1
         /// </summary>
         private void CreateVehicleWaypoint(BoundingBox box)
         {
-            if (box.Label != "vehicle") return;
+            if (box == null ||
+                !string.Equals(box.Label, "vehicle", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(box.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            int vehicleInstanceId = box.VehicleInstanceId > 0 ? box.VehicleInstanceId : box.VehicleId;
+            bool alreadyExists = waypointMarkers.Any(waypoint =>
+                string.Equals(waypoint.Label, "vehicle", StringComparison.OrdinalIgnoreCase) &&
+                waypoint.ObjectId == vehicleInstanceId &&
+                waypoint.EntryFrame <= box.FrameIndex &&
+                waypoint.ExitFrame >= box.FrameIndex);
+
+            if (alreadyExists)
+            {
+                return;
+            }
 
             TimeSpan time = TimeSpan.FromSeconds(box.FrameIndex / fps);
             string timeString = time.ToString(@"hh\:mm\:ss");
@@ -71,11 +88,11 @@ namespace WinFormsApp1
             var waypoint = new WaypointMarker
             {
                 EntryFrame = box.FrameIndex,
-                ExitFrame = box.FrameIndex, // 단일 프레임
-                MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255), // 파랑
+                ExitFrame = box.FrameIndex,
+                MarkerColor = System.Drawing.Color.FromArgb(107, 158, 255),
                 EntryTime = timeString,
                 ExitTime = timeString,
-                ObjectId = box.VehicleId, // ✅ VehicleId를 ObjectId로 설정
+                ObjectId = vehicleInstanceId,
                 Label = "vehicle"
             };
 

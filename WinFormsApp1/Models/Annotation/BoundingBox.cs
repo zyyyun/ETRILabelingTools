@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Drawing;
 
 namespace WinFormsApp1
@@ -10,6 +10,9 @@ namespace WinFormsApp1
         public string Label { get; set; }
         public int PersonId { get; set; }
         public int VehicleId { get; set; }
+        public int VehicleInstanceId { get; set; }
+        public int? LinkedVehicleInstanceId { get; set; }
+        public string VehiclePartType { get; set; }
         public int EventId { get; set; }
         public string Action { get; set; }
         public string EventInstanceId { get; set; }

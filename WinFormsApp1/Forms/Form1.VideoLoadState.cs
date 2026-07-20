@@ -1,4 +1,4 @@
-using System.Diagnostics;
+ï»¿using System.Diagnostics;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -54,7 +54,7 @@ namespace WinFormsApp1
 
             if (btnPlay != null)
             {
-                btnPlay.Text = "¢º";
+                btnPlay.Text = "â–¶";
             }
 
             timerPlayback?.Stop();

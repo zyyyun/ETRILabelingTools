@@ -34,6 +34,9 @@ namespace WinFormsApp1
                 Label = box.Label,
                 PersonId = box.PersonId,
                 VehicleId = box.VehicleId,
+                VehicleInstanceId = box.VehicleInstanceId,
+                LinkedVehicleInstanceId = box.LinkedVehicleInstanceId,
+                VehiclePartType = box.VehiclePartType,
                 EventId = box.EventId,
                 EventInstanceId = box.EventInstanceId,
                 Action = box.Action,
@@ -132,38 +135,93 @@ namespace WinFormsApp1
                 string.Equals(box.PersonPartType, "body", StringComparison.OrdinalIgnoreCase);
         }
 
-        private int GetDrawingIdentityId(BoundingBox box)
+        private BoundingBox FindVehicleBodyForTracking(BoundingBox box)
         {
-            if (box == null) return 0;
+            if (box == null || !string.Equals(box.Label, "vehicle", StringComparison.OrdinalIgnoreCase))
+                return box;
 
-            if (string.Equals(box.Label, "person", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(box.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase))
+                return box;
+
+            int instanceId = TrackingIdentityHelper.GetNumericIdentity(box);
+            return boundingBoxes
+                .Where(candidate =>
+                    !candidate.IsDeleted &&
+                    candidate.FrameIndex == box.FrameIndex &&
+                    string.Equals(candidate.Label, "vehicle", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(candidate.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase) &&
+                    TrackingIdentityHelper.GetNumericIdentity(candidate) == instanceId)
+                .OrderBy(candidate => candidate.Rectangle.Width * candidate.Rectangle.Height)
+                .LastOrDefault() ?? box;
+        }
+        private bool IsVehicleBodySubTypeCandidate(BoundingBox box)
+        {
+            return string.IsNullOrWhiteSpace(box.VehiclePartType) ||
+                string.Equals(box.VehiclePartType, "body", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private int GetVehicleInstanceIdForNewBody()
+        {
+            if (selectedBox != null &&
+                string.Equals(selectedBox.Label, "vehicle", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(selectedBox.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase) &&
+                selectedBox.FrameIndex == currentFrameIndex)
             {
-                if (IsFaceBox(box))
-                {
-                    return box.LinkedPersonId.GetValueOrDefault(box.PersonId);
-                }
-
-                return box.PersonId;
+                return TrackingIdentityHelper.GetNumericIdentity(selectedBox);
             }
 
-            return GetBoxId(box);
+            return GetNextVehicleInstanceId();
+        }
+        private int GetNextVehicleInstanceId()
+        {
+            int maxExisting = boundingBoxes
+                .Where(b => !b.IsDeleted && string.Equals(b.Label, "vehicle", StringComparison.OrdinalIgnoreCase))
+                .Select(TrackingIdentityHelper.GetNumericIdentity)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            return maxExisting + 1;
+        }
+
+        private BoundingBox FindActiveVehicleBodyForCurrentFrame(int frameIndex)
+        {
+            return GetActiveVehicleBodyCandidates(frameIndex).FirstOrDefault();
+        }
+
+        private List<BoundingBox> GetActiveVehicleBodyCandidates(int frameIndex)
+        {
+            var activeWaypointIds = waypointMarkers
+                .Where(w => w.Label == "vehicle" && frameIndex >= w.EntryFrame && frameIndex <= w.ExitFrame)
+                .Select(w => w.ObjectId)
+                .Distinct()
+                .ToHashSet();
+
+            if (activeWaypointIds.Count == 0)
+            {
+                return new List<BoundingBox>();
+            }
+
+            var candidates = boundingBoxes
+                .Where(b => !b.IsDeleted &&
+                    b.Label == "vehicle" &&
+                    b.FrameIndex == frameIndex &&
+                    activeWaypointIds.Contains(TrackingIdentityHelper.GetNumericIdentity(b)) &&
+                    IsVehicleBodySubTypeCandidate(b))
+                .OrderBy(b => selectedBox != null && b == selectedBox ? 0 : 1)
+                .ThenBy(TrackingIdentityHelper.GetNumericIdentity)
+                .ToList();
+
+            return candidates;
+        }
+
+        private int GetDrawingIdentityId(BoundingBox box)
+        {
+            return TrackingIdentityHelper.GetNumericIdentity(box);
         }
 
         private string GetDrawingIdentityKey(BoundingBox box)
         {
-            if (box == null) return "unknown_unknown";
-
-            if (string.Equals(box.Label, "person", StringComparison.OrdinalIgnoreCase))
-            {
-                if (IsFaceBox(box))
-                {
-                    return $"person_face_{GetDrawingIdentityId(box):D2}";
-                }
-
-                return $"person_body_{GetDrawingIdentityId(box):D2}";
-            }
-
-            return $"{box.Label}_{GetDrawingIdentityId(box)}";
+            return TrackingIdentityHelper.GetIdentityKey(box);
         }
 
         private bool AreDrawingIdentitiesEqual(BoundingBox first, BoundingBox second)
@@ -176,28 +234,7 @@ namespace WinFormsApp1
 
         private bool IsBoxInWaypoint(BoundingBox box, WaypointMarker waypoint)
         {
-            if (box == null || waypoint == null)
-                return false;
-
-            if (!string.Equals(box.Label, waypoint.Label, StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            if (string.Equals(box.Label, "person", StringComparison.OrdinalIgnoreCase))
-            {
-                return GetDrawingIdentityId(box) == waypoint.ObjectId;
-            }
-
-            if (string.Equals(box.Label, "vehicle", StringComparison.OrdinalIgnoreCase))
-            {
-                return box.VehicleId == waypoint.ObjectId;
-            }
-
-            if (string.Equals(box.Label, "event", StringComparison.OrdinalIgnoreCase))
-            {
-                return box.EventId == waypoint.ObjectId;
-            }
-
-            return false;
+            return TrackingIdentityHelper.MatchesWaypoint(box, waypoint);
         }
 
         private BoundingBox FindBestMatchingBodyForFace(BoundingBox faceBox)
@@ -261,7 +298,7 @@ namespace WinFormsApp1
         }
 
         /// <summary>
-        /// COCO 17°³ °üÀý ¿¬°á ±¸Á¶ ¹ÝÈ¯
+        /// COCO 17ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯
         /// 0: nose, 1: left_eye, 2: right_eye, 3: left_ear, 4: right_ear
         /// 5: left_shoulder, 6: right_shoulder, 7: left_elbow, 8: right_elbow
         /// 9: left_wrist, 10: right_wrist, 11: left_hip, 12: right_hip

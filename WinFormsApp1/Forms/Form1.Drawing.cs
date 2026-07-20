@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -85,6 +85,14 @@ namespace WinFormsApp1
                     return;
                 }
 
+                bool isPlateCreation = (e.Button == MouseButtons.Right && currentSelectedLabel == "vehicle");
+                var activeBodyForPlate = isPlateCreation ? FindActiveVehicleBodyForCurrentFrame(currentFrameIndex) : null;
+                if (isPlateCreation && activeBodyForPlate == null)
+                {
+                    MessageBox.Show("No matching active vehicle body in current frame. Plate box creation is disabled.", "Plate box", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
                 // Entry ???(???) - YOLO ?좎룞?쇿뜝?숈삕 ?좎룞?쇿뜝?
                 isDrawing = true;
                 drawStartPoint = e.Location; // ?좎룞?쇿뜝?숈삕 ?좎룞?숉몴 ?좎룞?쇿뜝?숈삕
@@ -98,7 +106,14 @@ namespace WinFormsApp1
                     Rectangle = new Rectangle((int)imagePoint.X, (int)imagePoint.Y, 0, 0),
                     Label = currentSelectedLabel,
                     PersonId = isFaceCreation ? (activeBodyForFace != null ? activeBodyForFace.PersonId : currentAssignedId) : (currentSelectedLabel == "person" ? currentAssignedId : 0),
-                    VehicleId = currentSelectedLabel == "vehicle" ? currentAssignedId : 0,
+                    VehicleId = currentSelectedLabel == "vehicle" ? (isPlateCreation && activeBodyForPlate != null ? activeBodyForPlate.VehicleId : currentAssignedId) : 0,
+                    VehicleInstanceId = currentSelectedLabel == "vehicle"
+                        ? (isPlateCreation
+                            ? (activeBodyForPlate != null ? activeBodyForPlate.VehicleInstanceId : 0)
+                            : GetVehicleInstanceIdForNewBody())
+                        : 0,
+                    LinkedVehicleInstanceId = isPlateCreation && activeBodyForPlate != null ? activeBodyForPlate.VehicleInstanceId : (int?)null,
+                    VehiclePartType = currentSelectedLabel == "vehicle" ? (isPlateCreation ? "plate" : "body") : null,
                     EventId = currentSelectedLabel == "event" ? currentAssignedId : 0,
                     EventInstanceId = currentSelectedLabel == "event" ? CreateEventInstanceId() : null,
                     Action = "waypoint",
@@ -498,9 +513,7 @@ namespace WinFormsApp1
             foreach (var box in cachedCurrentFrameBoxes)
             {
                 // ??좎?源??獄쏅벡?????좎럩夷??域밸챶?곮첋???椰꾨?瑗??좎럡由?
-                if (box == selectedBox ||
-                    (selectedBox != null && box.FrameIndex == currentFrameIndex &&
-                     AreDrawingIdentitiesEqual(box, selectedBox)))
+                if (TrackingIdentityHelper.ShouldSkipForSelection(box, selectedBox))
                     continue;
 
                 // ??좎럩????좎럥???좎럩??獄쏅벡?ゅ뜝???좎럩??(box.FrameIndex == currentFrameIndex)
@@ -524,7 +537,7 @@ namespace WinFormsApp1
                 else
                 {
                     // ??좎럩湲?獄쏅벡???疫꿸퀣??嚥≪뮇彛??좎룞??
-                    using (Pen pen = new Pen(boxColor, 3))
+                    using (Pen pen = new Pen(boxColor, DrawingStyleHelper.DefaultBoxPenWidth))
                     {
                         g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
                     }
@@ -571,7 +584,7 @@ namespace WinFormsApp1
                 else
                 {
                     // ??좎럩湲?獄쏅벡???疫꿸퀣??嚥≪뮇彛??좎룞??(??좎?源??獄쏅벡???????좎럡蹂????
-                    using (Pen pen = new Pen(boxColor, 5))
+                    using (Pen pen = new Pen(boxColor, DrawingStyleHelper.SelectedBoxPenWidth))
                     {
                         g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
                     }
@@ -607,7 +620,7 @@ namespace WinFormsApp1
                     drawingBox.Rectangle.Width, drawingBox.Rectangle.Height));
 
                 Color boxColor = GetColorForLabel(drawingBox.Label);
-                using (Pen pen = new Pen(boxColor, 3) { DashStyle = DashStyle.Dash })
+                using (Pen pen = new Pen(boxColor, DrawingStyleHelper.DraftBoxPenWidth) { DashStyle = DashStyle.Dash })
                     g.DrawRectangle(pen, viewRect.X, viewRect.Y, viewRect.Width, viewRect.Height);
             }
 
@@ -1534,21 +1547,21 @@ namespace WinFormsApp1
                 }
                 else if (waypoint.Label == "vehicle")
                 {
-                    // Vehicle: ??좎럩????좎럥???좎럩??Vehicle category name ??좎럩??
                     var vehicleBox = boundingBoxes
-                        .FirstOrDefault(b => b.Label == "vehicle" && b.FrameIndex == waypoint.EntryFrame);
-                    
-                    if (vehicleBox != null)
-                    {
-                        // ???⑥쥙? 甕곕뜇????좎럩???좎럥以???좎럩??(car, motorcycle, e_scooter, bicycle)
-                        string categoryName = GetCategoryName("vehicle", vehicleBox.VehicleId);
-                        item.SubItems.Add(categoryName);
-                    }
-                    else
-                    {
-                        item.SubItems.Add("car");
-                    }
-                    
+                        .Where(b =>
+                            b.Label == "vehicle" &&
+                            TrackingIdentityHelper.GetNumericIdentity(b) == waypoint.ObjectId &&
+                            b.FrameIndex >= waypoint.EntryFrame &&
+                            b.FrameIndex <= waypoint.ExitFrame &&
+                            !string.Equals(b.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase) &&
+                            !b.IsDeleted)
+                        .OrderBy(b => b.FrameIndex)
+                        .FirstOrDefault();
+
+                    item.SubItems.Add(vehicleBox != null
+                        ? GetVehicleDisplayLabel(vehicleBox)
+                        : $"vehicle_instance_{waypoint.ObjectId:D2}");
+
                     item.ForeColor = waypoint.MarkerColor;
                     item.Tag = waypoint;
                     listViewVehicleWaypoints.Items.Add(item);
@@ -1720,15 +1733,11 @@ namespace WinFormsApp1
             }
             else if (box.Label == "vehicle")
             {
-                string[] vehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
-                if (box.VehicleId > 0 && box.VehicleId <= vehicleTypes.Length)
-                    labelText = $"Label: vehicle_{vehicleTypes[box.VehicleId - 1]}";
-                else
-                    labelText = $"Label: vehicle_{box.VehicleId}";
+                labelText = $"Label: {GetVehicleDisplayLabel(box)}";
             }
             else if (box.Label == "event")
             {
-                string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
+                var eventTypes = LabelCatalogHelper.EventTypes;
                 if (box.EventId > 0 && box.EventId <= eventTypes.Length)
                     labelText = $"Label: event_{eventTypes[box.EventId - 1]}";
                 else
@@ -2134,8 +2143,8 @@ namespace WinFormsApp1
         }
 
         // ??좎럥??筌ㅼ뮇??? 獄쏅벡????좎럥爰???좎럩?????좎럩苑?(??좎럩沅??揶쎛??좎?釉?獄쏄퀣肉???좎럩??
-        private static readonly string[] VehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
-        private static readonly string[] EventTypes = { "contact", "exchange", "board", "final_exchange" };
+        private static readonly string[] VehicleTypes = LabelCatalogHelper.VehicleTypes;
+        private static readonly string[] EventTypes = LabelCatalogHelper.EventTypes;
         
         private string GetPersonDisplayLabel(BoundingBox box)
         {
@@ -2158,6 +2167,20 @@ namespace WinFormsApp1
             return $"person_{box.PersonId:D2}";
         }
 
+        private string GetVehicleDisplayLabel(BoundingBox box)
+        {
+            if (box == null || box.Label != "vehicle")
+            {
+                return string.Empty;
+            }
+
+            return LabelCatalogHelper.GetVehicleDisplayLabel(
+                box.VehicleId,
+                box.VehicleInstanceId,
+                box.VehiclePartType,
+                box.LinkedVehicleInstanceId);
+        }
+
         private string GetBoxLabelText(BoundingBox box)
         {
             if (box.Label == "person")
@@ -2166,10 +2189,7 @@ namespace WinFormsApp1
             }
             else if (box.Label == "vehicle")
             {
-                if (box.VehicleId > 0 && box.VehicleId <= VehicleTypes.Length)
-                    return $"vehicle_{VehicleTypes[box.VehicleId - 1]}";
-                else
-                    return $"vehicle_{box.VehicleId}";
+                return GetVehicleDisplayLabel(box);
             }
             else if (box.Label == "event")
             {
@@ -2446,10 +2466,9 @@ namespace WinFormsApp1
             foreach (var box in currentBoxes)
             {
                 var currentBox = box;
-                string[] vehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
-                string vehicleName = currentBox.VehicleId > 0 && currentBox.VehicleId <= vehicleTypes.Length 
-                    ? vehicleTypes[currentBox.VehicleId - 1] 
-                    : currentBox.VehicleId.ToString();
+                string vehicleName = GetVehicleDisplayLabel(currentBox);
+                bool isPlate = string.Equals(currentBox.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase);
+                string vehicleTypeName = LabelCatalogHelper.GetVehicleCategoryName(currentBox.VehicleId, "body");
                 
                 Panel itemPanel = new Panel
                 {
@@ -2463,7 +2482,7 @@ namespace WinFormsApp1
                 
                 Label itemLabel = new Label
                 {
-                    Text = $"vehicle_{vehicleName}",
+                    Text = vehicleName,
                     Location = new System.Drawing.Point(8, 8),
                     Size = new System.Drawing.Size(244, 20),
                     Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold),
@@ -2482,8 +2501,9 @@ namespace WinFormsApp1
                 // ComboBox ??좎럥苡?????좎?寃뺝뜝?獄쎻뫜??
                 comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
                 
-                comboBox.Items.AddRange(new object[] { "vehicle_car", "vehicle_motorcycle", "vehicle_e_scooter", "vehicle_bicycle" });
-                comboBox.SelectedItem = $"vehicle_{vehicleName}";
+                comboBox.Items.AddRange(LabelCatalogHelper.VehicleTypes.Select(type => "vehicle_" + type).Cast<object>().ToArray());
+                comboBox.SelectedItem = "vehicle_" + vehicleTypeName;
+                comboBox.Enabled = !isPlate;
                 
                 comboBox.SelectedIndexChanged += (s, e) =>
                 {
@@ -2493,10 +2513,12 @@ namespace WinFormsApp1
                         if (selected.StartsWith("vehicle_"))
                         {
                             string vType = selected.Substring(8);
+                            var vehicleTypes = LabelCatalogHelper.VehicleTypes;
                             int newVehicleId = Array.IndexOf(vehicleTypes, vType) + 1;
                             if (newVehicleId > 0)
                             {
                                 int oldVehicleId = currentBox.VehicleId;
+                                int vehicleInstanceId = currentBox.VehicleInstanceId;
                                 
                                 // ????좎럥??獄쏅벡?ゅ첎? ??좎?釉?waypoint 筌≪뼐由?
                                 var waypoint = FindWaypointForBox(currentBox);
@@ -2506,7 +2528,7 @@ namespace WinFormsApp1
                                     // ??waypoint 甕곕뗄????좎럩??筌뤴뫀諭?vehicle 獄쏅벡???VehicleId 癰궰??
                                     var boxesToUpdate = boundingBoxes
                                         .Where(b => b.Label == "vehicle" &&
-                                                   b.VehicleId == oldVehicleId &&
+                                                   b.VehicleInstanceId == vehicleInstanceId &&
                                                    b.FrameIndex >= waypoint.EntryFrame &&
                                                    b.FrameIndex <= waypoint.ExitFrame &&
                                                    !b.IsDeleted)
@@ -2524,8 +2546,6 @@ namespace WinFormsApp1
                                         });
                                     }
                                     
-                                    // ??waypoint??ObjectId??癰궰??
-                                    waypoint.ObjectId = newVehicleId;
                                     
                                     // ??waypoint ?귐딅뮞????좎럥???좎???
                                     UpdateWaypointListView();
@@ -2606,7 +2626,7 @@ namespace WinFormsApp1
             foreach (var box in currentBoxes)
             {
                 var currentBox = box;
-                string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
+                var eventTypes = LabelCatalogHelper.EventTypes;
                 string eventName = currentBox.EventId > 0 && currentBox.EventId <= eventTypes.Length 
                     ? eventTypes[currentBox.EventId - 1] 
                     : currentBox.EventId.ToString();
@@ -2642,7 +2662,7 @@ namespace WinFormsApp1
                 // ComboBox ??좎럥苡?????좎?寃뺝뜝?獄쎻뫜??
                 comboBox.MouseWheel += (s, e) => ((HandledMouseEventArgs)e).Handled = true;
                 
-                comboBox.Items.AddRange(new object[] { "event_contact", "event_exchange", "event_board", "event_final_exchange", "event_throw" });
+                comboBox.Items.AddRange(LabelCatalogHelper.GetEventComboItems().Cast<object>().ToArray());
                 comboBox.SelectedItem = $"event_{eventName}";
                 
                 comboBox.SelectedIndexChanged += (s, e) =>
@@ -2762,59 +2782,31 @@ namespace WinFormsApp1
         // 獄쏅벡?????좎럩????좎럥爰????좎럥???좎럥??ID 揶쎛??좎럩?ㅵ뜝?
         private int GetBoxId(BoundingBox box)
         {
-            if (box.Label == "person") return box.PersonId;
-            if (box.Label == "vehicle") return box.VehicleId;
-            if (box.Label == "event") return box.EventId;
-            return 0;
+            return TrackingIdentityHelper.GetNumericIdentity(box);
         }
         
-        // ??좎?源??獄쏅벡?ゅ첎? ??좎?釉?疫꿸퀣??Waypoint 筌≪뼐由?
-        private WaypointMarker FindWaypointForBox(BoundingBox box)
+        // Person ??좎럩苑?????筌롫뗄苑??
+private WaypointMarker FindWaypointForBox(BoundingBox box)
         {
             if (box == null) return null;
-
             int boxId = GetDrawingIdentityId(box);
-
-            // Event: ??좎럩??EventInstanceId揶쎛 ??좎럩?앭뜝???좎럩苑???좎???筌띲끉臾?
             if (box.Label == "event")
             {
-                if (!string.IsNullOrWhiteSpace(box.EventInstanceId))
-                {
-                    var sameInstanceWaypoint = waypointMarkers.FirstOrDefault(w =>
-                        w.Label == box.Label &&
-                        w.EntryFrame <= box.FrameIndex &&
-                        w.ExitFrame >= box.FrameIndex &&
-                        string.Equals(w.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal));
-
-                    if (sameInstanceWaypoint != null)
-                        return sameInstanceWaypoint;
-                }
-
-                var sameTypeWaypoint = waypointMarkers.FirstOrDefault(w =>
-                    w.Label == box.Label &&
-                    w.EntryFrame <= box.FrameIndex &&
-                    w.ExitFrame >= box.FrameIndex &&
-                    IsSameEventInstance(box, w));
-
-                if (sameTypeWaypoint != null)
-                    return sameTypeWaypoint;
+                var instanceWaypoint = waypointMarkers.FirstOrDefault(w =>
+                    w.Label == box.Label && w.EntryFrame <= box.FrameIndex && w.ExitFrame >= box.FrameIndex &&
+                    !string.IsNullOrWhiteSpace(box.EventInstanceId) &&
+                    string.Equals(w.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal));
+                if (instanceWaypoint != null) return instanceWaypoint;
             }
-
-            // 疫꿸퀣????좎럩??fallback
-            var waypoint = waypointMarkers.FirstOrDefault(w =>
-                w.Label == box.Label &&
-                w.ObjectId == boxId &&
-                box.FrameIndex >= w.EntryFrame &&
-                box.FrameIndex <= w.ExitFrame);
-
-            return waypoint;
+            return waypointMarkers.FirstOrDefault(w =>
+                w.Label == box.Label && TrackingIdentityHelper.MatchesWaypoint(box, w) &&
+                box.FrameIndex >= w.EntryFrame && box.FrameIndex <= w.ExitFrame);
         }
+
         private object GetPersonAttribute(int personId, int frameIndex, string attributeName)
         {
             return personAttributeStore.GetAttribute(personId, frameIndex, attributeName, waypointMarkers, currentVideoFile);
         }
-
-        // Person ??좎럩苑?????筌롫뗄苑??
         private void SetPersonAttribute(int personId, int waypointEntryFrame, string attributeName, object value)
         {
             int applyFromFrame;
@@ -2903,7 +2895,7 @@ namespace WinFormsApp1
             // 疫꿸퀡??뜝?筌ｌ꼶??(筌띲끋釉??좎룞?? ??좎룞?? 野껋럩??
             if (label == "person") return Math.Min(boxId, 20); // 1~20
             if (label == "vehicle") return Math.Min(21 + (boxId - 1), 24); // 21~24
-            if (label == "event") return Math.Min(25 + (boxId - 1), 28); // 25~28 (4??
+            if (label == "event") return LabelCatalogHelper.GetEventCategoryId(LabelCatalogHelper.GetEventCategoryName(boxId)); // 25~32 (LabelCatalogHelper 湲곗?)
             
             return boxId;
         }
@@ -2930,15 +2922,7 @@ namespace WinFormsApp1
             }
             else if (label == "event")
             {
-                // event???⑥쥙? ??좎럥已?筌띲끋釉?(ID 25~28)
-                switch (boxId)
-                {
-                    case 1: return "contact";         // ID: 25
-                    case 2: return "exchange";        // ID: 26
-                    case 3: return "board";           // ID: 27
-                    case 4: return "final_exchange";  // ID: 28
-                    default: return "contact"; // 疫꿸퀡??뜝?
-                }
+                return LabelCatalogHelper.GetEventCategoryName(boxId);
             }
             
             return $"{label}_{boxId:D2}";

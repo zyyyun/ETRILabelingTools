@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -60,7 +60,7 @@ namespace WinFormsApp1
         private static readonly HashSet<string> singleSelectAttributes = new HashSet<string>
         {
             // 보임/가림/행동 탭
-            "Occlusion", "BodyView", "ActionType",
+            "Occlusion", "BodyView", "ActionType", "Camouflage",
             // 생체 정보 탭
             "Age", "Gender", "Height", "Weight/BodyShape", "Face",
             // 머리/헤어 탭
@@ -123,7 +123,8 @@ namespace WinFormsApp1
             {
                 ("Occlusion", new[] { "Person-Multi", "Person-FullyVisible", "Person-PartiallyVisible", "OccludedPart-Head", "OccludedPart-UpperBody", "OccludedPart-LowerBody", "OccludedPart-Feet", "Occluded-byPerson" }),
                 ("BodyView", new[] { "BodyView-Front", "BodyView-Side", "BodyView-Back" }),
-                ("ActionType", new[] { "Standing", "Walking", "Running", "Riding", "Sitting", "Pulling" })
+                ("ActionType", new[] { "Standing", "Walking", "Running", "Riding", "Sitting", "Pulling" }),
+                ("Camouflage", new[] { "camouflage" })
             });
             tabControl.TabPages.Add(viewActionTab);
 
@@ -353,7 +354,10 @@ namespace WinFormsApp1
             { "Running", "뛰고 있음" },
             { "Riding", "타고 있음(자전거, 오토바이, 퀵보드 등)" },
             { "Sitting", "앉아 있음(모빌리티 제외한 의자, 고정형 구조물에)" },
-            { "Pulling", "끌고 있음(유모차, 자전거, 카트, 캐리어 등)" }
+            { "Pulling", "끌고 있음(유모차, 자전거, 카트, 캐리어 등)" },
+
+            // Camouflage
+            { "camouflage", "변장 상태" }
         };
 
         // 영문 속성 값을 한국어로 변환
@@ -373,6 +377,7 @@ namespace WinFormsApp1
                 // View 탭
                 { "Occlusion", "가림 정도" },
                 { "BodyView", "신체 방향" },
+                { "Camouflage", "변장" },
                 // Biometric 탭
                 { "Age", "연령대" },
                 { "Gender", "성별" },

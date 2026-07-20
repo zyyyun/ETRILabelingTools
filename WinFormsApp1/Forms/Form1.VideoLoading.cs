@@ -22,7 +22,7 @@ namespace WinFormsApp1
 
                 if (ofd.ShowDialog() == DialogResult.OK)
                 {
-                    // ºñµğ¿À ÀüÈ¯ ½Ã ÀÚµ¿ ÀúÀå Á¦°Å - ¼öµ¿À¸·Î¸¸ ÀúÀå
+                    // ë¹„ë””ì˜¤ ì „í™˜ ì‹œ ìë™ ì €ì¥ ì œê±° - ìˆ˜ë™ìœ¼ë¡œë§Œ ì €ì¥
 
                     videoFileList.Clear();
                     videoFileList.AddRange(ofd.FileNames);
@@ -44,7 +44,7 @@ namespace WinFormsApp1
 
                 if (fbd.ShowDialog() == DialogResult.OK)
                 {
-                    // ºñµğ¿À ÀüÈ¯ ½Ã ÀÚµ¿ ÀúÀå Á¦°Å - ¼öµ¿À¸·Î¸¸ ÀúÀå
+                    // ë¹„ë””ì˜¤ ì „í™˜ ì‹œ ìë™ ì €ì¥ ì œê±° - ìˆ˜ë™ìœ¼ë¡œë§Œ ì €ì¥
 
                     videoFileList.Clear();
                     string[] videoExtensions = { "*.avi", "*.mp4", "*.mkv", "*.mov", "*.flv", "*.wmv" };
@@ -59,39 +59,39 @@ namespace WinFormsApp1
 
                     if (videoFileList.Count == 0)
                     {
-                        MessageBox.Show("¼±ÅÃÇÑ Æú´õ¿¡¼­ ¿µ»ó ÆÄÀÏÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        MessageBox.Show("ì„ íƒí•œ í´ë”ì—ì„œ ì˜ìƒ íŒŒì¼ì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         return;
                     }
 
-                // ? Æú´õ ¼±ÅÃ ½Ã: µ¥ÀÌÅÍ ¹é¾÷ ¡æ ÃÊ±âÈ­ ¡æ ·Îµå (½ÇÆĞ ½Ã º¹¿ø)
+                // ? í´ë” ì„ íƒ ì‹œ: ë°ì´í„° ë°±ì—… â†’ ì´ˆê¸°í™” â†’ ë¡œë“œ (ì‹¤íŒ¨ ì‹œ ë³µì›)
                 var backupBoxes = new List<BoundingBox>(boundingBoxes);
                 var backupWaypoints = new List<WaypointMarker>(waypointMarkers);
                 var backupSelectedBox = selectedBox;
                 var backupUndoStack = new Stack<UndoAction>(undoStack.Reverse());
                 var backupRedoStack = new Stack<UndoAction>(redoStack.Reverse());
-                
+
                     boundingBoxes.Clear();
                     waypointMarkers.Clear();
                     selectedBox = null;
                 undoStack.Clear();
                 redoStack.Clear();
                 lastRenderedWaypoint = null;
-                
+
                 try
                 {
                     currentVideoIndex = 0;
                     await LoadVideoWithSubtitle(videoFileList[0]);
-                    
-                    // LoadVideoWithSubtitle ³»ºÎÀÇ LoadLabelingData¿¡¼­ »õ µ¥ÀÌÅÍ°¡ ·ÎµåµÊ
+
+                    // LoadVideoWithSubtitle ë‚´ë¶€ì˜ LoadLabelingDataì—ì„œ ìƒˆ ë°ì´í„°ê°€ ë¡œë“œë¨
                     UpdateBoxCount();
                     UpdateWaypointListView();
                     pictureBoxVideo.Invalidate();
 
-                    MessageBox.Show($"ÃÑ {videoFileList.Count}°³ÀÇ ¿µ»ó ÆÄÀÏÀ» ºÒ·¯¿Ô½À´Ï´Ù.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show($"ì´ {videoFileList.Count}ê°œì˜ ì˜ìƒ íŒŒì¼ì„ ë¶ˆëŸ¬ì™”ìŠµë‹ˆë‹¤.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
-                    // ? ·Îµå ½ÇÆĞ ½Ã ÀÌÀü µ¥ÀÌÅÍ º¹¿ø
+                    // ? ë¡œë“œ ì‹¤íŒ¨ ì‹œ ì´ì „ ë°ì´í„° ë³µì›
                     boundingBoxes.Clear();
                     boundingBoxes.AddRange(backupBoxes);
                     waypointMarkers.Clear();
@@ -101,13 +101,13 @@ namespace WinFormsApp1
                     foreach (var action in backupUndoStack) undoStack.Push(action);
                     redoStack.Clear();
                     foreach (var action in backupRedoStack) redoStack.Push(action);
-                    
+
                     UpdateBoxCount();
                     UpdateWaypointListView();
                     pictureBoxVideo.Invalidate();
-                    
-                    MessageBox.Show($"¿µ»ó ·Îµå ½ÇÆĞ:\n{ex.Message}\n\nÀÌÀü ÀÛ¾÷ ³»¿ëÀÌ º¹¿øµÇ¾ú½À´Ï´Ù.", 
-                        "Æú´õ ·Îµå ¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                    MessageBox.Show($"ì˜ìƒ ë¡œë“œ ì‹¤íŒ¨:\n{ex.Message}\n\nì´ì „ ì‘ì—… ë‚´ìš©ì´ ë³µì›ë˜ì—ˆìŠµë‹ˆë‹¤.",
+                        "í´ë” ë¡œë“œ ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 }
             }
@@ -143,8 +143,8 @@ namespace WinFormsApp1
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"ºñµğ¿À ·Îµå Áß ¿À·ù°¡ ¹ß»ıÇß½À´Ï´Ù:\n{ex.Message}",
-                    "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"ë¹„ë””ì˜¤ ë¡œë“œ ì¤‘ ì˜¤ë¥˜ê°€ ë°œìƒí–ˆìŠµë‹ˆë‹¤:\n{ex.Message}",
+                    "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
@@ -155,35 +155,35 @@ namespace WinFormsApp1
         {
             try
             {
-                // ? ºñµğ¿À ·Îµå ½Ã YOLO Å½Áö Ä³½Ã ÃÊ±âÈ­ ¹× Å½Áö ÁßÁö
+                // ? ë¹„ë””ì˜¤ ë¡œë“œ ì‹œ YOLO íƒì§€ ìºì‹œ ì´ˆê¸°í™” ë° íƒì§€ ì¤‘ì§€
                 try
                 {
-                    System.Diagnostics.Debug.WriteLine("[ºñµğ¿À ·Îµå] YOLO Å½Áö Ä³½Ã ÃÊ±âÈ­ ½ÃÀÛ");
+                    System.Diagnostics.Debug.WriteLine("[ë¹„ë””ì˜¤ ë¡œë“œ] YOLO íƒì§€ ìºì‹œ ì´ˆê¸°í™” ì‹œì‘");
                     StopYoloDetection();
-                    
-                    // µğ¹Ù¿î½º Å¸ÀÌ¸Óµµ È®½ÇÈ÷ Á¤¸®
+
+                    // ë””ë°”ìš´ìŠ¤ íƒ€ì´ë¨¸ë„ í™•ì‹¤íˆ ì •ë¦¬
                     detectionDebounceTimer?.Dispose();
                     detectionDebounceTimer = null;
-                    
+
                     lock (yoloDetectionCacheLock)
                     {
                         int cacheCount = yoloDetectionCache.Count;
                         yoloDetectionCache.Clear();
-                        System.Diagnostics.Debug.WriteLine($"[ºñµğ¿À ·Îµå] YOLO Å½Áö Ä³½Ã ÃÊ±âÈ­ ¿Ï·á (±âÁ¸ Ä³½Ã: {cacheCount}°³)");
+                        System.Diagnostics.Debug.WriteLine($"[ë¹„ë””ì˜¤ ë¡œë“œ] YOLO íƒì§€ ìºì‹œ ì´ˆê¸°í™” ì™„ë£Œ (ê¸°ì¡´ ìºì‹œ: {cacheCount}ê°œ)");
                     }
                     showYoloDetections = false;
                     if (btnToggleYoloDetections != null)
                     {
-                        btnToggleYoloDetections.Text = "YOLO Å½Áö";
+                        btnToggleYoloDetections.Text = "YOLO íƒì§€";
                         btnToggleYoloDetections.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
                     }
                 }
                 catch (Exception yoloEx)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ºñµğ¿À ·Îµå] YOLO Å½Áö ÃÊ±âÈ­ ¿À·ù: {yoloEx.Message}");
-                    // ¿À·ù°¡ ÀÖ¾îµµ ºñµğ¿À ·Îµå´Â °è¼Ó ÁøÇà
+                    System.Diagnostics.Debug.WriteLine($"[ë¹„ë””ì˜¤ ë¡œë“œ] YOLO íƒì§€ ì´ˆê¸°í™” ì˜¤ë¥˜: {yoloEx.Message}");
+                    // ì˜¤ë¥˜ê°€ ìˆì–´ë„ ë¹„ë””ì˜¤ ë¡œë“œëŠ” ê³„ì† ì§„í–‰
                 }
-                
+
                 if (videoCapture != null)
                 {
                     videoCapture.Release();
@@ -196,27 +196,27 @@ namespace WinFormsApp1
                 }
                 catch (TypeInitializationException tiex)
                 {
-                    string errorMsg = "OpenCvSharp ³×ÀÌÆ¼ºê DLL ÃÊ±âÈ­ ½ÇÆĞ:\n\n" +
+                    string errorMsg = "OpenCvSharp ë„¤ì´í‹°ë¸Œ DLL ì´ˆê¸°í™” ì‹¤íŒ¨:\n\n" +
                                     $"{tiex.Message}\n\n" +
-                                    "°¡´ÉÇÑ ¿øÀÎ:\n" +
-                                    "1. Visual C++ Àç¹èÆ÷ °¡´É ÆĞÅ°Áö°¡ ¼³Ä¡µÇÁö ¾Ê¾Ò½À´Ï´Ù.\n" +
-                                    "   (Microsoft Visual C++ 2015-2022 Redistributable ¼³Ä¡ ÇÊ¿ä)\n" +
-                                    "2. OpenCvSharpExtern.dll ¶Ç´Â °ü·Ã DLLÀÌ ´©¶ôµÇ¾ú½À´Ï´Ù.\n" +
-                                    "3. ÇÃ·§Æû ¾ÆÅ°ÅØÃ³ ºÒÀÏÄ¡ (x64 ÇÊ¿ä)";
+                                    "ê°€ëŠ¥í•œ ì›ì¸:\n" +
+                                    "1. Visual C++ ì¬ë°°í¬ ê°€ëŠ¥ íŒ¨í‚¤ì§€ê°€ ì„¤ì¹˜ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.\n" +
+                                    "   (Microsoft Visual C++ 2015-2022 Redistributable ì„¤ì¹˜ í•„ìš”)\n" +
+                                    "2. OpenCvSharpExtern.dll ë˜ëŠ” ê´€ë ¨ DLLì´ ëˆ„ë½ë˜ì—ˆìŠµë‹ˆë‹¤.\n" +
+                                    "3. í”Œë«í¼ ì•„í‚¤í…ì²˜ ë¶ˆì¼ì¹˜ (x64 í•„ìš”)";
                     if (tiex.InnerException != null)
                     {
-                        errorMsg += $"\n\n³»ºÎ ¿¹¿Ü: {tiex.InnerException.Message}";
+                        errorMsg += $"\n\në‚´ë¶€ ì˜ˆì™¸: {tiex.InnerException.Message}";
                     }
-                    MessageBox.Show(errorMsg, "OpenCvSharp ÃÊ±âÈ­ ¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(errorMsg, "OpenCvSharp ì´ˆê¸°í™” ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
                 catch (DllNotFoundException dllEx)
                 {
-                    string errorMsg = "ÇÊ¼ö DLLÀ» Ã£À» ¼ö ¾ø½À´Ï´Ù:\n\n" +
+                    string errorMsg = "í•„ìˆ˜ DLLì„ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤:\n\n" +
                                     $"{dllEx.Message}\n\n" +
-                                    "OpenCvSharpExtern.dll ¶Ç´Â opencv_videoio_ffmpeg4110_64.dllÀÌ\n" +
-                                    "½ÇÇà ÆÄÀÏ°ú °°Àº Æú´õ¿¡ ÀÖ´ÂÁö È®ÀÎÇÏ¼¼¿ä.";
-                    MessageBox.Show(errorMsg, "DLL ´©¶ô ¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    "OpenCvSharpExtern.dll ë˜ëŠ” opencv_videoio_ffmpeg4110_64.dllì´\n" +
+                                    "ì‹¤í–‰ íŒŒì¼ê³¼ ê°™ì€ í´ë”ì— ìˆëŠ”ì§€ í™•ì¸í•˜ì„¸ìš”.";
+                    MessageBox.Show(errorMsg, "DLL ëˆ„ë½ ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -237,11 +237,11 @@ namespace WinFormsApp1
 
                 labelTitle.Text = $"Form_AllDay - {Path.GetFileName(filePath)}";
 
-                // FormÀÌ Å° ÀÌº¥Æ®¸¦ ¹ŞÀ» ¼ö ÀÖµµ·Ï Æ÷Ä¿½º ¼³Á¤
+                // Formì´ í‚¤ ì´ë²¤íŠ¸ë¥¼ ë°›ì„ ìˆ˜ ìˆë„ë¡ í¬ì»¤ìŠ¤ ì„¤ì •
                 this.Focus();
                 this.Activate();
 
-                // µ¿ÀÏ ÆÄÀÏ¸íÀÇ JSON ÀÚµ¿ ·Îµå
+                // ë™ì¼ íŒŒì¼ëª…ì˜ JSON ìë™ ë¡œë“œ
                 await LoadLabelingData(filePath, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
             }
@@ -259,42 +259,42 @@ namespace WinFormsApp1
         {
             try
             {
-                // ? YOLO ÃßÀû/Å½Áö Áß¿¡´Â ÇÁ·¹ÀÓ ÀÌµ¿ Â÷´Ü (Áß¿ä!)
+                // ? YOLO ì¶”ì /íƒì§€ ì¤‘ì—ëŠ” í”„ë ˆì„ ì´ë™ ì°¨ë‹¨ (ì¤‘ìš”!)
                 if (IsYoloOperationInProgress())
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ÇÁ·¹ÀÓ ÀÌµ¿ Â÷´Ü] YOLO ÃßÀû/Å½Áö ÁßÀÌ¹Ç·Î ÇÁ·¹ÀÓ {frameIndex}·Î ÀÌµ¿ ºÒ°¡");
+                    System.Diagnostics.Debug.WriteLine($"[í”„ë ˆì„ ì´ë™ ì°¨ë‹¨] YOLO ì¶”ì /íƒì§€ ì¤‘ì´ë¯€ë¡œ í”„ë ˆì„ {frameIndex}ë¡œ ì´ë™ ë¶ˆê°€");
                     return;
                 }
-                
-                // ? ÇÁ·¹ÀÓÀÌ ½ÇÁ¦·Î ÀÌµ¿ÇÏ´ÂÁö È®ÀÎ
+
+                // ? í”„ë ˆì„ì´ ì‹¤ì œë¡œ ì´ë™í•˜ëŠ”ì§€ í™•ì¸
                 bool frameChanged = (currentFrameIndex != frameIndex);
-                
-                // ? YOLO Å½Áö Åä±ÛÀÌ ONÀÌ°í ÇÁ·¹ÀÓÀÌ ÀÌµ¿ÇÏ¸é ÀÚµ¿À¸·Î OFF·Î º¯°æ
+
+                // ? YOLO íƒì§€ í† ê¸€ì´ ONì´ê³  í”„ë ˆì„ì´ ì´ë™í•˜ë©´ ìë™ìœ¼ë¡œ OFFë¡œ ë³€ê²½
                 if (showYoloDetections && frameChanged)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[YOLO Å½Áö Åä±Û] ÇÁ·¹ÀÓ ÀÌµ¿ °¨Áö ({currentFrameIndex} -> {frameIndex}), Å½Áö Åä±Û ÀÚµ¿ OFF");
+                    System.Diagnostics.Debug.WriteLine($"[YOLO íƒì§€ í† ê¸€] í”„ë ˆì„ ì´ë™ ê°ì§€ ({currentFrameIndex} -> {frameIndex}), íƒì§€ í† ê¸€ ìë™ OFF");
                     showYoloDetections = false;
                     StopYoloDetection();
-                    
-                    // µğ¹Ù¿î½º Å¸ÀÌ¸Óµµ Á¤¸®
+
+                    // ë””ë°”ìš´ìŠ¤ íƒ€ì´ë¨¸ë„ ì •ë¦¬
                     detectionDebounceTimer?.Dispose();
                     detectionDebounceTimer = null;
-                    
-                    // Ä³½Ã Á¤¸®
+
+                    // ìºì‹œ ì •ë¦¬
                     lock (yoloDetectionCacheLock)
                     {
                         yoloDetectionCache.Clear();
                     }
-                    
-                    // UI ¾÷µ¥ÀÌÆ®
+
+                    // UI ì—…ë°ì´íŠ¸
                     if (btnToggleYoloDetections != null)
                     {
-                        btnToggleYoloDetections.Text = "YOLO Å½Áö";
+                        btnToggleYoloDetections.Text = "YOLO íƒì§€";
                         btnToggleYoloDetections.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
                     }
                     pictureBoxVideo?.Invalidate();
                 }
-                
+
                 if (videoCapture == null || !videoCapture.IsOpened())
                     return;
 
@@ -316,81 +316,81 @@ namespace WinFormsApp1
             }
 
             currentFrameIndex = frameIndex;
-            
-            // ? YOLO Å½Áö Åä±ÛÀÌ ONÀÏ °æ¿ì ÇÁ·¹ÀÓ ÀÌµ¿ ½Ã ÀÚµ¿À¸·Î Å½Áö ¼öÇà (300ms µğ¹Ù¿î½Ì)
-            // (ÇÁ·¹ÀÓÀÌ ÀÌµ¿ÇÏÁö ¾Ê¾Ò°Å³ª ÀÌ¹Ì OFF·Î º¯°æµÇ¾úÀ» ¼ö ÀÖÀ¸¹Ç·Î ÀçÈ®ÀÎ)
+
+            // ? YOLO íƒì§€ í† ê¸€ì´ ONì¼ ê²½ìš° í”„ë ˆì„ ì´ë™ ì‹œ ìë™ìœ¼ë¡œ íƒì§€ ìˆ˜í–‰ (300ms ë””ë°”ìš´ì‹±)
+            // (í”„ë ˆì„ì´ ì´ë™í•˜ì§€ ì•Šì•˜ê±°ë‚˜ ì´ë¯¸ OFFë¡œ ë³€ê²½ë˜ì—ˆì„ ìˆ˜ ìˆìœ¼ë¯€ë¡œ ì¬í™•ì¸)
             if (showYoloDetections && isYoloAvailable)
             {
                 try
                 {
                     lock (yoloDetectionCacheLock)
                     {
-                        // ÇöÀç ÇÁ·¹ÀÓÀÇ Å½Áö °á°ú°¡ ÀÖÀ¸¸é UI¸¸ ¾÷µ¥ÀÌÆ®
+                        // í˜„ì¬ í”„ë ˆì„ì˜ íƒì§€ ê²°ê³¼ê°€ ìˆìœ¼ë©´ UIë§Œ ì—…ë°ì´íŠ¸
                         if (yoloDetectionCache.ContainsKey(frameIndex))
                         {
                             pictureBoxVideo?.Invalidate();
                         }
                         else
                         {
-                            // Å½Áö °á°ú°¡ ¾øÀ¸¸é µğ¹Ù¿î½º Å¸ÀÌ¸Ó·Î Áö¿¬ Å½Áö
-                            // ? ±âÁ¸ Å¸ÀÌ¸Ó ¾ÈÀüÇÏ°Ô Ãë¼Ò
+                            // íƒì§€ ê²°ê³¼ê°€ ì—†ìœ¼ë©´ ë””ë°”ìš´ìŠ¤ íƒ€ì´ë¨¸ë¡œ ì§€ì—° íƒì§€
+                            // ? ê¸°ì¡´ íƒ€ì´ë¨¸ ì•ˆì „í•˜ê²Œ ì·¨ì†Œ
                             System.Threading.Timer oldTimer = detectionDebounceTimer;
                             detectionDebounceTimer = null;
                             if (oldTimer != null)
                             {
                                 try
                                 {
-                                    oldTimer.Change(Timeout.Infinite, Timeout.Infinite); // Å¸ÀÌ¸Ó ÁßÁö
+                                    oldTimer.Change(Timeout.Infinite, Timeout.Infinite); // íƒ€ì´ë¨¸ ì¤‘ì§€
                                     oldTimer.Dispose();
                                 }
                                 catch (Exception timerDisposeEx)
                                 {
-                                    System.Diagnostics.Debug.WriteLine($"[YOLO Å½Áö] ±âÁ¸ Å¸ÀÌ¸Ó ÇØÁ¦ ¿À·ù: {timerDisposeEx.Message}");
+                                    System.Diagnostics.Debug.WriteLine($"[YOLO íƒì§€] ê¸°ì¡´ íƒ€ì´ë¨¸ í•´ì œ ì˜¤ë¥˜: {timerDisposeEx.Message}");
                                 }
                             }
-                            
-                            // »õ Å¸ÀÌ¸Ó ½ÃÀÛ (µğ¹Ù¿î½Ì - 300ms)
-                            int targetFrame = frameIndex; // ÇÁ·¹ÀÓ ÀÎµ¦½º Ä¸Ã³
+
+                            // ìƒˆ íƒ€ì´ë¨¸ ì‹œì‘ (ë””ë°”ìš´ì‹± - 300ms)
+                            int targetFrame = frameIndex; // í”„ë ˆì„ ì¸ë±ìŠ¤ ìº¡ì²˜
                             pendingDetectionFrame = targetFrame;
-                            
-                            // ? Å¸ÀÌ¸Ó Äİ¹é¿¡¼­´Â Task.RunÀ¸·Î ºñµ¿±â ½ÇÇà (async void ¹æÁö)
+
+                            // ? íƒ€ì´ë¨¸ ì½œë°±ì—ì„œëŠ” Task.Runìœ¼ë¡œ ë¹„ë™ê¸° ì‹¤í–‰ (async void ë°©ì§€)
                             detectionDebounceTimer = new System.Threading.Timer((state) =>
                             {
                                 int checkFrame = targetFrame;
-                                
-                                // ? Task.RunÀ¸·Î ºñµ¿±â ½ÇÇà (¿¹¿Ü Ã³¸® °¡´É)
+
+                                // ? Task.Runìœ¼ë¡œ ë¹„ë™ê¸° ì‹¤í–‰ (ì˜ˆì™¸ ì²˜ë¦¬ ê°€ëŠ¥)
                                 _ = Task.Run(async () =>
                                 {
                                     try
                                     {
-                                        // ? ºü¸¥ Ã¼Å© (¶ô ¾øÀÌ)
+                                        // ? ë¹ ë¥¸ ì²´í¬ (ë½ ì—†ì´)
                                         if (checkFrame != currentFrameIndex || checkFrame != pendingDetectionFrame)
                                         {
-                                            System.Diagnostics.Debug.WriteLine($"[YOLO Å½Áö] µğ¹Ù¿î½º Å¸ÀÌ¸Ó: ÇÁ·¹ÀÓ {checkFrame} Å½Áö Ãë¼Ò (ÇÁ·¹ÀÓ º¯°æµÊ)");
+                                            System.Diagnostics.Debug.WriteLine($"[YOLO íƒì§€] ë””ë°”ìš´ìŠ¤ íƒ€ì´ë¨¸: í”„ë ˆì„ {checkFrame} íƒì§€ ì·¨ì†Œ (í”„ë ˆì„ ë³€ê²½ë¨)");
                                             return;
                                         }
-                                        
-                                        // ? Ä³½Ã È®ÀÎ (¶ô »ç¿ë)
+
+                                        // ? ìºì‹œ í™•ì¸ (ë½ ì‚¬ìš©)
                                         bool needsDetection = false;
                                         lock (yoloDetectionCacheLock)
                                         {
                                             needsDetection = !yoloDetectionCache.ContainsKey(checkFrame);
                                         }
-                                        
+
                                         if (!needsDetection)
                                         {
-                                            System.Diagnostics.Debug.WriteLine($"[YOLO Å½Áö] µğ¹Ù¿î½º Å¸ÀÌ¸Ó: ÇÁ·¹ÀÓ {checkFrame}Àº ÀÌ¹Ì Ä³½Ã¿¡ ÀÖÀ½");
+                                            System.Diagnostics.Debug.WriteLine($"[YOLO íƒì§€] ë””ë°”ìš´ìŠ¤ íƒ€ì´ë¨¸: í”„ë ˆì„ {checkFrame}ì€ ì´ë¯¸ ìºì‹œì— ìˆìŒ");
                                             return;
                                         }
-                                        
-                                        // ? ºñµ¿±â·Î Å½Áö ½ÃÀÛ
-                                        System.Diagnostics.Debug.WriteLine($"[YOLO Å½Áö] µğ¹Ù¿î½º(300ms) ÈÄ Å½Áö: ÇÁ·¹ÀÓ {checkFrame}");
-                                        pendingDetectionFrame = -1; // ´ë±â ÇÁ·¹ÀÓ ÃÊ±âÈ­
-                                        await DetectCurrentFrameOnlyAsync(); // ? ºñµ¿±â ¹öÀü »ç¿ë
+
+                                        // ? ë¹„ë™ê¸°ë¡œ íƒì§€ ì‹œì‘
+                                        System.Diagnostics.Debug.WriteLine($"[YOLO íƒì§€] ë””ë°”ìš´ìŠ¤(300ms) í›„ íƒì§€: í”„ë ˆì„ {checkFrame}");
+                                        pendingDetectionFrame = -1; // ëŒ€ê¸° í”„ë ˆì„ ì´ˆê¸°í™”
+                                        await DetectCurrentFrameOnlyAsync(); // ? ë¹„ë™ê¸° ë²„ì „ ì‚¬ìš©
                                     }
                                     catch (Exception timerEx)
                                     {
-                                        System.Diagnostics.Debug.WriteLine($"[YOLO Å½Áö] µğ¹Ù¿î½º Å¸ÀÌ¸Ó ¿À·ù: {timerEx.Message}\n{timerEx.StackTrace}");
+                                        System.Diagnostics.Debug.WriteLine($"[YOLO íƒì§€] ë””ë°”ìš´ìŠ¤ íƒ€ì´ë¨¸ ì˜¤ë¥˜: {timerEx.Message}\n{timerEx.StackTrace}");
                                     }
                                 });
                             }, null, DETECTION_DEBOUNCE_MS, Timeout.Infinite);
@@ -399,12 +399,12 @@ namespace WinFormsApp1
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[YOLO Å½Áö] ÇÁ·¹ÀÓ ÀÌµ¿ ½Ã Å½Áö ¿À·ù: {ex.Message}\n{ex.StackTrace}");
-                    // ¿À·ù ½Ã °è¼Ó ÁøÇà
+                    System.Diagnostics.Debug.WriteLine($"[YOLO íƒì§€] í”„ë ˆì„ ì´ë™ ì‹œ íƒì§€ ì˜¤ë¥˜: {ex.Message}\n{ex.StackTrace}");
+                    // ì˜¤ë¥˜ ì‹œ ê³„ì† ì§„í–‰
                 }
             }
-            
-            // ? ÇÁ·¹ÀÓ ÀüÈ¯ ½Ã ¼±ÅÃ ¹Ú½º Àç¹ÙÀÎµù ¶Ç´Â ÇØÁ¦
+
+            // ? í”„ë ˆì„ ì „í™˜ ì‹œ ì„ íƒ ë°•ìŠ¤ ì¬ë°”ì¸ë”© ë˜ëŠ” í•´ì œ
             if (selectedBox != null && selectedBox.FrameIndex != frameIndex)
             {
                 var selLabel = selectedBox.Label;
@@ -422,22 +422,22 @@ namespace WinFormsApp1
                 }
             }
             UpdateTimeLabels();
-            
-            // Waypoint entry ÇÁ·¹ÀÓ¿¡¼­¸¸ bbox ¸®½ºÆ® ¾÷µ¥ÀÌÆ® (¸®¼Ò½º ÃÖÀûÈ­)
+
+            // Waypoint entry í”„ë ˆì„ì—ì„œë§Œ bbox ë¦¬ìŠ¤íŠ¸ ì—…ë°ì´íŠ¸ (ë¦¬ì†ŒìŠ¤ ìµœì í™”)
             if (ShouldUpdateBboxList(frameIndex))
             {
                 UpdateBboxListDisplay();
             }
-            
+
             pictureBoxVideo.Invalidate();
-            
-            // ? ¼Ó¼º Ã¢ ¾÷µ¥ÀÌÆ® (Åä±ÛÀÌ ÄÑÁ® ÀÖÀ» °æ¿ì)
+
+            // ? ì†ì„± ì°½ ì—…ë°ì´íŠ¸ (í† ê¸€ì´ ì¼œì ¸ ìˆì„ ê²½ìš°)
             UpdateAttributeWindows();
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ÇÁ·¹ÀÓ ·Îµå ¿À·ù] {ex.Message}\n{ex.StackTrace}");
-                // ¿À·ù ¹ß»ı ½Ã ÇöÀç ÇÁ·¹ÀÓ ÀÎµ¦½º´Â À¯Áö
+                System.Diagnostics.Debug.WriteLine($"[í”„ë ˆì„ ë¡œë“œ ì˜¤ë¥˜] {ex.Message}\n{ex.StackTrace}");
+                // ì˜¤ë¥˜ ë°œìƒ ì‹œ í˜„ì¬ í”„ë ˆì„ ì¸ë±ìŠ¤ëŠ” ìœ ì§€
             }
         }
 
@@ -454,14 +454,14 @@ namespace WinFormsApp1
 
             string speedText = playbackSpeed == 1.0 ? "" : $" ({playbackSpeed}x)";
             string subtitleText = isSubtitleVisible ? GetCurrentSubtitle() : "";
-            
+
             UpdateSubtitleTimestampDisplay(subtitleText);
-            
-            // x264 ´ë½Å ½ÇÁ¦ Àç»ı ¼Óµµ(1.0x, 2.0x µî)·Î Ç¥±â
+
+            // x264 ëŒ€ì‹  ì‹¤ì œ ì¬ìƒ ì†ë„(1.0x, 2.0x ë“±)ë¡œ í‘œê¸°
             string speedInfo = $"{playbackSpeed:0.##}x";
             if (!string.IsNullOrEmpty(subtitleText))
             {
-                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} {speedInfo}\nÀÚ¸·: {subtitleText}";
+                labelTimeInfo.Text = $"{currentTime:hh\\:mm\\:ss} / {totalTime:hh\\:mm\\:ss} {speedInfo}\nìë§‰: {subtitleText}";
             }
             else
             {
@@ -477,7 +477,7 @@ namespace WinFormsApp1
         {
             if (videoFileList.Count == 0)
             {
-                MessageBox.Show("·ÎµåµÈ ºñµğ¿À ÆÄÀÏÀÌ ¾ø½À´Ï´Ù.\n¸ÕÀú ÆÄÀÏÀ» ¼±ÅÃÇØÁÖ¼¼¿ä.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("ë¡œë“œëœ ë¹„ë””ì˜¤ íŒŒì¼ì´ ì—†ìŠµë‹ˆë‹¤.\në¨¼ì € íŒŒì¼ì„ ì„ íƒí•´ì£¼ì„¸ìš”.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -548,26 +548,26 @@ namespace WinFormsApp1
 
             if (selectedIndex != currentVideoIndex)
             {
-                // ? ºñµğ¿À ÀüÈ¯ ½Ã: µ¥ÀÌÅÍ ¹é¾÷ ¡æ ÃÊ±âÈ­ ¡æ ·Îµå (½ÇÆĞ ½Ã º¹¿ø)
+                // ? ë¹„ë””ì˜¤ ì „í™˜ ì‹œ: ë°ì´í„° ë°±ì—… â†’ ì´ˆê¸°í™” â†’ ë¡œë“œ (ì‹¤íŒ¨ ì‹œ ë³µì›)
                 var backupBoxes = new List<BoundingBox>(boundingBoxes);
                 var backupWaypoints = new List<WaypointMarker>(waypointMarkers);
                 var backupSelectedBox = selectedBox;
                 var backupUndoStack = new Stack<UndoAction>(undoStack.Reverse());
                 var backupRedoStack = new Stack<UndoAction>(redoStack.Reverse());
-                
+
                 boundingBoxes.Clear();
                 waypointMarkers.Clear();
                 selectedBox = null;
                 undoStack.Clear();
                 redoStack.Clear();
                 lastRenderedWaypoint = null;
-                
+
                 try
                 {
                     currentVideoIndex = selectedIndex;
                     await LoadVideoWithSubtitle(videoFileList[currentVideoIndex]);
-                    
-                    // LoadVideoWithSubtitle ³»ºÎÀÇ LoadLabelingData¿¡¼­ »õ µ¥ÀÌÅÍ°¡ ·ÎµåµÊ
+
+                    // LoadVideoWithSubtitle ë‚´ë¶€ì˜ LoadLabelingDataì—ì„œ ìƒˆ ë°ì´í„°ê°€ ë¡œë“œë¨
                 UpdateBoxCount();
                 UpdateWaypointListView();
                 pictureBoxVideo.Invalidate();
@@ -575,7 +575,7 @@ namespace WinFormsApp1
                 }
                 catch (Exception ex)
                 {
-                    // ? ·Îµå ½ÇÆĞ ½Ã ÀÌÀü µ¥ÀÌÅÍ º¹¿ø
+                    // ? ë¡œë“œ ì‹¤íŒ¨ ì‹œ ì´ì „ ë°ì´í„° ë³µì›
                     boundingBoxes.Clear();
                     boundingBoxes.AddRange(backupBoxes);
                     waypointMarkers.Clear();
@@ -585,13 +585,13 @@ namespace WinFormsApp1
                     foreach (var action in backupUndoStack) undoStack.Push(action);
                     redoStack.Clear();
                     foreach (var action in backupRedoStack) redoStack.Push(action);
-                    
+
                     UpdateBoxCount();
                     UpdateWaypointListView();
                     pictureBoxVideo.Invalidate();
-                    
-                    MessageBox.Show($"¿µ»ó ·Îµå ½ÇÆĞ:\n{ex.Message}\n\nÀÌÀü ÀÛ¾÷ ³»¿ëÀÌ º¹¿øµÇ¾ú½À´Ï´Ù.", 
-                        "¿µ»ó ÀüÈ¯ ¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+                    MessageBox.Show($"ì˜ìƒ ë¡œë“œ ì‹¤íŒ¨:\n{ex.Message}\n\nì´ì „ ì‘ì—… ë‚´ìš©ì´ ë³µì›ë˜ì—ˆìŠµë‹ˆë‹¤.",
+                        "ì˜ìƒ ì „í™˜ ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
         }

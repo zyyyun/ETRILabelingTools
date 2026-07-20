@@ -63,7 +63,7 @@ namespace WinFormsApp1
 
             if (string.Equals(box.Label, "vehicle", StringComparison.OrdinalIgnoreCase))
             {
-                return box.VehicleId;
+                return box.VehicleInstanceId;
             }
 
             if (string.Equals(box.Label, "event", StringComparison.OrdinalIgnoreCase))

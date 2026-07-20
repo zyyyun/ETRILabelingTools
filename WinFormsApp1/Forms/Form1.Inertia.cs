@@ -28,6 +28,25 @@ namespace WinFormsApp1
             return box.LinkedPersonId.GetValueOrDefault(box.PersonId);
         }
 
+        private bool IsPlateBox(BoundingBox box)
+        {
+            return box != null &&
+                box.Label == "vehicle" &&
+                string.Equals(box.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private int GetTrackedVehicleIdentity(BoundingBox box)
+        {
+            if (box == null)
+                return 0;
+
+            if (!IsPlateBox(box))
+                return box.VehicleInstanceId > 0 ? box.VehicleInstanceId : box.VehicleId;
+
+            return box.LinkedVehicleInstanceId.GetValueOrDefault(
+                box.VehicleInstanceId > 0 ? box.VehicleInstanceId : box.VehicleId);
+        }
+
         private string GetTrackedBoxKey(BoundingBox box)
         {
             if (box == null)
@@ -37,6 +56,12 @@ namespace WinFormsApp1
             {
                 int linkedPersonId = GetTrackedPersonIdentity(box);
                 return $"{box.Label}_face_{linkedPersonId}";
+            }
+
+            if (IsPlateBox(box))
+            {
+                int linkedVehicleInstanceId = GetTrackedVehicleIdentity(box);
+                return $"{box.Label}_plate_{linkedVehicleInstanceId}";
             }
 
             return $"{box.Label}_{GetBoxId(box)}";
@@ -62,8 +87,13 @@ namespace WinFormsApp1
             }
 
             if (templateBox.Label == "vehicle")
-            {
-                return templateBox.VehicleId == candidateBox.VehicleId;
+            {                if (IsPlateBox(templateBox) || IsPlateBox(candidateBox))
+                {
+                    return IsPlateBox(templateBox) && IsPlateBox(candidateBox) &&
+                           TrackingIdentityHelper.AreSameTrackingTarget(templateBox, candidateBox);
+                }
+
+                return TrackingIdentityHelper.AreSameTrackingTarget(templateBox, candidateBox);
             }
 
             if (templateBox.Label == "event")
@@ -76,83 +106,26 @@ namespace WinFormsApp1
 
         private bool IsWaypointTrackingMatch(BoundingBox box, WaypointMarker waypoint)
         {
-            if (box == null || waypoint == null)
-                return false;
-
-            if (box.Label != waypoint.Label)
-                return false;
-
-            if (box.Label == "person")
-            {
-                if (IsFaceBox(box))
-                {
-                    return waypoint.ObjectId == GetTrackedPersonIdentity(box);
-                }
-
-                return box.PersonId == waypoint.ObjectId;
-            }
-
-            if (box.Label == "vehicle")
-            {
-                return box.VehicleId == waypoint.ObjectId;
-            }
-
-            if (box.Label == "event")
-            {
-                return box.EventId == waypoint.ObjectId;
-            }
-
-            return false;
+            return TrackingIdentityHelper.MatchesWaypoint(box, waypoint);
         }
 
         private string GetTrackingIdentityKey(WaypointMarker waypoint, BoundingBox templateBox = null)
         {
-            if (waypoint == null)
-                return "unknown_unknown";
-
-            if (string.Equals(waypoint.Label, "person", StringComparison.OrdinalIgnoreCase))
-            {
-                if (templateBox != null && IsFaceBox(templateBox))
-                {
-                    return $"{waypoint.Label}_face_{GetTrackedPersonIdentity(templateBox)}";
-                }
-
-                return $"{waypoint.Label}_{waypoint.ObjectId}";
-            }
-
-            return $"{waypoint.Label}_{waypoint.ObjectId}";
+            if (waypoint == null) return "unknown_unknown";
+            if (string.Equals(waypoint.Label, "event", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(waypoint.EventInstanceId))
+                return string.Format("event_instance_{0}", waypoint.EventInstanceId);
+            return string.Format("{0}_{1}", waypoint.Label, waypoint.ObjectId);
         }
 
         private bool IsTrackingBoxMatch(BoundingBox box, WaypointMarker waypoint, BoundingBox templateBox = null)
         {
-            if (box == null || waypoint == null)
+            if (box == null || waypoint == null || !string.Equals(box.Label, waypoint.Label, StringComparison.OrdinalIgnoreCase))
                 return false;
-
-            if (!string.Equals(box.Label, waypoint.Label, StringComparison.OrdinalIgnoreCase))
-                return false;
-
-            if (string.Equals(waypoint.Label, "person", StringComparison.OrdinalIgnoreCase))
-            {
-                if (templateBox == null)
-                {
-                    return box.PersonId == waypoint.ObjectId;
-                }
-
+            if (templateBox != null)
                 return IsSameTrackedBox(templateBox, box);
-            }
-
-            if (string.Equals(waypoint.Label, "vehicle", StringComparison.OrdinalIgnoreCase))
-            {
-                return box.VehicleId == waypoint.ObjectId;
-            }
-
-            if (string.Equals(waypoint.Label, "event", StringComparison.OrdinalIgnoreCase))
-            {
-                return box.EventId == waypoint.ObjectId;
-            }
-
-            return false;
+            return TrackingIdentityHelper.MatchesWaypoint(box, waypoint);
         }
+
         private void RunAutoInterpolationForFace(BoundingBox selectedBox)
         {
             if (!IsFaceBox(selectedBox))
@@ -161,8 +134,8 @@ namespace WinFormsApp1
             if (!selectedBox.BoxEntryFrame.HasValue || !selectedBox.BoxExitFrame.HasValue)
             {
                 MessageBox.Show(
-                    "Face ¹Ú½ºÀÇ ÀÔÀå/ÀÌÅ» ÇÁ·¹ÀÓÀÌ ¼³Á¤µÇÁö ¾Ê¾Ò½À´Ï´Ù.",
-                    "¿À·ù",
+                    "Face ë°•ìŠ¤ì˜ ì…ì¥/ì´íƒˆ í”„ë ˆì„ì´ ì„¤ì •ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.",
+                    "ì˜¤ë¥˜",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return;
@@ -174,8 +147,8 @@ namespace WinFormsApp1
             if (exitFrame <= entryFrame)
             {
                 MessageBox.Show(
-                    "Exit ÇÁ·¹ÀÓÀº Entry ÇÁ·¹ÀÓº¸´Ù Ä¿¾ß ÇÕ´Ï´Ù.",
-                    "¿À·ù",
+                    "Exit í”„ë ˆì„ì€ Entry í”„ë ˆì„ë³´ë‹¤ ì»¤ì•¼ í•©ë‹ˆë‹¤.",
+                    "ì˜¤ë¥˜",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
                 return;
@@ -189,8 +162,8 @@ namespace WinFormsApp1
             if (startBox == null)
             {
                 MessageBox.Show(
-                    "Face ¹Ú½ºÀÇ ½ÃÀÛ ÇÁ·¹ÀÓ¿¡ ´ëÀÀÇÏ´Â ¹Ú½º¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.",
-                    "¿À·ù",
+                    "Face ë°•ìŠ¤ì˜ ì‹œì‘ í”„ë ˆì„ì— ëŒ€ì‘í•˜ëŠ” ë°•ìŠ¤ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.",
+                    "ì˜¤ë¥˜",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
@@ -200,21 +173,25 @@ namespace WinFormsApp1
         }
 
         #region Forced Inertia Tracking (Shift+T)
-        
+
         /// <summary>
-        /// °­Á¦ °ü¼º ÃßÀû: a ÇÁ·¹ÀÓºÎÅÍ b ÇÁ·¹ÀÓ±îÁö ¼öµ¿ ¼öÁ¤ ÇÁ·¹ÀÓÀ» ±âÁØÀ¸·Î º¸°£
+        /// ê°•ì œ ê´€ì„± ì¶”ì : a í”„ë ˆì„ë¶€í„° b í”„ë ˆì„ê¹Œì§€ ìˆ˜ë™ ìˆ˜ì • í”„ë ˆì„ì„ ê¸°ì¤€ìœ¼ë¡œ ë³´ê°„
         /// </summary>
-        private void PerformForcedInertiaTracking(BoundingBox selectedBox, int aFrame, int bFrame)
+        private void PerformForcedInertiaTracking(
+            BoundingBox selectedBox,
+            int aFrame,
+            int bFrame)
         {
             if (selectedBox == null || aFrame >= bFrame)
             {
-                MessageBox.Show("Àß¸øµÈ ÇÁ·¹ÀÓ ¹üÀ§ÀÔ´Ï´Ù.", "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("ì˜ëª»ëœ í”„ë ˆì„ ë²”ìœ„ì…ë‹ˆë‹¤.", "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
+selectedBox = FindVehicleBodyForTracking(selectedBox);
             string key = GetTrackedBoxKey(selectedBox);
 
-            // a ÇÁ·¹ÀÓÀÇ ¹Ú½º Ã£±â
+            // a í”„ë ˆì„ì˜ ë°•ìŠ¤ ì°¾ê¸°
             var boxA = boundingBoxes.FirstOrDefault(b =>
                 b.FrameIndex == aFrame &&
                 !b.IsDeleted &&
@@ -222,17 +199,17 @@ namespace WinFormsApp1
 
             if (boxA == null)
             {
-                MessageBox.Show($"ÇÁ·¹ÀÓ {aFrame}¿¡¼­ ÇØ´ç ¹Ú½º¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.", "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"í”„ë ˆì„ {aFrame}ì—ì„œ í•´ë‹¹ ë°•ìŠ¤ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.", "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            // ¼º°ø ÇÁ·¹ÀÓ µñ¼Å³Ê¸® »ı¼º
+            // ì„±ê³µ í”„ë ˆì„ ë”•ì…”ë„ˆë¦¬ ìƒì„±
             Dictionary<int, Rectangle> successFrames = new Dictionary<int, Rectangle>();
 
-            // 1. a ÇÁ·¹ÀÓ Ãß°¡ (ÃÖ¿ì¼±)
+            // 1. a í”„ë ˆì„ ì¶”ê°€ (ìµœìš°ì„ )
             successFrames[aFrame] = boxA.Rectangle;
 
-            // 2. ¼öµ¿ ¼öÁ¤ ÇÁ·¹ÀÓµé Ãß°¡ (a ÀÌÈÄºÎÅÍ b±îÁö)
+            // 2. ìˆ˜ë™ ìˆ˜ì • í”„ë ˆì„ë“¤ ì¶”ê°€ (a ì´í›„ë¶€í„° bê¹Œì§€)
             if (manuallyAdjustedFrames.ContainsKey(key))
             {
                 foreach (int adjustedFrame in manuallyAdjustedFrames[key])
@@ -252,13 +229,13 @@ namespace WinFormsApp1
                 }
             }
 
-            // 3. b ÇÁ·¹ÀÓ ¹Ú½º È®ÀÎ ¹× Ãß°¡ (Shift+T¸¦ ´©¸¥ ½ÃÁ¡ÀÇ ¹Ú½º)
+            // 3. b í”„ë ˆì„ ë°•ìŠ¤ í™•ì¸ ë° ì¶”ê°€ (Shift+Të¥¼ ëˆ„ë¥¸ ì‹œì ì˜ ë°•ìŠ¤)
             var boxB = boundingBoxes.FirstOrDefault(b =>
                 b.FrameIndex == bFrame &&
                 !b.IsDeleted &&
                 IsSameTrackedBox(selectedBox, b));
 
-            // b ÇÁ·¹ÀÓ¿¡ ¹Ú½º°¡ ¾øÀ¸¸é ÇöÀç ¼±ÅÃµÈ ¹Ú½º¸¦ »ç¿ë (Shift+T¸¦ ´©¸¥ ½ÃÁ¡ÀÇ ¹Ú½º)
+            // b í”„ë ˆì„ì— ë°•ìŠ¤ê°€ ì—†ìœ¼ë©´ í˜„ì¬ ì„ íƒëœ ë°•ìŠ¤ë¥¼ ì‚¬ìš© (Shift+Të¥¼ ëˆ„ë¥¸ ì‹œì ì˜ ë°•ìŠ¤)
             if (boxB == null && selectedBox.FrameIndex == bFrame)
             {
                 boxB = selectedBox;
@@ -266,43 +243,43 @@ namespace WinFormsApp1
 
             if (boxB != null)
             {
-                // b ÇÁ·¹ÀÓµµ ¼º°ø ÇÁ·¹ÀÓÀ¸·Î Ãß°¡ (ÃÖ¿ì¼±)
+                // b í”„ë ˆì„ë„ ì„±ê³µ í”„ë ˆì„ìœ¼ë¡œ ì¶”ê°€ (ìµœìš°ì„ )
                 successFrames[bFrame] = boxB.Rectangle;
             }
             else
             {
-                // b ÇÁ·¹ÀÓ¿¡ ¹Ú½º°¡ ¾øÀ¸¸é a ÇÁ·¹ÀÓÀÇ ¹Ú½º¸¦ º¹»çÇÏ¿© »ç¿ë
+                // b í”„ë ˆì„ì— ë°•ìŠ¤ê°€ ì—†ìœ¼ë©´ a í”„ë ˆì„ì˜ ë°•ìŠ¤ë¥¼ ë³µì‚¬í•˜ì—¬ ì‚¬ìš©
                 var boxBFromA = CloneBoundingBox(boxA);
                 boxBFromA.FrameIndex = bFrame;
                 boxBFromA.Rectangle = boxA.Rectangle;
 
-                // ¹Ú½º Ãß°¡
+                // ë°•ìŠ¤ ì¶”ê°€
                 boundingBoxes.Add(boxBFromA);
                 boxB = boxBFromA;
                 successFrames[bFrame] = boxB.Rectangle;
 
-                System.Diagnostics.Debug.WriteLine($"[°­Á¦ °ü¼º ÃßÀû] bÇÁ·¹ÀÓ({bFrame})¿¡ ¹Ú½º°¡ ¾ø¾î aÇÁ·¹ÀÓ ¹Ú½º¸¦ º¹»çÇÏ¿© »ı¼º");
+                System.Diagnostics.Debug.WriteLine($"[ê°•ì œ ê´€ì„± ì¶”ì ] bí”„ë ˆì„({bFrame})ì— ë°•ìŠ¤ê°€ ì—†ì–´ aí”„ë ˆì„ ë°•ìŠ¤ë¥¼ ë³µì‚¬í•˜ì—¬ ìƒì„±");
             }
 
-            // ¼º°ø ÇÁ·¹ÀÓÀÌ 2°³ ¹Ì¸¸ÀÌ¸é º¸°£ ºÒ°¡
+            // ì„±ê³µ í”„ë ˆì„ì´ 2ê°œ ë¯¸ë§Œì´ë©´ ë³´ê°„ ë¶ˆê°€
             if (successFrames.Count < 2)
             {
                 MessageBox.Show(
-                    $"º¸°£ÇÒ ¼ö ÀÖ´Â ¼º°ø ÇÁ·¹ÀÓÀÌ ºÎÁ·ÇÕ´Ï´Ù.\n\n" +
-                    $"a ÇÁ·¹ÀÓ: {aFrame}\n" +
-                    $"b ÇÁ·¹ÀÓ: {bFrame}\n" +
-                    $"¼º°ø ÇÁ·¹ÀÓ: {successFrames.Count}°³\n\n" +
-                    $"ÃÖ¼Ò 2°³ÀÇ ¼º°ø ÇÁ·¹ÀÓÀÌ ÇÊ¿äÇÕ´Ï´Ù.",
-                    "¿À·ù",
+                    $"ë³´ê°„í•  ìˆ˜ ìˆëŠ” ì„±ê³µ í”„ë ˆì„ì´ ë¶€ì¡±í•©ë‹ˆë‹¤.\n\n" +
+                    $"a í”„ë ˆì„: {aFrame}\n" +
+                    $"b í”„ë ˆì„: {bFrame}\n" +
+                    $"ì„±ê³µ í”„ë ˆì„: {successFrames.Count}ê°œ\n\n" +
+                    $"ìµœì†Œ 2ê°œì˜ ì„±ê³µ í”„ë ˆì„ì´ í•„ìš”í•©ë‹ˆë‹¤.",
+                    "ì˜¤ë¥˜",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 return;
             }
 
-            // ¼º°ø ÇÁ·¹ÀÓ ¸ñ·Ï Á¤·Ä
+            // ì„±ê³µ í”„ë ˆì„ ëª©ë¡ ì •ë ¬
             var sortedSuccessFrames = successFrames.Keys.OrderBy(f => f).ToList();
 
-            // Undo ½ºÅÃ¿¡ Ãß°¡
+            // Undo ìŠ¤íƒì— ì¶”ê°€
             var boxesToModify = new List<BoundingBox>();
             for (int frameIdx = aFrame + 1; frameIdx < bFrame; frameIdx++)
             {
@@ -318,30 +295,30 @@ namespace WinFormsApp1
                 var undoAction = new UndoAction
                 {
                     Type = UndoActionType.ModifyBox,
-                    Box = CloneBoundingBox(boxesToModify[0]), // Ã¹ ¹øÂ° ¹Ú½º¸¸ ÀúÀå (´ëÇ¥)
+                    Box = CloneBoundingBox(boxesToModify[0]), // ì²« ë²ˆì§¸ ë°•ìŠ¤ë§Œ ì €ì¥ (ëŒ€í‘œ)
                     TrackedBoxes = boxesToModify.Select(b => CloneBoundingBox(b)).ToList()
                 };
                 AddUndoAction(undoAction);
             }
 
-            // º¸°£ Àû¿ë
+            // ë³´ê°„ ì ìš©
             int interpolatedCount = 0;
             for (int frameIdx = aFrame + 1; frameIdx < bFrame; frameIdx++)
             {
-                // ÀÌ¹Ì ¼º°ø ÇÁ·¹ÀÓÀÌ¸é °Ç³Ê¶Ù±â
+                // ì´ë¯¸ ì„±ê³µ í”„ë ˆì„ì´ë©´ ê±´ë„ˆë›°ê¸°
                 if (successFrames.ContainsKey(frameIdx))
                     continue;
 
-                // ÇØ´ç ÇÁ·¹ÀÓÀÇ ¹Ú½º Ã£±â ¶Ç´Â »ı¼º
+                // í•´ë‹¹ í”„ë ˆì„ì˜ ë°•ìŠ¤ ì°¾ê¸° ë˜ëŠ” ìƒì„±
                 var box = FindOrCreateBoxAtFrame(frameIdx, selectedBox);
 
-                // ¾ÕµÚ ¼º°ø ÇÁ·¹ÀÓ Ã£±â
+                // ì•ë’¤ ì„±ê³µ í”„ë ˆì„ ì°¾ê¸°
                 int? prevSuccess = FindPreviousSuccessFrame(frameIdx, sortedSuccessFrames);
                 int? nextSuccess = FindNextSuccessFrame(frameIdx, sortedSuccessFrames);
 
                 if (prevSuccess.HasValue && nextSuccess.HasValue)
                 {
-                    // ¾ç¹æÇâ º¸°£
+                    // ì–‘ë°©í–¥ ë³´ê°„
                     box.Rectangle = InterpolateRect(
                         successFrames[prevSuccess.Value],
                         successFrames[nextSuccess.Value],
@@ -353,37 +330,169 @@ namespace WinFormsApp1
                 }
                 else if (prevSuccess.HasValue)
                 {
-                    // ÀÌÀü ¼º°ø ÇÁ·¹ÀÓ¸¸ ÀÖÀ¸¸é °íÁ¤
+                    // ì´ì „ ì„±ê³µ í”„ë ˆì„ë§Œ ìˆìœ¼ë©´ ê³ ì •
                     box.Rectangle = successFrames[prevSuccess.Value];
                     interpolatedCount++;
                 }
                 else if (nextSuccess.HasValue)
                 {
-                    // ´ÙÀ½ ¼º°ø ÇÁ·¹ÀÓ¸¸ ÀÖÀ¸¸é ±× À§Ä¡·Î ¼³Á¤
+                    // ë‹¤ìŒ ì„±ê³µ í”„ë ˆì„ë§Œ ìˆìœ¼ë©´ ê·¸ ìœ„ì¹˜ë¡œ ì„¤ì •
                     box.Rectangle = successFrames[nextSuccess.Value];
                     interpolatedCount++;
                 }
             }
 
-            // UI ¾÷µ¥ÀÌÆ®
-            InvalidateBoxCache();
+InvalidateBoxCache();
             UpdateBoxCount();
             UpdateBboxListDisplay();
             pictureBoxVideo.Invalidate();
 
             MessageBox.Show(
-                $"°­Á¦ °ü¼º ÃßÀûÀÌ ¿Ï·áµÇ¾ú½À´Ï´Ù.\n\n" +
-                $"¹üÀ§: ÇÁ·¹ÀÓ {aFrame} ~ {bFrame}\n" +
-                $"¼º°ø ÇÁ·¹ÀÓ: {successFrames.Count}°³\n" +
-                $"º¸°£µÈ ¹Ú½º: {interpolatedCount}°³",
-                "¿Ï·á",
+                $"ê°•ì œ ê´€ì„± ì¶”ì ì´ ì™„ë£Œë˜ì—ˆìŠµë‹ˆë‹¤.\n\n" +
+                $"ë²”ìœ„: í”„ë ˆì„ {aFrame} ~ {bFrame}\n" +
+                $"ì„±ê³µ í”„ë ˆì„: {successFrames.Count}ê°œ\n" +
+                $"ë³´ê°„ëœ ë°•ìŠ¤: {interpolatedCount}ê°œ",
+                "ì™„ë£Œ",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         }
 
         /// <summary>
-        /// Á¤·ÄµÈ ¼º°ø ÇÁ·¹ÀÓ ¸®½ºÆ®¿¡¼­ ÀÌÀü ¼º°ø ÇÁ·¹ÀÓ Ã£±â
+        /// ì •ë ¬ëœ ì„±ê³µ í”„ë ˆì„ ë¦¬ìŠ¤íŠ¸ì—ì„œ ì´ì „ ì„±ê³µ í”„ë ˆì„ ì°¾ê¸°
         /// </summary>
+        private void PerformForcedPlateTracking(BoundingBox selectedPlate, int aFrame, int bFrame)
+        {
+            if (selectedPlate == null || aFrame >= bFrame)
+            {
+                MessageBox.Show("ì˜ëª»ëœ ë²ˆí˜¸íŒ í”„ë ˆì„ ë²”ìœ„ì…ë‹ˆë‹¤.", "ë²ˆí˜¸íŒ ì¶”ì ", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            var plateA = FindPlateAtFrame(aFrame, selectedPlate);
+            if (plateA == null)
+            {
+                MessageBox.Show("a í”„ë ˆì„ì—ì„œ ì„ íƒí•œ ë²ˆí˜¸íŒ ë°•ìŠ¤ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.", "ë²ˆí˜¸íŒ ì¶”ì ", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string key = GetTrackedBoxKey(selectedPlate);
+            var successFrames = new Dictionary<int, Rectangle>
+            {
+                [aFrame] = plateA.Rectangle
+            };
+
+            if (manuallyAdjustedFrames.ContainsKey(key))
+            {
+                foreach (int adjustedFrame in manuallyAdjustedFrames[key])
+                {
+                    if (adjustedFrame > aFrame && adjustedFrame <= bFrame)
+                    {
+                        var adjustedPlate = FindPlateAtFrame(adjustedFrame, selectedPlate);
+                        if (adjustedPlate != null)
+                        {
+                            successFrames[adjustedFrame] = adjustedPlate.Rectangle;
+                        }
+                    }
+                }
+            }
+
+            var plateB = FindPlateAtFrame(bFrame, selectedPlate);
+            if (plateB != null)
+            {
+                successFrames[bFrame] = plateB.Rectangle;
+            }
+            else
+            {
+                plateB = CloneBoundingBox(plateA);
+                plateB.FrameIndex = bFrame;
+                plateB.Action = "waypoint";
+                boundingBoxes.Add(plateB);
+                successFrames[bFrame] = plateB.Rectangle;
+            }
+
+            var sortedSuccessFrames = successFrames.Keys.OrderBy(frame => frame).ToList();
+            var boxesToModify = new List<BoundingBox>();
+            for (int frame = aFrame + 1; frame < bFrame; frame++)
+            {
+                if (!successFrames.ContainsKey(frame))
+                {
+                    boxesToModify.Add(FindOrCreatePlateAtFrame(frame, selectedPlate));
+                }
+            }
+
+            if (boxesToModify.Count > 0)
+            {
+                AddUndoAction(new UndoAction
+                {
+                    Type = UndoActionType.ModifyBox,
+                    Box = CloneBoundingBox(boxesToModify[0]),
+                    TrackedBoxes = boxesToModify.Select(CloneBoundingBox).ToList()
+                });
+            }
+
+            int interpolatedCount = 0;
+            for (int frame = aFrame + 1; frame < bFrame; frame++)
+            {
+                if (successFrames.ContainsKey(frame))
+                {
+                    continue;
+                }
+
+                var plate = FindOrCreatePlateAtFrame(frame, selectedPlate);
+                int? previous = FindPreviousSuccessFrame(frame, sortedSuccessFrames);
+                int? next = FindNextSuccessFrame(frame, sortedSuccessFrames);
+                if (previous.HasValue && next.HasValue)
+                {
+                    plate.Rectangle = InterpolateRect(
+                        successFrames[previous.Value],
+                        successFrames[next.Value],
+                        previous.Value,
+                        next.Value,
+                        frame);
+                    interpolatedCount++;
+                }
+                else if (previous.HasValue)
+                {
+                    plate.Rectangle = successFrames[previous.Value];
+                    interpolatedCount++;
+                }
+                else if (next.HasValue)
+                {
+                    plate.Rectangle = successFrames[next.Value];
+                    interpolatedCount++;
+                }
+            }
+
+            InvalidateBoxCache();
+            UpdateBoxCount();
+            UpdateBboxListDisplay();
+            pictureBoxVideo.Invalidate();
+            MessageBox.Show(
+                $"ë²ˆí˜¸íŒ ë…ë¦½ ê´€ì„± ì¶”ì ì´ ì™„ë£Œë˜ì—ˆìŠµë‹ˆë‹¤.\n\në²”ìœ„: {aFrame} ~ {bFrame}\në³´ê°„ëœ ë²ˆí˜¸íŒ ë°•ìŠ¤: {interpolatedCount}",
+                "ë²ˆí˜¸íŒ ì¶”ì ",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
+        private BoundingBox FindOrCreatePlateAtFrame(int frameIndex, BoundingBox templatePlate)
+        {
+            var existing = FindPlateAtFrame(frameIndex, templatePlate);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var created = CloneBoundingBox(templatePlate);
+            created.FrameIndex = frameIndex;
+            created.Action = "waypoint";
+            boundingBoxes.Add(created);
+            return created;
+        }
+        private BoundingBox FindPlateAtFrame(int frameIndex, BoundingBox referencePlate)
+        {
+            return TrackingIdentityHelper.FindPlateAtFrame(boundingBoxes, frameIndex, referencePlate);
+        }
+
         private int? FindPreviousSuccessFrame(int currentFrame, List<int> sortedSuccessFrames)
         {
             for (int i = sortedSuccessFrames.Count - 1; i >= 0; i--)
@@ -393,9 +502,9 @@ namespace WinFormsApp1
             }
             return null;
         }
-        
+
         /// <summary>
-        /// Á¤·ÄµÈ ¼º°ø ÇÁ·¹ÀÓ ¸®½ºÆ®¿¡¼­ ´ÙÀ½ ¼º°ø ÇÁ·¹ÀÓ Ã£±â
+        /// ì •ë ¬ëœ ì„±ê³µ í”„ë ˆì„ ë¦¬ìŠ¤íŠ¸ì—ì„œ ë‹¤ìŒ ì„±ê³µ í”„ë ˆì„ ì°¾ê¸°
         /// </summary>
         private int? FindNextSuccessFrame(int currentFrame, List<int> sortedSuccessFrames)
         {
@@ -406,28 +515,28 @@ namespace WinFormsApp1
             }
             return null;
         }
-        
+
         /// <summary>
-        /// ¼±Çü º¸°£ °è»ê (À§Ä¡ ¹× Å©±â ¸ğµÎ º¸°£)
+        /// ì„ í˜• ë³´ê°„ ê³„ì‚° (ìœ„ì¹˜ ë° í¬ê¸° ëª¨ë‘ ë³´ê°„)
         /// </summary>
         private Rectangle InterpolateRect(Rectangle prev, Rectangle next, int prevFrame, int nextFrame, int currentFrame)
         {
             double ratio = (double)(currentFrame - prevFrame) / (nextFrame - prevFrame);
-            
+
             int x = (int)(prev.X + (next.X - prev.X) * ratio);
             int y = (int)(prev.Y + (next.Y - prev.Y) * ratio);
             int width = (int)(prev.Width + (next.Width - prev.Width) * ratio);
             int height = (int)(prev.Height + (next.Height - prev.Height) * ratio);
-            
+
             return new Rectangle(x, y, width, height);
         }
-        
+
         /// <summary>
-        /// ÇØ´ç ÇÁ·¹ÀÓÀÇ ¹Ú½º Ã£±â ¶Ç´Â »ı¼º
+        /// í•´ë‹¹ í”„ë ˆì„ì˜ ë°•ìŠ¤ ì°¾ê¸° ë˜ëŠ” ìƒì„±
         /// </summary>
         private BoundingBox FindOrCreateBoxAtFrame(int frameIndex, BoundingBox templateBox)
         {
-            // ¸ÕÀú ±âÁ¸ ¹Ú½º Ã£±â
+            // ë¨¼ì € ê¸°ì¡´ ë°•ìŠ¤ ì°¾ê¸°
             var existing = boundingBoxes.FirstOrDefault(b =>
                 b.FrameIndex == frameIndex &&
                 !b.IsDeleted &&
@@ -436,20 +545,24 @@ namespace WinFormsApp1
             if (existing != null)
                 return existing;
 
-            // ¾øÀ¸¸é »ı¼º
+            // ì—†ìœ¼ë©´ ìƒì„±
             var newBox = new BoundingBox
             {
                 FrameIndex = frameIndex,
                 Label = templateBox.Label,
                 PersonId = templateBox.PersonId,
                 VehicleId = templateBox.VehicleId,
+                VehicleInstanceId = templateBox.VehicleInstanceId,
+                LinkedVehicleInstanceId = templateBox.LinkedVehicleInstanceId,
+                VehiclePartType = templateBox.VehiclePartType,
+                VehicleName = templateBox.VehicleName,
                 EventId = templateBox.EventId,
                 EventInstanceId = templateBox.EventInstanceId,
                 PersonPartType = templateBox.PersonPartType,
                 LinkedPersonId = templateBox.LinkedPersonId,
                 BoxEntryFrame = templateBox.BoxEntryFrame,
                 BoxExitFrame = templateBox.BoxExitFrame,
-                Rectangle = templateBox.Rectangle, // ÀÓ½Ã°ª, º¸°£À¸·Î ¾÷µ¥ÀÌÆ®µÊ
+                Rectangle = templateBox.Rectangle, // ì„ì‹œê°’, ë³´ê°„ìœ¼ë¡œ ì—…ë°ì´íŠ¸ë¨
                 Action = "waypoint"
             };
 
@@ -460,56 +573,56 @@ namespace WinFormsApp1
 
 
         #region Disappearance Handling
-        
+
         /// <summary>
-        /// Æ¯Á¤ ÇÁ·¹ÀÓ¿¡¼­ »ç¶óÁü ±¸°£ Ã³¸® (ÀçÃßÀû ½ÃÀÛ ½ÃÁ¡¿¡¼­ È£Ãâ)
+        /// íŠ¹ì • í”„ë ˆì„ì—ì„œ ì‚¬ë¼ì§ êµ¬ê°„ ì²˜ë¦¬ (ì¬ì¶”ì  ì‹œì‘ ì‹œì ì—ì„œ í˜¸ì¶œ)
         /// </summary>
         private void ProcessDisappearedRangesAtFrame(WaypointMarker waypoint, int returnFrame)
         {
             int boxId = waypoint.ObjectId;
             string key = $"{waypoint.Label}_{boxId}";
-            
+
             if (!disappearedRanges.ContainsKey(key))
                 return;
-            
-            // ¹ÌÈ®Á¤ »ç¶óÁü ±¸°£ Ã³¸® (endFrameÀÌ nullÀÎ °Íµé)
+
+            // ë¯¸í™•ì • ì‚¬ë¼ì§ êµ¬ê°„ ì²˜ë¦¬ (endFrameì´ nullì¸ ê²ƒë“¤)
             var pendingRanges = disappearedRanges[key]
                 .Where(r => !r.endFrame.HasValue && r.startFrame < returnFrame)
                 .ToList();
-            
+
             foreach (var pendingRange in pendingRanges)
             {
                 int aFrame = pendingRange.startFrame;
-                int endFrame = returnFrame - 1; // º¹±Í ÇÁ·¹ÀÓ Á÷Àü±îÁö
-                
+                int endFrame = returnFrame - 1; // ë³µê·€ í”„ë ˆì„ ì§ì „ê¹Œì§€
+
                 if (endFrame >= aFrame)
                 {
-                    // »ç¶óÁø ±¸°£ È®Á¤: a ~ (returnFrame-1)
+                    // ì‚¬ë¼ì§„ êµ¬ê°„ í™•ì •: a ~ (returnFrame-1)
                     var index = disappearedRanges[key].IndexOf(pendingRange);
                     disappearedRanges[key][index] = (aFrame, endFrame);
-                    
-                    System.Diagnostics.Debug.WriteLine($"[ÀçÃßÀû ½ÃÁ¡ º¹±Í °¨Áö] {key}: ÇÁ·¹ÀÓ {aFrame}~{endFrame} (º¹±Í: {returnFrame})");
-                    
-                    // a ~ endFrame ±¸°£ÀÇ ¹Ú½º »èÁ¦
+
+                    System.Diagnostics.Debug.WriteLine($"[ì¬ì¶”ì  ì‹œì  ë³µê·€ ê°ì§€] {key}: í”„ë ˆì„ {aFrame}~{endFrame} (ë³µê·€: {returnFrame})");
+
+                    // a ~ endFrame êµ¬ê°„ì˜ ë°•ìŠ¤ ì‚­ì œ
                     DeleteBoxesInRange(key, waypoint, aFrame, endFrame);
                 }
             }
         }
-        
+
         /// <summary>
-        /// »ç¶óÁü ÀÇµµ°¡ ±â·ÏµÈ ±¸°£À» Ã³¸® (º¹±Í ½ÃÁ¡ °¨Áö ¹× »ç¶óÁø ±¸°£ È®Á¤)
+        /// ì‚¬ë¼ì§ ì˜ë„ê°€ ê¸°ë¡ëœ êµ¬ê°„ì„ ì²˜ë¦¬ (ë³µê·€ ì‹œì  ê°ì§€ ë° ì‚¬ë¼ì§„ êµ¬ê°„ í™•ì •)
         /// </summary>
         private void ProcessDisappearedRanges(WaypointMarker waypoint)
         {
             int boxId = waypoint.ObjectId;
             string key = $"{waypoint.Label}_{boxId}";
-            
+
             if (!disappearedRanges.ContainsKey(key))
                 return;
-            
-            // waypoint ¹üÀ§ ³»ÀÇ ¹Ú½º Ã£±â
+
+            // waypoint ë²”ìœ„ ë‚´ì˜ ë°•ìŠ¤ ì°¾ê¸°
             var boxesInWaypoint = boundingBoxes
-                .Where(b => 
+                .Where(b =>
                     b.Label == waypoint.Label &&
                     GetBoxId(b) == boxId &&
                     b.FrameIndex >= waypoint.EntryFrame &&
@@ -517,50 +630,50 @@ namespace WinFormsApp1
                     !b.IsDeleted)
                 .OrderBy(b => b.FrameIndex)
                 .ToList();
-            
-            // ¹ÌÈ®Á¤ »ç¶óÁü ±¸°£ Ã³¸® (endFrameÀÌ nullÀÎ °Íµé)
+
+            // ë¯¸í™•ì • ì‚¬ë¼ì§ êµ¬ê°„ ì²˜ë¦¬ (endFrameì´ nullì¸ ê²ƒë“¤)
             var pendingRanges = disappearedRanges[key]
                 .Where(r => !r.endFrame.HasValue)
                 .ToList();
-            
+
             foreach (var pendingRange in pendingRanges)
             {
                 int aFrame = pendingRange.startFrame;
-                
-                // a ÇÁ·¹ÀÓ ÀÌÈÄ Ã¹ ¹øÂ° ¼º°ø ÇÁ·¹ÀÓ(b) Ã£±â
+
+                // a í”„ë ˆì„ ì´í›„ ì²« ë²ˆì§¸ ì„±ê³µ í”„ë ˆì„(b) ì°¾ê¸°
                 int? bFrame = boxesInWaypoint
                     .Where(b => b.FrameIndex > aFrame)
                     .Select(b => (int?)b.FrameIndex)
                     .FirstOrDefault();
-                
+
                 if (bFrame.HasValue && bFrame.Value > aFrame)
                 {
-                    // »ç¶óÁø ±¸°£ È®Á¤: a ~ (b-1)
+                    // ì‚¬ë¼ì§„ êµ¬ê°„ í™•ì •: a ~ (b-1)
                     int endFrame = bFrame.Value - 1;
-                    
-                    // ±âÁ¸ Ç×¸ñ ¾÷µ¥ÀÌÆ®
+
+                    // ê¸°ì¡´ í•­ëª© ì—…ë°ì´íŠ¸
                     var index = disappearedRanges[key].IndexOf(pendingRange);
                     disappearedRanges[key][index] = (aFrame, endFrame);
-                    
-                    System.Diagnostics.Debug.WriteLine($"[»ç¶óÁü ±¸°£ È®Á¤] {key}: ÇÁ·¹ÀÓ {aFrame}~{endFrame} (º¹±Í: {bFrame.Value})");
-                    
-                    // a ~ endFrame ±¸°£ÀÇ ¹Ú½º »èÁ¦
+
+                    System.Diagnostics.Debug.WriteLine($"[ì‚¬ë¼ì§ êµ¬ê°„ í™•ì •] {key}: í”„ë ˆì„ {aFrame}~{endFrame} (ë³µê·€: {bFrame.Value})");
+
+                    // a ~ endFrame êµ¬ê°„ì˜ ë°•ìŠ¤ ì‚­ì œ
                     DeleteBoxesInRange(key, waypoint, aFrame, endFrame);
                 }
             }
         }
-        
+
         /// <summary>
-        /// ¿¬¼Ó ¹Ú½º ºÎÀç ±¸°£ ÀÚµ¿ °¨Áö ¹× Ã³¸®
+        /// ì—°ì† ë°•ìŠ¤ ë¶€ì¬ êµ¬ê°„ ìë™ ê°ì§€ ë° ì²˜ë¦¬
         /// </summary>
         private void DetectContinuousAbsence(WaypointMarker waypoint)
         {
             int boxId = waypoint.ObjectId;
             string key = $"{waypoint.Label}_{boxId}";
-            
-            // waypoint ¹üÀ§ ³»ÀÇ ¹Ú½º Ã£±â
+
+            // waypoint ë²”ìœ„ ë‚´ì˜ ë°•ìŠ¤ ì°¾ê¸°
             var boxesInWaypoint = boundingBoxes
-                .Where(b => 
+                .Where(b =>
                     b.Label == waypoint.Label &&
                     GetBoxId(b) == boxId &&
                     b.FrameIndex >= waypoint.EntryFrame &&
@@ -569,23 +682,23 @@ namespace WinFormsApp1
                 .Select(b => b.FrameIndex)
                 .OrderBy(f => f)
                 .ToList();
-            
-            // ºó ÇÁ·¹ÀÓ ±¸°£ Ã£±â
+
+            // ë¹ˆ í”„ë ˆì„ êµ¬ê°„ ì°¾ê¸°
             List<(int start, int end)> emptyRanges = new List<(int, int)>();
             int currentStart = -1;
-            
+
             for (int frame = waypoint.EntryFrame; frame <= waypoint.ExitFrame; frame++)
             {
                 bool hasBox = boxesInWaypoint.Contains(frame);
-                
+
                 if (!hasBox && currentStart == -1)
                 {
-                    // ºó ±¸°£ ½ÃÀÛ
+                    // ë¹ˆ êµ¬ê°„ ì‹œì‘
                     currentStart = frame;
                 }
                 else if (hasBox && currentStart != -1)
                 {
-                    // ºó ±¸°£ Á¾·á
+                    // ë¹ˆ êµ¬ê°„ ì¢…ë£Œ
                     int end = frame - 1;
                     if (end >= currentStart)
                     {
@@ -594,95 +707,95 @@ namespace WinFormsApp1
                     currentStart = -1;
                 }
             }
-            
-            // ¸¶Áö¸· ºó ±¸°£ Ã³¸®
+
+            // ë§ˆì§€ë§‰ ë¹ˆ êµ¬ê°„ ì²˜ë¦¬
             if (currentStart != -1)
             {
                 emptyRanges.Add((currentStart, waypoint.ExitFrame));
             }
-            
-            // ÀÓ°è°ª ÀÌ»óÀÇ ¿¬¼Ó ºÎÀç ±¸°£¸¸ Ã³¸®
+
+            // ì„ê³„ê°’ ì´ìƒì˜ ì—°ì† ë¶€ì¬ êµ¬ê°„ë§Œ ì²˜ë¦¬
             foreach (var emptyRange in emptyRanges)
             {
                 int duration = emptyRange.end - emptyRange.start + 1;
-                
+
                 if (duration >= DISAPPEARANCE_THRESHOLD)
                 {
-                    // ÀÌ¹Ì Ã³¸®µÈ ±¸°£ÀÎÁö È®ÀÎ
+                    // ì´ë¯¸ ì²˜ë¦¬ëœ êµ¬ê°„ì¸ì§€ í™•ì¸
                     bool alreadyProcessed = disappearedRanges.ContainsKey(key) &&
-                        disappearedRanges[key].Any(r => 
-                            r.startFrame == emptyRange.start && 
-                            r.endFrame.HasValue && 
+                        disappearedRanges[key].Any(r =>
+                            r.startFrame == emptyRange.start &&
+                            r.endFrame.HasValue &&
                             r.endFrame.Value == emptyRange.end);
-                    
+
                     if (!alreadyProcessed)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[¿¬¼Ó ºÎÀç °¨Áö] {key}: ÇÁ·¹ÀÓ {emptyRange.start}~{emptyRange.end} ({duration}ÇÁ·¹ÀÓ)");
-                        
-                        // »ç¶óÁø ±¸°£À¸·Î ±â·Ï
+                        System.Diagnostics.Debug.WriteLine($"[ì—°ì† ë¶€ì¬ ê°ì§€] {key}: í”„ë ˆì„ {emptyRange.start}~{emptyRange.end} ({duration}í”„ë ˆì„)");
+
+                        // ì‚¬ë¼ì§„ êµ¬ê°„ìœ¼ë¡œ ê¸°ë¡
                         if (!disappearedRanges.ContainsKey(key))
                         {
                             disappearedRanges[key] = new List<(int, int?)>();
                         }
                         disappearedRanges[key].Add((emptyRange.start, emptyRange.end));
-                        
-                        // ÇØ´ç ±¸°£ÀÇ ¹Ú½º »èÁ¦
+
+                        // í•´ë‹¹ êµ¬ê°„ì˜ ë°•ìŠ¤ ì‚­ì œ
                         DeleteBoxesInRange(key, waypoint, emptyRange.start, emptyRange.end);
                     }
                 }
             }
         }
-        
+
         /// <summary>
-        /// ÁöÁ¤µÈ ±¸°£ÀÇ ¹Ú½º »èÁ¦
+        /// ì§€ì •ëœ êµ¬ê°„ì˜ ë°•ìŠ¤ ì‚­ì œ
         /// </summary>
         private void DeleteBoxesInRange(string key, WaypointMarker waypoint, int startFrame, int endFrame)
         {
             int boxId = waypoint.ObjectId;
             int deletedCount = 0;
-            
+
             var boxesToDelete = boundingBoxes
-                .Where(b => 
+                .Where(b =>
                     b.Label == waypoint.Label &&
                     GetBoxId(b) == boxId &&
                     b.FrameIndex >= startFrame &&
                     b.FrameIndex <= endFrame &&
                     !b.IsDeleted)
                 .ToList();
-            
+
             foreach (var box in boxesToDelete)
             {
                 box.IsDeleted = true;
                 deletedCount++;
             }
-            
+
             if (deletedCount > 0)
             {
                 InvalidateBoxCache();
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
-                System.Diagnostics.Debug.WriteLine($"[¹Ú½º »èÁ¦] {key}: ÇÁ·¹ÀÓ {startFrame}~{endFrame}¿¡¼­ {deletedCount}°³ ¹Ú½º »èÁ¦");
+                System.Diagnostics.Debug.WriteLine($"[ë°•ìŠ¤ ì‚­ì œ] {key}: í”„ë ˆì„ {startFrame}~{endFrame}ì—ì„œ {deletedCount}ê°œ ë°•ìŠ¤ ì‚­ì œ");
             }
         }
-        
+
         #endregion
 
         #region Tracking Algorithm
-        
-        // ? ¿©·¯ Waypoint¸¦ ¼øÂ÷ÀûÀ¸·Î ÃßÀû (µ¿½Ã ½ÇÇà ¹æÁö)
+
+        // ? ì—¬ëŸ¬ Waypointë¥¼ ìˆœì°¨ì ìœ¼ë¡œ ì¶”ì  (ë™ì‹œ ì‹¤í–‰ ë°©ì§€)
         private async void PerformSequentialTracking(List<WaypointMarker> waypoints)
         {
-            // ? waypoint°¡ ºñ¾îÀÖÀ¸¸é ÃßÀûÇÏÁö ¾ÊÀ½
+            // ? waypointê°€ ë¹„ì–´ìˆìœ¼ë©´ ì¶”ì í•˜ì§€ ì•ŠìŒ
             if (waypoints == null || waypoints.Count == 0)
             {
-                System.Diagnostics.Debug.WriteLine("[¼øÂ÷ ÃßÀû] ÃßÀûÇÒ waypoint°¡ ¾ø½À´Ï´Ù.");
+                System.Diagnostics.Debug.WriteLine("[ìˆœì°¨ ì¶”ì ] ì¶”ì í•  waypointê°€ ì—†ìŠµë‹ˆë‹¤.");
                 return;
             }
-            
-            // ? ¼øÂ÷ ÃßÀû ½ÃÀÛ ½Ã ÇÃ·¡±× ¼³Á¤
+
+            // ? ìˆœì°¨ ì¶”ì  ì‹œì‘ ì‹œ í”Œë˜ê·¸ ì„¤ì •
             isTrackingInProgress = true;
-            System.Diagnostics.Debug.WriteLine($"[¼øÂ÷ ÃßÀû ½ÃÀÛ] {waypoints.Count}°³ waypoint ÃßÀû ½ÃÀÛ, isTrackingInProgress = true");
-            
+            System.Diagnostics.Debug.WriteLine($"[ìˆœì°¨ ì¶”ì  ì‹œì‘] {waypoints.Count}ê°œ waypoint ì¶”ì  ì‹œì‘, isTrackingInProgress = true");
+
             try
             {
                 int totalCount = waypoints.Count;
@@ -692,46 +805,46 @@ namespace WinFormsApp1
                 foreach (var waypoint in waypoints)
                 {
                     currentIndex++;
-                    System.Diagnostics.Debug.WriteLine($"[¼øÂ÷ ÃßÀû] {currentIndex}/{totalCount} - {waypoint.Label} ID={waypoint.ObjectId}");
-                    
+                    System.Diagnostics.Debug.WriteLine($"[ìˆœì°¨ ì¶”ì ] {currentIndex}/{totalCount} - {waypoint.Label} ID={waypoint.ObjectId}");
+
                     int beforeCount = boundingBoxes.Count;
-                    
+
                     try
                     {
-                        // ? °¢ Waypoint¸¦ ¼øÂ÷ÀûÀ¸·Î ÃßÀû (awaitÀ¸·Î ´ë±â)
+                        // ? ê° Waypointë¥¼ ìˆœì°¨ì ìœ¼ë¡œ ì¶”ì  (awaitìœ¼ë¡œ ëŒ€ê¸°)
                         await PerformTrackingForWaypointAsync(waypoint, true);
-                        
+
                         int afterCount = boundingBoxes.Count;
                         totalBoxesAdded += (afterCount - beforeCount);
                     }
                     catch (InvalidOperationException ex)
                     {
-                        // ÃßÀû ºÒ°¡ »óÈ² (YOLO ÀÛ¾÷ Áß µî)ÀÎ °æ¿ì ÇØ´ç waypoint¸¸ °Ç³Ê¶Ü
-                        System.Diagnostics.Debug.WriteLine($"[¼øÂ÷ ÃßÀû °Ç³Ê¶Ü] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
-                        // »ç¿ëÀÚ¿¡°Ô ¾Ë¸®Áö ¾Ê°í °è¼Ó ÁøÇà (´Ù¸¥ waypoint´Â ÃßÀû °¡´ÉÇÒ ¼ö ÀÖÀ½)
+                        // ì¶”ì  ë¶ˆê°€ ìƒí™© (YOLO ì‘ì—… ì¤‘ ë“±)ì¸ ê²½ìš° í•´ë‹¹ waypointë§Œ ê±´ë„ˆëœ€
+                        System.Diagnostics.Debug.WriteLine($"[ìˆœì°¨ ì¶”ì  ê±´ë„ˆëœ€] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
+                        // ì‚¬ìš©ìì—ê²Œ ì•Œë¦¬ì§€ ì•Šê³  ê³„ì† ì§„í–‰ (ë‹¤ë¥¸ waypointëŠ” ì¶”ì  ê°€ëŠ¥í•  ìˆ˜ ìˆìŒ)
                         continue;
                     }
                     catch (Exception ex)
                     {
-                        // ´Ù¸¥ ¿¹¿Ü´Â ·Î±×¸¸ ³²±â°í °è¼Ó ÁøÇà
-                        System.Diagnostics.Debug.WriteLine($"[¼øÂ÷ ÃßÀû ¿À·ù] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
-                        // »ç¿ëÀÚ¿¡°Ô ¾Ë¸®Áö ¾Ê°í °è¼Ó ÁøÇà
+                        // ë‹¤ë¥¸ ì˜ˆì™¸ëŠ” ë¡œê·¸ë§Œ ë‚¨ê¸°ê³  ê³„ì† ì§„í–‰
+                        System.Diagnostics.Debug.WriteLine($"[ìˆœì°¨ ì¶”ì  ì˜¤ë¥˜] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
+                        // ì‚¬ìš©ìì—ê²Œ ì•Œë¦¬ì§€ ì•Šê³  ê³„ì† ì§„í–‰
                         continue;
                     }
                 }
 
-                // ? ¸ğµç ÃßÀû ¿Ï·á ÈÄ JSON ÀúÀå ¹× Àç·Îµå (ÇÑ ¹ø¸¸)
+                // ? ëª¨ë“  ì¶”ì  ì™„ë£Œ í›„ JSON ì €ì¥ ë° ì¬ë¡œë“œ (í•œ ë²ˆë§Œ)
                 if (!string.IsNullOrEmpty(currentVideoFile))
                 {
                     string videoDir = Path.GetDirectoryName(currentVideoFile);
                     string saveDir = Path.Combine(videoDir, "labels");
-                    
+
                     if (!Directory.Exists(saveDir))
                     {
                         Directory.CreateDirectory(saveDir);
                     }
-                    
-                    // ? ±âÁ¸¿¡ ·ÎµåµÈ ÆÄÀÏ¿¡ ÀúÀå
+
+                    // ? ê¸°ì¡´ì— ë¡œë“œëœ íŒŒì¼ì— ì €ì¥
                     string jsonFilePath;
                     if (!string.IsNullOrEmpty(currentJsonFile) && File.Exists(currentJsonFile))
                     {
@@ -744,30 +857,30 @@ namespace WinFormsApp1
                         currentJsonFile = jsonFilePath;
                     }
 
-                    // JSON ÀúÀå
+                    // JSON ì €ì¥
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
 
-                    // JSON Àç·ÎµåÇÏ¿© ÃßÀû µ¥ÀÌÅÍ ±â¹İÀ¸·Î Ç¥½Ã
+                    // JSON ì¬ë¡œë“œí•˜ì—¬ ì¶”ì  ë°ì´í„° ê¸°ë°˜ìœ¼ë¡œ í‘œì‹œ
                     if (File.Exists(jsonFilePath))
                     {
                         await LoadLabelingData(currentVideoFile);
                     }
 
                     MessageBox.Show(
-                        $"? {totalCount}°³ Waypoint ÃßÀû ¿Ï·á!\n\n" +
-                        $"ÃÑ {totalBoxesAdded}°³ BBox Ãß°¡µÊ\n" +
-                        $"?? JSON ÀúÀå ¹× Àç·Îµå ¿Ï·á\n\n" +
-                        $"ÀúÀå À§Ä¡: {jsonFilePath}",
-                        "ÃßÀû ¿Ï·á",
+                        $"? {totalCount}ê°œ Waypoint ì¶”ì  ì™„ë£Œ!\n\n" +
+                        $"ì´ {totalBoxesAdded}ê°œ BBox ì¶”ê°€ë¨\n" +
+                        $"?? JSON ì €ì¥ ë° ì¬ë¡œë“œ ì™„ë£Œ\n\n" +
+                        $"ì €ì¥ ìœ„ì¹˜: {jsonFilePath}",
+                        "ì¶”ì  ì™„ë£Œ",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                 }
                 else
                 {
                     MessageBox.Show(
-                        $"? {totalCount}°³ Waypoint ÃßÀû ¿Ï·á!\n\n" +
-                        $"ÃÑ {totalBoxesAdded}°³ BBox Ãß°¡µÊ",
-                        "ÃßÀû ¿Ï·á",
+                        $"? {totalCount}ê°œ Waypoint ì¶”ì  ì™„ë£Œ!\n\n" +
+                        $"ì´ {totalBoxesAdded}ê°œ BBox ì¶”ê°€ë¨",
+                        "ì¶”ì  ì™„ë£Œ",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                 }
@@ -775,16 +888,16 @@ namespace WinFormsApp1
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"¼øÂ÷ ÃßÀû Áß ¿À·ù ¹ß»ı:\n\n{ex.Message}\n\n{ex.StackTrace}",
-                        "¿À·ù",
+                    $"ìˆœì°¨ ì¶”ì  ì¤‘ ì˜¤ë¥˜ ë°œìƒ:\n\n{ex.Message}\n\n{ex.StackTrace}",
+                        "ì˜¤ë¥˜",
                         MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
             finally
             {
-                // ? ¼øÂ÷ ÃßÀû Á¾·á ½Ã ÇÃ·¡±× ÇØÁ¦ (¿¹¿Ü ¹ß»ı ½Ã¿¡µµ ¹İµå½Ã ÇØÁ¦)
+                // ? ìˆœì°¨ ì¶”ì  ì¢…ë£Œ ì‹œ í”Œë˜ê·¸ í•´ì œ (ì˜ˆì™¸ ë°œìƒ ì‹œì—ë„ ë°˜ë“œì‹œ í•´ì œ)
                 isTrackingInProgress = false;
-                System.Diagnostics.Debug.WriteLine("[¼øÂ÷ ÃßÀû Á¾·á] isTrackingInProgress = false");
+                System.Diagnostics.Debug.WriteLine("[ìˆœì°¨ ì¶”ì  ì¢…ë£Œ] isTrackingInProgress = false");
             }
         }
 
@@ -792,71 +905,56 @@ namespace WinFormsApp1
         {
             try
             {
-                // ? ÃßÀû Áß¿¡´Â ´Ù¸¥ ÃßÀû ÀÛ¾÷ Â÷´Ü (´Ü¼ø Å½Áö´Â Â÷´ÜÇÏÁö ¾ÊÀ½)
-                // ´Ü, PerformSequentialTracking¿¡¼­ È£ÃâµÇ´Â °æ¿ì(useYolo=true)´Â ÀÌ¹Ì isTrackingInProgress°¡ trueÀÌ¹Ç·Î Çã¿ë
-                // ¿ÜºÎ¿¡¼­ Á÷Á¢ È£ÃâµÇ´Â °æ¿ì(useYolo=false)¿¡¸¸ Áßº¹ ÃßÀû Â÷´Ü
+                // ? ì¶”ì  ì¤‘ì—ëŠ” ë‹¤ë¥¸ ì¶”ì  ì‘ì—… ì°¨ë‹¨ (ë‹¨ìˆœ íƒì§€ëŠ” ì°¨ë‹¨í•˜ì§€ ì•ŠìŒ)
+                // ë‹¨, PerformSequentialTrackingì—ì„œ í˜¸ì¶œë˜ëŠ” ê²½ìš°(useYolo=true)ëŠ” ì´ë¯¸ isTrackingInProgressê°€ trueì´ë¯€ë¡œ í—ˆìš©
+                // ì™¸ë¶€ì—ì„œ ì§ì ‘ í˜¸ì¶œë˜ëŠ” ê²½ìš°(useYolo=false)ì—ë§Œ ì¤‘ë³µ ì¶”ì  ì°¨ë‹¨
                 if (!useYolo && isTrackingInProgress)
                 {
-                    System.Diagnostics.Debug.WriteLine("[ÃßÀû ÀÛ¾÷ Â÷´Ü] ÀÌ¹Ì ÃßÀûÀÌ ÁøÇà ÁßÀÌ¹Ç·Î »õ ÃßÀû ÀÛ¾÷ ºÒ°¡");
+                    System.Diagnostics.Debug.WriteLine("[ì¶”ì  ì‘ì—… ì°¨ë‹¨] ì´ë¯¸ ì¶”ì ì´ ì§„í–‰ ì¤‘ì´ë¯€ë¡œ ìƒˆ ì¶”ì  ì‘ì—… ë¶ˆê°€");
                     MessageBox.Show(
-                        "ÃßÀûÀÌ ÀÌ¹Ì ÁøÇà ÁßÀÔ´Ï´Ù.\n±âÁ¸ ÃßÀûÀÌ ¿Ï·áµÉ ¶§±îÁö ±â´Ù·ÁÁÖ¼¼¿ä.",
-                        "ÀÛ¾÷ Áß",
+                        "ì¶”ì ì´ ì´ë¯¸ ì§„í–‰ ì¤‘ì…ë‹ˆë‹¤.\nê¸°ì¡´ ì¶”ì ì´ ì™„ë£Œë  ë•Œê¹Œì§€ ê¸°ë‹¤ë ¤ì£¼ì„¸ìš”.",
+                        "ì‘ì—… ì¤‘",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
-                    // ?? early return ½Ã¿¡µµ È£ÃâÀÚ¿¡°Ô ¾Ë·Á¾ß ÇÏÁö¸¸, 
-                    // PerformTrackingForWaypointAsync´Â void TaskÀÌ¹Ç·Î ¿¹¿Ü¸¦ throwÇØ¾ß ÇÔ
-                    throw new InvalidOperationException("ÃßÀûÀÌ ÁøÇà ÁßÀÌ¾î¼­ »õ ÃßÀûÀ» ½ÃÀÛÇÒ ¼ö ¾ø½À´Ï´Ù.");
+                    // ?? early return ì‹œì—ë„ í˜¸ì¶œìì—ê²Œ ì•Œë ¤ì•¼ í•˜ì§€ë§Œ,
+                    // PerformTrackingForWaypointAsyncëŠ” void Taskì´ë¯€ë¡œ ì˜ˆì™¸ë¥¼ throwí•´ì•¼ í•¨
+                    throw new InvalidOperationException("ì¶”ì ì´ ì§„í–‰ ì¤‘ì´ì–´ì„œ ìƒˆ ì¶”ì ì„ ì‹œì‘í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.");
                 }
-                
-                // ? Entry ÇÁ·¹ÀÓ¿¡¼­ waypointÀÇ ObjectId¿Í Label¿¡ ÇØ´çÇÏ´Â ¹Ú½º¸¸ Ã£±â
+
+                // ? Entry í”„ë ˆì„ì—ì„œ waypointì˜ ObjectIdì™€ Labelì— í•´ë‹¹í•˜ëŠ” ë°•ìŠ¤ë§Œ ì°¾ê¸°
                 List<BoundingBox> startBoxes = new List<BoundingBox>();
-                
-                if (waypoint.Label == "person")
+
+                if (waypoint.Label == "person" || waypoint.Label == "vehicle" || waypoint.Label == "event")
                 {
                     startBoxes = boundingBoxes
-                        .Where(b => b.FrameIndex == waypoint.EntryFrame && 
-                                   b.Label == "person" && 
-                                   b.PersonId == waypoint.ObjectId)
+                        .Where(b => b.FrameIndex == waypoint.EntryFrame &&
+                                   !b.IsDeleted &&
+                                   !(waypoint.Label == "vehicle" && TrackingIdentityHelper.IsPlate(b)) &&
+                                   TrackingIdentityHelper.MatchesWaypoint(b, waypoint))
                         .ToList();
                 }
-                else if (waypoint.Label == "vehicle")
-                {
-                    startBoxes = boundingBoxes
-                        .Where(b => b.FrameIndex == waypoint.EntryFrame && 
-                                   b.Label == "vehicle" && 
-                                   b.VehicleId == waypoint.ObjectId)
-                        .ToList();
-                }
-                else if (waypoint.Label == "event")
-                {
-                    startBoxes = boundingBoxes
-                        .Where(b => b.FrameIndex == waypoint.EntryFrame && 
-                                   b.Label == "event" && 
-                                   b.EventId == waypoint.ObjectId)
-                        .ToList();
-                }
-                
-                System.Diagnostics.Debug.WriteLine($"[ÃßÀû ½ÃÀÛ] {waypoint.Label} ID={waypoint.ObjectId}, startBoxes={startBoxes.Count}");
+
+                System.Diagnostics.Debug.WriteLine($"[ì¶”ì  ì‹œì‘] {waypoint.Label} ID={waypoint.ObjectId}, startBoxes={startBoxes.Count}");
 
                 if (startBoxes.Count == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ÃßÀû ½ºÅµ] {waypoint.Label} ID={waypoint.ObjectId} - Entry ÇÁ·¹ÀÓ¿¡ ¹Ú½º ¾øÀ½");
+                    System.Diagnostics.Debug.WriteLine($"[ì¶”ì  ìŠ¤í‚µ] {waypoint.Label} ID={waypoint.ObjectId} - Entry í”„ë ˆì„ì— ë°•ìŠ¤ ì—†ìŒ");
                     return;
                 }
 
-                // ? Event´Â ÀÚµ¿ ÃßÀû ¾ÈÇÔ (ÀüÆÄ ±â´É¸¸ »ç¿ë)
+                // ? EventëŠ” ìë™ ì¶”ì  ì•ˆí•¨ (ì „íŒŒ ê¸°ëŠ¥ë§Œ ì‚¬ìš©)
                 if (waypoint.Label == "event")
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ÃßÀû ½ºÅµ] Event´Â ÀÚµ¿ ÃßÀû ¾ÈÇÔ");
+                    System.Diagnostics.Debug.WriteLine($"[ì¶”ì  ìŠ¤í‚µ] EventëŠ” ìë™ ì¶”ì  ì•ˆí•¨");
                     return;
                 }
 
-                // ÃßÀû Áß ·Îµù Æû »ı¼º
+                // ì¶”ì  ì¤‘ ë¡œë”© í¼ ìƒì„±
                 Form loadingForm = new Form
                 {
                     Width = 350,
                     Height = 120,
-                    Text = useYolo ? "YOLO ÃßÀû Áß" : "OpenCV ÃßÀû Áß",
+                    Text = useYolo ? "YOLO ì¶”ì  ì¤‘" : "OpenCV ì¶”ì  ì¤‘",
                     StartPosition = FormStartPosition.CenterParent,
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     MaximizeBox = false,
@@ -866,7 +964,7 @@ namespace WinFormsApp1
 
                 Label loadingLabel = new Label
                 {
-                    Text = useYolo ? "YOLO ÃßÀû Áß... Àá½Ã¸¸ ±â´Ù·ÁÁÖ¼¼¿ä." : "OpenCV ÃßÀû Áß... Àá½Ã¸¸ ±â´Ù·ÁÁÖ¼¼¿ä.",
+                    Text = useYolo ? "YOLO ì¶”ì  ì¤‘... ì ì‹œë§Œ ê¸°ë‹¤ë ¤ì£¼ì„¸ìš”." : "OpenCV ì¶”ì  ì¤‘... ì ì‹œë§Œ ê¸°ë‹¤ë ¤ì£¼ì„¸ìš”.",
                     AutoSize = true,
                     Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
                     Location = new System.Drawing.Point(40, 35)
@@ -880,11 +978,11 @@ namespace WinFormsApp1
 
                 if (useYolo && isYoloAvailable)
                 {
-                    
-                    // °¢ startBox¿¡ ´ëÇØ °³º°ÀûÀ¸·Î YOLO ÃßÀû ¼öÇà
+
+                    // ê° startBoxì— ëŒ€í•´ ê°œë³„ì ìœ¼ë¡œ YOLO ì¶”ì  ìˆ˜í–‰
                     foreach (var startBox in startBoxes)
                     {
-                        // ? ½ÇÆĞ ±¸°£À» ¹Ş¾Æ¿À´Â ¿À¹ö·Îµå ¸Ş¼­µå È£Ãâ
+                        // ? ì‹¤íŒ¨ êµ¬ê°„ì„ ë°›ì•„ì˜¤ëŠ” ì˜¤ë²„ë¡œë“œ ë©”ì„œë“œ í˜¸ì¶œ
                         if (trackingEngine is YoloTrackingEngine yoloEngine)
                         {
                             var result = await Task.Run(() =>
@@ -900,25 +998,25 @@ namespace WinFormsApp1
                                     out Dictionary<string, int> detectionCount);
                                 return new { Boxes = boxes, Failures = failures, InertiaCount = inertiaCount, DetectionCount = detectionCount };
                             });
-                            
+
                             allTrackedBoxes.AddRange(result.Boxes);
-                            
-                            // ? ½ÇÆĞ ±¸°£ ÀúÀå
+
+                            // ? ì‹¤íŒ¨ êµ¬ê°„ ì €ì¥
                             string key = $"{waypoint.Label}_{waypoint.ObjectId}";
                             if (result.Failures != null && result.Failures.Count > 0)
                             {
                                 waypointFailureRanges[key] = result.Failures;
-                                System.Diagnostics.Debug.WriteLine($"[½ÇÆĞ ±¸°£ ÀúÀå] {key}: {result.Failures.Count}°³ ±¸°£");
+                                System.Diagnostics.Debug.WriteLine($"[ì‹¤íŒ¨ êµ¬ê°„ ì €ì¥] {key}: {result.Failures.Count}ê°œ êµ¬ê°„");
                             }
-                            
-                            // ? YOLO ÃßÀû ¿Ï·á ½Ã waypoint ±¸°£ µ¿¾È Å½ÁöÇÑ °´Ã¼ Á¾·ùº° ·Î±× Ãâ·Â
+
+                            // ? YOLO ì¶”ì  ì™„ë£Œ ì‹œ waypoint êµ¬ê°„ ë™ì•ˆ íƒì§€í•œ ê°ì²´ ì¢…ë¥˜ë³„ ë¡œê·¸ ì¶œë ¥
                             if (result.DetectionCount != null && result.DetectionCount.Count > 0)
                             {
                                 var detectionSummary = string.Join(", ", result.DetectionCount
                                     .OrderBy(kv => kv.Key)
                                     .Select(kv => $"{kv.Key}: {kv.Value}"));
                                 System.Diagnostics.Debug.WriteLine(
-                                    $"[YOLO Å½Áö Åë°è] Waypoint ({waypoint.Label} ID={waypoint.ObjectId}, ÇÁ·¹ÀÓ {waypoint.EntryFrame}~{waypoint.ExitFrame}): {detectionSummary}");
+                                    $"[YOLO íƒì§€ í†µê³„] Waypoint ({waypoint.Label} ID={waypoint.ObjectId}, í”„ë ˆì„ {waypoint.EntryFrame}~{waypoint.ExitFrame}): {detectionSummary}");
                             }
                         }
                         else
@@ -929,19 +1027,19 @@ namespace WinFormsApp1
                                 waypoint.EntryFrame,
                                 waypoint.ExitFrame,
                                 fps));
-                            
+
                             allTrackedBoxes.AddRange(trackedBoxes);
                         }
                     }
                 }
-                else 
+                else
                 {
                     loadingForm.Close();
                     MessageBox.Show(
-                        "YOLO ¸ğµ¨À» »ç¿ëÇÒ ¼ö ¾ø½À´Ï´Ù.\n" +
+                        "YOLO ëª¨ë¸ì„ ì‚¬ìš©í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n" +
                         $"useYolo: {useYolo}\n" +
                         $"isYoloAvailable: {isYoloAvailable}",
-                        "Á¤º¸",
+                        "ì •ë³´",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                     return;
@@ -949,14 +1047,14 @@ namespace WinFormsApp1
 
                 loadingForm.Close();
 
-                // ÃßÀûµÈ ¹Ú½º Ãß°¡
+                // ì¶”ì ëœ ë°•ìŠ¤ ì¶”ê°€
                 foreach (var box in allTrackedBoxes)
                 {
                     boundingBoxes.Add(box);
                 }
                 InvalidateBoxCache();
 
-                // ÃßÀûÀÌ ¼º°øÀûÀ¸·Î ¿Ï·áµÇ¸é Entry ÇÁ·¹ÀÓÀÇ »ç¿ëÀÚ°¡ ÁöÁ¤ÇÑ ÃÊ±â ¹Ú½º »èÁ¦
+                // ì¶”ì ì´ ì„±ê³µì ìœ¼ë¡œ ì™„ë£Œë˜ë©´ Entry í”„ë ˆì„ì˜ ì‚¬ìš©ìê°€ ì§€ì •í•œ ì´ˆê¸° ë°•ìŠ¤ ì‚­ì œ
                 if (allTrackedBoxes.Count > 0)
                 {
                     foreach (var startBox in startBoxes)
@@ -966,75 +1064,75 @@ namespace WinFormsApp1
                             boundingBoxes.Remove(startBox);
                         }
                     }
-                    
+
                     InvalidateBoxCache();
                     AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = allTrackedBoxes });
                 }
-                
-                // ? ÃßÀû ¿Ï·á ÈÄ »ç¶óÁü ±¸°£ Ã³¸®
+
+                // ? ì¶”ì  ì™„ë£Œ í›„ ì‚¬ë¼ì§ êµ¬ê°„ ì²˜ë¦¬
                 ProcessDisappearedRanges(waypoint);
-                
-                // ? ÃßÀû ¿Ï·á ÈÄ ¿¬¼Ó ¹Ú½º ºÎÀç ±¸°£ ÀÚµ¿ °¨Áö
+
+                // ? ì¶”ì  ì™„ë£Œ í›„ ì—°ì† ë°•ìŠ¤ ë¶€ì¬ êµ¬ê°„ ìë™ ê°ì§€
                 DetectContinuousAbsence(waypoint);
 
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
 
-                // ? °³º° waypoint ÃßÀû ¿Ï·á ·Î±×
-                System.Diagnostics.Debug.WriteLine($"[ÃßÀû ¿Ï·á] {waypoint.Label} ID={waypoint.ObjectId}, BBox Ãß°¡={allTrackedBoxes.Count}°³");
+                // ? ê°œë³„ waypoint ì¶”ì  ì™„ë£Œ ë¡œê·¸
+                System.Diagnostics.Debug.WriteLine($"[ì¶”ì  ì™„ë£Œ] {waypoint.Label} ID={waypoint.ObjectId}, BBox ì¶”ê°€={allTrackedBoxes.Count}ê°œ");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ÃßÀû ¿À·ù] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}\n{ex.StackTrace}");
+                System.Diagnostics.Debug.WriteLine($"[ì¶”ì  ì˜¤ë¥˜] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show(
-                    $"ÃßÀû Áß ¿À·ù ¹ß»ı:\n\n" +
+                    $"ì¶”ì  ì¤‘ ì˜¤ë¥˜ ë°œìƒ:\n\n" +
                     $"Waypoint: {waypoint.Label} ID={waypoint.ObjectId}\n" +
                     $"Error: {ex.Message}\n\n" +
                     $"StackTrace:\n{ex.StackTrace}",
-                    "¿À·ù",
+                    "ì˜¤ë¥˜",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
-                throw; // ¿¹¿Ü¸¦ »óÀ§·Î ÀüÆÄÇÏ¿© ¼øÂ÷ ÃßÀûÀÌ Áß´ÜµÇµµ·Ï
+                throw; // ì˜ˆì™¸ë¥¼ ìƒìœ„ë¡œ ì „íŒŒí•˜ì—¬ ìˆœì°¨ ì¶”ì ì´ ì¤‘ë‹¨ë˜ë„ë¡
             }
         }
 
-        // ? ºÎºĞ ÀçÃßÀû ÇÔ¼ö (Æ¯Á¤ ÇÁ·¹ÀÓºÎÅÍ Exit±îÁö)
+        // ? ë¶€ë¶„ ì¬ì¶”ì  í•¨ìˆ˜ (íŠ¹ì • í”„ë ˆì„ë¶€í„° Exitê¹Œì§€)
         private async Task PerformPartialRetrackingAsync(WaypointMarker waypoint, int startFrame, BoundingBox templateBox = null)
         {
-            // ? ÃßÀû ½ÃÀÛ ½Ã ÇÃ·¡±× ¼³Á¤
+            // ? ì¶”ì  ì‹œì‘ ì‹œ í”Œë˜ê·¸ ì„¤ì •
             isTrackingInProgress = true;
-            
+
             try
             {
-                System.Diagnostics.Debug.WriteLine($"[ºÎºĞ ÀçÃßÀû ½ÃÀÛ] {waypoint.Label} ID={waypoint.ObjectId}, Frame {startFrame}~{waypoint.ExitFrame}");
+                System.Diagnostics.Debug.WriteLine($"[ë¶€ë¶„ ì¬ì¶”ì  ì‹œì‘] {waypoint.Label} ID={waypoint.ObjectId}, Frame {startFrame}~{waypoint.ExitFrame}");
 
-                // ? 1. ¸ÕÀú startBox Ã£±â (»èÁ¦ Àü¿¡ Ã£¾Æ¾ß ÇÔ)
+                // ? 1. ë¨¼ì € startBox ì°¾ê¸° (ì‚­ì œ ì „ì— ì°¾ì•„ì•¼ í•¨)
                 string key = $"{waypoint.Label}_{waypoint.ObjectId}";
-                
-                // ? ÀçÃßÀû ½ÃÀÛ ½Ã ÇØ´ç °´Ã¼ÀÇ ½ÇÆĞ ±¸°£ Á¤º¸ ÃÊ±âÈ­
+
+                // ? ì¬ì¶”ì  ì‹œì‘ ì‹œ í•´ë‹¹ ê°ì²´ì˜ ì‹¤íŒ¨ êµ¬ê°„ ì •ë³´ ì´ˆê¸°í™”
                 if (waypointFailureRanges.ContainsKey(key))
                 {
                     waypointFailureRanges.Remove(key);
-                    System.Diagnostics.Debug.WriteLine($"[ÀçÃßÀû] {key}ÀÇ ½ÇÆĞ ±¸°£ Á¤º¸ ÃÊ±âÈ­µÊ");
+                    System.Diagnostics.Debug.WriteLine($"[ì¬ì¶”ì ] {key}ì˜ ì‹¤íŒ¨ êµ¬ê°„ ì •ë³´ ì´ˆê¸°í™”ë¨");
                 }
-                
-                // ? ÀçÃßÀû ½ÃÀÛ ½ÃÁ¡¿¡¼­ »ç¶óÁü ±¸°£ Ã³¸® (º¹±Í ½ÃÁ¡À¸·Î °£ÁÖ)
-                // ÇöÀç ÇÁ·¹ÀÓ(startFrame)ÀÌ º¹±Í ½ÃÁ¡(b)ÀÏ ¼ö ÀÖÀ¸¹Ç·Î, ÀÌÀü »ç¶óÁü ±¸°£ È®Á¤
+
+                // ? ì¬ì¶”ì  ì‹œì‘ ì‹œì ì—ì„œ ì‚¬ë¼ì§ êµ¬ê°„ ì²˜ë¦¬ (ë³µê·€ ì‹œì ìœ¼ë¡œ ê°„ì£¼)
+                // í˜„ì¬ í”„ë ˆì„(startFrame)ì´ ë³µê·€ ì‹œì (b)ì¼ ìˆ˜ ìˆìœ¼ë¯€ë¡œ, ì´ì „ ì‚¬ë¼ì§ êµ¬ê°„ í™•ì •
                 ProcessDisappearedRangesAtFrame(waypoint, startFrame);
-                
-                // ? 2. ÇöÀç ÇÁ·¹ÀÓÀÇ ¹Ú½º¸¦ startBox·Î »ç¿ë (»èÁ¦ Àü¿¡ Ã£¾Æ¾ß ÇÔ)
+
+                // ? 2. í˜„ì¬ í”„ë ˆì„ì˜ ë°•ìŠ¤ë¥¼ startBoxë¡œ ì‚¬ìš© (ì‚­ì œ ì „ì— ì°¾ì•„ì•¼ í•¨)
                 BoundingBox startBox = null;
-                
-                // selectedBox°¡ ¿Ã¹Ù¸¥ ¹Ú½ºÀÎÁö È®ÀÎ
-                if (selectedBox != null && 
+
+                // selectedBoxê°€ ì˜¬ë°”ë¥¸ ë°•ìŠ¤ì¸ì§€ í™•ì¸
+                if (selectedBox != null &&
                     selectedBox.FrameIndex == startFrame &&
-                    selectedBox.Label == waypoint.Label && 
+                    selectedBox.Label == waypoint.Label &&
                     GetBoxId(selectedBox) == waypoint.ObjectId)
                 {
                     startBox = selectedBox;
                 }
-                
-                // startBox¸¦ Ã£Áö ¸øÇßÀ¸¸é ÇöÀç ÇÁ·¹ÀÓ¿¡¼­ Ã£±â
+
+                // startBoxë¥¼ ì°¾ì§€ ëª»í–ˆìœ¼ë©´ í˜„ì¬ í”„ë ˆì„ì—ì„œ ì°¾ê¸°
                 if (startBox == null)
                 {
                     startBox = boundingBoxes.FirstOrDefault(b =>
@@ -1044,19 +1142,19 @@ namespace WinFormsApp1
 
                 if (startBox == null)
                 {
-                    MessageBox.Show($"Frame {startFrame}¿¡ ÇØ´çÇÏ´Â ¹Ú½º¸¦ Ã£À» ¼ö ¾ø½À´Ï´Ù.\n\n¹Ú½º¸¦ ¼±ÅÃÇÑ ÈÄ ÀçÃßÀûÀ» ½ÇÇàÇØÁÖ¼¼¿ä.", "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"Frame {startFrame}ì— í•´ë‹¹í•˜ëŠ” ë°•ìŠ¤ë¥¼ ì°¾ì„ ìˆ˜ ì—†ìŠµë‹ˆë‹¤.\n\në°•ìŠ¤ë¥¼ ì„ íƒí•œ í›„ ì¬ì¶”ì ì„ ì‹¤í–‰í•´ì£¼ì„¸ìš”.", "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                // ? 3. ±âÁ¸ µ¥ÀÌÅÍ »èÁ¦ (ÀçÃßÀû ¹üÀ§) - startBox´Â Á¦¿Ü
+                // ? 3. ê¸°ì¡´ ë°ì´í„° ì‚­ì œ (ì¬ì¶”ì  ë²”ìœ„) - startBoxëŠ” ì œì™¸
                 int removedCount = 0;
-                
-                // startFrameºÎÅÍ waypoint.ExitFrame±îÁöÀÇ ±âÁ¸ ¹Ú½º »èÁ¦ (startBox Á¦¿Ü)
+
+                // startFrameë¶€í„° waypoint.ExitFrameê¹Œì§€ì˜ ê¸°ì¡´ ë°•ìŠ¤ ì‚­ì œ (startBox ì œì™¸)
                 var boxesToRemove = boundingBoxes.Where(b =>
                     IsTrackingBoxMatch(b, waypoint, templateBox) &&
                     b.FrameIndex >= startFrame &&
                     b.FrameIndex <= waypoint.ExitFrame &&
-                    b != startBox).ToList(); // startBox´Â »èÁ¦ÇÏÁö ¾ÊÀ½
+                    b != startBox).ToList(); // startBoxëŠ” ì‚­ì œí•˜ì§€ ì•ŠìŒ
 
                 foreach (var box in boxesToRemove)
                 {
@@ -1064,21 +1162,21 @@ namespace WinFormsApp1
                     removedCount++;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"[ºÎºĞ ÀçÃßÀû] {removedCount}°³ ±âÁ¸ ¹Ú½º »èÁ¦µÊ");
+                System.Diagnostics.Debug.WriteLine($"[ë¶€ë¶„ ì¬ì¶”ì ] {removedCount}ê°œ ê¸°ì¡´ ë°•ìŠ¤ ì‚­ì œë¨");
 
-                // ? 4. ÀçÃßÀû ¼öÇà
+                // ? 4. ì¬ì¶”ì  ìˆ˜í–‰
                 if (!isYoloAvailable)
                 {
-                    MessageBox.Show("YOLO ¸ğµ¨À» »ç¿ëÇÒ ¼ö ¾ø½À´Ï´Ù.", "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("YOLO ëª¨ë¸ì„ ì‚¬ìš©í•  ìˆ˜ ì—†ìŠµë‹ˆë‹¤.", "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                // ·Îµù Æû
+                // ë¡œë”© í¼
                 Form loadingForm = new Form
                 {
                     Width = 350,
                     Height = 120,
-                    Text = "ÀçÃßÀû Áß",
+                    Text = "ì¬ì¶”ì  ì¤‘",
                     StartPosition = FormStartPosition.CenterParent,
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     MaximizeBox = false,
@@ -1088,7 +1186,7 @@ namespace WinFormsApp1
 
                 Label loadingLabel = new Label
                 {
-                    Text = "ÀçÃßÀû Áß... Àá½Ã¸¸ ±â´Ù·ÁÁÖ¼¼¿ä.",
+                    Text = "ì¬ì¶”ì  ì¤‘... ì ì‹œë§Œ ê¸°ë‹¤ë ¤ì£¼ì„¸ìš”.",
                     AutoSize = true,
                     Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold),
                     Location = new System.Drawing.Point(40, 35)
@@ -1099,7 +1197,7 @@ namespace WinFormsApp1
                 loadingForm.Refresh();
 
                 List<BoundingBox> newTrackedBoxes = new List<BoundingBox>();
-                int inertiaAppliedFrames = 0; // ? °ü¼º ÃßÀû Àû¿ëµÈ ÇÁ·¹ÀÓ ¼ö
+                int inertiaAppliedFrames = 0; // ? ê´€ì„± ì¶”ì  ì ìš©ëœ í”„ë ˆì„ ìˆ˜
 
                 if (trackingEngine is YoloTrackingEngine yoloEngine)
                 {
@@ -1120,72 +1218,72 @@ namespace WinFormsApp1
                     newTrackedBoxes = result.Boxes;
                     inertiaAppliedFrames = result.InertiaCount;
 
-                    // ? ½ÇÆĞ ±¸°£ ¾÷µ¥ÀÌÆ®
+                    // ? ì‹¤íŒ¨ êµ¬ê°„ ì—…ë°ì´íŠ¸
                     if (result.Failures != null && result.Failures.Count > 0)
                     {
                         waypointFailureRanges[key] = result.Failures;
-                        System.Diagnostics.Debug.WriteLine($"[ÀçÃßÀû ½ÇÆĞ ±¸°£] {key}: {result.Failures.Count}°³ ±¸°£");
+                        System.Diagnostics.Debug.WriteLine($"[ì¬ì¶”ì  ì‹¤íŒ¨ êµ¬ê°„] {key}: {result.Failures.Count}ê°œ êµ¬ê°„");
                     }
-                    
-                    // ? ÀçÃßÀû ¿Ï·á ½Ã waypoint ±¸°£ µ¿¾È Å½ÁöÇÑ °´Ã¼ Á¾·ùº° ·Î±× Ãâ·Â
+
+                    // ? ì¬ì¶”ì  ì™„ë£Œ ì‹œ waypoint êµ¬ê°„ ë™ì•ˆ íƒì§€í•œ ê°ì²´ ì¢…ë¥˜ë³„ ë¡œê·¸ ì¶œë ¥
                     if (result.DetectionCount != null && result.DetectionCount.Count > 0)
                     {
                         var detectionSummary = string.Join(", ", result.DetectionCount
                             .OrderBy(kv => kv.Key)
                             .Select(kv => $"{kv.Key}: {kv.Value}"));
                         System.Diagnostics.Debug.WriteLine(
-                            $"[YOLO Å½Áö Åë°è] ÀçÃßÀû Waypoint ({waypoint.Label} ID={waypoint.ObjectId}, ÇÁ·¹ÀÓ {startFrame}~{waypoint.ExitFrame}): {detectionSummary}");
+                            $"[YOLO íƒì§€ í†µê³„] ì¬ì¶”ì  Waypoint ({waypoint.Label} ID={waypoint.ObjectId}, í”„ë ˆì„ {startFrame}~{waypoint.ExitFrame}): {detectionSummary}");
                     }
                 }
 
                 loadingForm.Close();
 
-                // ? 5. »õ µ¥ÀÌÅÍ Ãß°¡ Àü Áßº¹ Á¦°Å È®ÀÎ
+                // ? 5. ìƒˆ ë°ì´í„° ì¶”ê°€ ì „ ì¤‘ë³µ ì œê±° í™•ì¸
                 int duplicateCount = 0;
                 var framesToCheck = newTrackedBoxes.Select(b => b.FrameIndex).Distinct().ToList();
-                
-                // »õ·Î Ãß°¡ÇÒ ¹Ú½ºÀÇ ÇÁ·¹ÀÓ¿¡ ÀÌ¹Ì Á¸ÀçÇÏ´Â µ¿ÀÏÇÑ °´Ã¼ ¹Ú½º Á¦°Å
+
+                // ìƒˆë¡œ ì¶”ê°€í•  ë°•ìŠ¤ì˜ í”„ë ˆì„ì— ì´ë¯¸ ì¡´ì¬í•˜ëŠ” ë™ì¼í•œ ê°ì²´ ë°•ìŠ¤ ì œê±°
                 foreach (var frame in framesToCheck)
                 {
                     var existingBoxes = boundingBoxes.Where(b =>
                         b.FrameIndex == frame &&
                         IsTrackingBoxMatch(b, waypoint, templateBox)).ToList();
-                    
+
                     foreach (var existingBox in existingBoxes)
                     {
                         boundingBoxes.Remove(existingBox);
                         duplicateCount++;
                     }
                 }
-                
+
                 if (duplicateCount > 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ÀçÃßÀû Áßº¹ Á¦°Å] {duplicateCount}°³ Áßº¹ ¹Ú½º »èÁ¦µÊ");
+                    System.Diagnostics.Debug.WriteLine($"[ì¬ì¶”ì  ì¤‘ë³µ ì œê±°] {duplicateCount}ê°œ ì¤‘ë³µ ë°•ìŠ¤ ì‚­ì œë¨");
                 }
 
-                // ? 6. »õ µ¥ÀÌÅÍ Ãß°¡
+                // ? 6. ìƒˆ ë°ì´í„° ì¶”ê°€
                 foreach (var box in newTrackedBoxes)
                 {
                     boundingBoxes.Add(box);
                 }
 
-                // ? 7. Á¤·Ä
+                // ? 7. ì •ë ¬
                 boundingBoxes.Sort((a, b) => a.FrameIndex.CompareTo(b.FrameIndex));
 
                 InvalidateBoxCache();
                 UpdateBoxCount();
                 UpdateBboxListDisplay();
 
-                // ? 8. ÀçÃßÀû ¿Ï·á ÈÄ ÀüÃ¼ ¹üÀ§(EntryFrame~ExitFrame)¿¡¼­ Àçº¸°£ ¼öÇà
-                // ÀçÃßÀû ÀÌÀü ¸¶Áö¸· ¼º°ø ÇÁ·¹ÀÓ°ú ÀçÃßÀû ÈÄ Ã¹ ¼º°ø ÇÁ·¹ÀÓ »çÀÌµµ º¸°£ÇÏ±â À§ÇÔ
+                // ? 8. ì¬ì¶”ì  ì™„ë£Œ í›„ ì „ì²´ ë²”ìœ„(EntryFrame~ExitFrame)ì—ì„œ ì¬ë³´ê°„ ìˆ˜í–‰
+                // ì¬ì¶”ì  ì´ì „ ë§ˆì§€ë§‰ ì„±ê³µ í”„ë ˆì„ê³¼ ì¬ì¶”ì  í›„ ì²« ì„±ê³µ í”„ë ˆì„ ì‚¬ì´ë„ ë³´ê°„í•˜ê¸° ìœ„í•¨
                 int additionalInterpolatedFrames = await Task.Run(() =>
                 {
                     return ApplyInertialInterpolationForWaypoint(waypoint, startFrame, templateBox);
                 });
 
-                System.Diagnostics.Debug.WriteLine($"[ºÎºĞ ÀçÃßÀû ¿Ï·á] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}°³ ¹Ú½º Ãß°¡µÊ, ÀçÃßÀû ¹üÀ§ º¸°£: {inertiaAppliedFrames}°³, ÀüÃ¼ ¹üÀ§ Àçº¸°£: {additionalInterpolatedFrames}°³");
+                System.Diagnostics.Debug.WriteLine($"[ë¶€ë¶„ ì¬ì¶”ì  ì™„ë£Œ] {waypoint.Label} ID={waypoint.ObjectId}, {newTrackedBoxes.Count}ê°œ ë°•ìŠ¤ ì¶”ê°€ë¨, ì¬ì¶”ì  ë²”ìœ„ ë³´ê°„: {inertiaAppliedFrames}ê°œ, ì „ì²´ ë²”ìœ„ ì¬ë³´ê°„: {additionalInterpolatedFrames}ê°œ");
 
-                // ? Àçº¸°£ ÈÄ UI ¾÷µ¥ÀÌÆ®
+                // ? ì¬ë³´ê°„ í›„ UI ì—…ë°ì´íŠ¸
                 if (additionalInterpolatedFrames > 0)
                 {
                     InvalidateBoxCache();
@@ -1193,10 +1291,10 @@ namespace WinFormsApp1
                     UpdateBboxListDisplay();
                 }
 
-                // ? 9. ÇöÀç ÇÁ·¹ÀÓ »õ·Î°íÄ§
+                // ? 9. í˜„ì¬ í”„ë ˆì„ ìƒˆë¡œê³ ì¹¨
                 pictureBoxVideo.Invalidate();
 
-                // ? 10. JSON ÀÚµ¿ ÀúÀå
+                // ? 10. JSON ìë™ ì €ì¥
                 if (!string.IsNullOrEmpty(currentVideoFile))
                 {
                     string videoDir = Path.GetDirectoryName(currentVideoFile);
@@ -1207,7 +1305,7 @@ namespace WinFormsApp1
                         Directory.CreateDirectory(saveDir);
                     }
 
-                    // ? ±âÁ¸¿¡ ·ÎµåµÈ ÆÄÀÏ¿¡ ÀúÀå
+                    // ? ê¸°ì¡´ì— ë¡œë“œëœ íŒŒì¼ì— ì €ì¥
                     string jsonFilePath;
                     if (!string.IsNullOrEmpty(currentJsonFile) && File.Exists(currentJsonFile))
                     {
@@ -1220,72 +1318,72 @@ namespace WinFormsApp1
                         currentJsonFile = jsonFilePath;
                     }
 
-                    // JSON ÀúÀå (Àç·ÎµåÇÏÁö ¾ÊÀ½ - ¸Ş¸ğ¸® »óÅÂ°¡ ÀÌ¹Ì ÃÖ½Å)
+                    // JSON ì €ì¥ (ì¬ë¡œë“œí•˜ì§€ ì•ŠìŒ - ë©”ëª¨ë¦¬ ìƒíƒœê°€ ì´ë¯¸ ìµœì‹ )
                     await Task.Run(() => ExportToJsonExtended(jsonFilePath));
                 }
 
                 int totalInterpolated = inertiaAppliedFrames + additionalInterpolatedFrames;
-                
-                // ? ÀçÃßÀû ¿Ï·á ÈÄ »ç¶óÁü ±¸°£ Ã³¸®
+
+                // ? ì¬ì¶”ì  ì™„ë£Œ í›„ ì‚¬ë¼ì§ êµ¬ê°„ ì²˜ë¦¬
                 ProcessDisappearedRanges(waypoint);
-                
-                // ? ÀçÃßÀû ¿Ï·á ÈÄ ¿¬¼Ó ¹Ú½º ºÎÀç ±¸°£ ÀÚµ¿ °¨Áö
+
+                // ? ì¬ì¶”ì  ì™„ë£Œ í›„ ì—°ì† ë°•ìŠ¤ ë¶€ì¬ êµ¬ê°„ ìë™ ê°ì§€
                 DetectContinuousAbsence(waypoint);
-                
-                MessageBox.Show($"ÀçÃßÀûÀÌ ¿Ï·áµÇ¾ú½À´Ï´Ù.\nÃß°¡µÈ ¹Ú½º: {newTrackedBoxes.Count}°³\n\n°ü¼º º¸°£:\n- ÀçÃßÀû ¹üÀ§: {inertiaAppliedFrames}°³ ÇÁ·¹ÀÓ\n- ÀüÃ¼ ¹üÀ§ Àçº¸°£: {additionalInterpolatedFrames}°³ ÇÁ·¹ÀÓ\n- ÃÑ º¸°£: {totalInterpolated}°³ ÇÁ·¹ÀÓ\n\n?? JSON ÀúÀå ¿Ï·á", "¿Ï·á", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                MessageBox.Show($"ì¬ì¶”ì ì´ ì™„ë£Œë˜ì—ˆìŠµë‹ˆë‹¤.\nì¶”ê°€ëœ ë°•ìŠ¤: {newTrackedBoxes.Count}ê°œ\n\nê´€ì„± ë³´ê°„:\n- ì¬ì¶”ì  ë²”ìœ„: {inertiaAppliedFrames}ê°œ í”„ë ˆì„\n- ì „ì²´ ë²”ìœ„ ì¬ë³´ê°„: {additionalInterpolatedFrames}ê°œ í”„ë ˆì„\n- ì´ ë³´ê°„: {totalInterpolated}ê°œ í”„ë ˆì„\n\n?? JSON ì €ì¥ ì™„ë£Œ", "ì™„ë£Œ", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ºÎºĞ ÀçÃßÀû ¿À·ù] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
-                MessageBox.Show($"ÀçÃßÀû Áß ¿À·ù ¹ß»ı:\n\n{ex.Message}", "¿À·ù", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                System.Diagnostics.Debug.WriteLine($"[ë¶€ë¶„ ì¬ì¶”ì  ì˜¤ë¥˜] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
+                MessageBox.Show($"ì¬ì¶”ì  ì¤‘ ì˜¤ë¥˜ ë°œìƒ:\n\n{ex.Message}", "ì˜¤ë¥˜", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
-                // ? ÃßÀû Á¾·á ½Ã ÇÃ·¡±× ÇØÁ¦
+                // ? ì¶”ì  ì¢…ë£Œ ì‹œ í”Œë˜ê·¸ í•´ì œ
                 isTrackingInProgress = false;
             }
         }
 
-        // ? ÀçÃßÀû ¿Ï·á ÈÄ ÀüÃ¼ ¹üÀ§¿¡¼­ Àçº¸°£ ¼öÇà
+        // ? ì¬ì¶”ì  ì™„ë£Œ í›„ ì „ì²´ ë²”ìœ„ì—ì„œ ì¬ë³´ê°„ ìˆ˜í–‰
         private int ApplyInertialInterpolationForWaypoint(WaypointMarker waypoint, int retrackingStartFrame, BoundingBox templateBox = null)
         {
             int interpolatedCount = 0;
-            
+
             try
             {
-                // waypointÀÇ ÀüÃ¼ ¹üÀ§¿¡¼­ ÇØ´ç °´Ã¼ÀÇ ¸ğµç ¹Ú½º Ã£±â
+                // waypointì˜ ì „ì²´ ë²”ìœ„ì—ì„œ í•´ë‹¹ ê°ì²´ì˜ ëª¨ë“  ë°•ìŠ¤ ì°¾ê¸°
                 List<BoundingBox> allBoxes = boundingBoxes
-                    .Where(b => b.FrameIndex >= waypoint.EntryFrame && 
+                    .Where(b => b.FrameIndex >= waypoint.EntryFrame &&
                                b.FrameIndex <= waypoint.ExitFrame &&
                                IsTrackingBoxMatch(b, waypoint, templateBox))
                     .OrderBy(b => b.FrameIndex)
                     .ToList();
-                
+
                 if (allBoxes.Count == 0)
                     return 0;
-                
-                // ? ¼º°ø ÇÁ·¹ÀÓ Ã£±â: ¿¬¼ÓµÈ ÇÁ·¹ÀÓ¿¡¼­ À§Ä¡°¡ º¯°æµÈ ÇÁ·¹ÀÓ = Detection ¼º°ø ÇÁ·¹ÀÓ
+
+                // ? ì„±ê³µ í”„ë ˆì„ ì°¾ê¸°: ì—°ì†ëœ í”„ë ˆì„ì—ì„œ ìœ„ì¹˜ê°€ ë³€ê²½ëœ í”„ë ˆì„ = Detection ì„±ê³µ í”„ë ˆì„
                 var successfulFrames = new Dictionary<int, Rectangle>();
                 BoundingBox prevBox = null;
-                
+
                 foreach (var box in allBoxes)
                 {
                     if (prevBox == null)
                     {
-                        // Ã¹ ÇÁ·¹ÀÓÀº Ç×»ó ¼º°øÀ¸·Î °£ÁÖ (½ÃÀÛ ¹Ú½º)
+                        // ì²« í”„ë ˆì„ì€ í•­ìƒ ì„±ê³µìœ¼ë¡œ ê°„ì£¼ (ì‹œì‘ ë°•ìŠ¤)
                         successfulFrames[box.FrameIndex] = box.Rectangle;
                     }
                     else
                     {
-                        // ÀÌÀü ¹Ú½º¿Í À§Ä¡°¡ ´Ù¸£¸é ¼º°ø ÇÁ·¹ÀÓÀ¸·Î °£ÁÖ
-                        if (box.Rectangle.X != prevBox.Rectangle.X || 
+                        // ì´ì „ ë°•ìŠ¤ì™€ ìœ„ì¹˜ê°€ ë‹¤ë¥´ë©´ ì„±ê³µ í”„ë ˆì„ìœ¼ë¡œ ê°„ì£¼
+                        if (box.Rectangle.X != prevBox.Rectangle.X ||
                             box.Rectangle.Y != prevBox.Rectangle.Y ||
                             box.Rectangle.Width != prevBox.Rectangle.Width ||
                             box.Rectangle.Height != prevBox.Rectangle.Height)
                         {
                             successfulFrames[box.FrameIndex] = box.Rectangle;
                         }
-                        // ÀçÃßÀû ½ÃÀÛ ÇÁ·¹ÀÓÀº Ç×»ó ¼º°ø ÇÁ·¹ÀÓÀ¸·Î °£ÁÖ (ÀçÃßÀû ½ÃÀÛÁ¡)
+                        // ì¬ì¶”ì  ì‹œì‘ í”„ë ˆì„ì€ í•­ìƒ ì„±ê³µ í”„ë ˆì„ìœ¼ë¡œ ê°„ì£¼ (ì¬ì¶”ì  ì‹œì‘ì )
                         else if (box.FrameIndex == retrackingStartFrame)
                         {
                             successfulFrames[box.FrameIndex] = box.Rectangle;
@@ -1293,32 +1391,32 @@ namespace WinFormsApp1
                     }
                     prevBox = box;
                 }
-                
+
                 if (successfulFrames.Count < 2)
-                    return 0; // ¼º°ø ÇÁ·¹ÀÓÀÌ 2°³ ¹Ì¸¸ÀÌ¸é º¸°£ ºÒ°¡
-                
-                // ? ¼º°ø ÇÁ·¹ÀÓ ¸ñ·Ï Á¤·Ä
+                    return 0; // ì„±ê³µ í”„ë ˆì„ì´ 2ê°œ ë¯¸ë§Œì´ë©´ ë³´ê°„ ë¶ˆê°€
+
+                // ? ì„±ê³µ í”„ë ˆì„ ëª©ë¡ ì •ë ¬
                 var sortedSuccessFrames = successfulFrames.Keys.OrderBy(f => f).ToList();
-                
-                System.Diagnostics.Debug.WriteLine($"[ÀüÃ¼ ¹üÀ§ Àçº¸°£] {waypoint.Label} ID={waypoint.ObjectId}: EntryFrame={waypoint.EntryFrame}~ExitFrame={waypoint.ExitFrame}, ¼º°ø ÇÁ·¹ÀÓ {successfulFrames.Count}°³");
-                
-                // ? °¢ ½ÇÆĞ ÇÁ·¹ÀÓ¿¡ ´ëÇØ º¸°£ Àû¿ë
+
+                System.Diagnostics.Debug.WriteLine($"[ì „ì²´ ë²”ìœ„ ì¬ë³´ê°„] {waypoint.Label} ID={waypoint.ObjectId}: EntryFrame={waypoint.EntryFrame}~ExitFrame={waypoint.ExitFrame}, ì„±ê³µ í”„ë ˆì„ {successfulFrames.Count}ê°œ");
+
+                // ? ê° ì‹¤íŒ¨ í”„ë ˆì„ì— ëŒ€í•´ ë³´ê°„ ì ìš©
                 for (int frameIdx = waypoint.EntryFrame; frameIdx <= waypoint.ExitFrame; frameIdx++)
                 {
-                    // ÀÌ¹Ì ¼º°ø ÇÁ·¹ÀÓÀÌ¸é °Ç³Ê¶Ù±â
+                    // ì´ë¯¸ ì„±ê³µ í”„ë ˆì„ì´ë©´ ê±´ë„ˆë›°ê¸°
                     if (successfulFrames.ContainsKey(frameIdx))
                         continue;
-                    
-                    // ÇØ´ç ÇÁ·¹ÀÓÀÇ ¹Ú½º Ã£±â
+
+                    // í•´ë‹¹ í”„ë ˆì„ì˜ ë°•ìŠ¤ ì°¾ê¸°
                     var box = allBoxes.FirstOrDefault(b => b.FrameIndex == frameIdx);
                     if (box == null)
                         continue;
-                    
-                    // ¾ÕµÚ ¼º°ø ÇÁ·¹ÀÓ Ã£±â
+
+                    // ì•ë’¤ ì„±ê³µ í”„ë ˆì„ ì°¾ê¸°
                     int? prevSuccessFrame = null;
                     int? nextSuccessFrame = null;
-                    
-                    // ÀÌÀü ¼º°ø ÇÁ·¹ÀÓ Ã£±â
+
+                    // ì´ì „ ì„±ê³µ í”„ë ˆì„ ì°¾ê¸°
                     for (int i = sortedSuccessFrames.Count - 1; i >= 0; i--)
                     {
                         if (sortedSuccessFrames[i] < frameIdx)
@@ -1327,8 +1425,8 @@ namespace WinFormsApp1
                             break;
                         }
                     }
-                    
-                    // ´ÙÀ½ ¼º°ø ÇÁ·¹ÀÓ Ã£±â
+
+                    // ë‹¤ìŒ ì„±ê³µ í”„ë ˆì„ ì°¾ê¸°
                     for (int i = 0; i < sortedSuccessFrames.Count; i++)
                     {
                         if (sortedSuccessFrames[i] > frameIdx)
@@ -1337,40 +1435,40 @@ namespace WinFormsApp1
                             break;
                         }
                     }
-                    
-                    // ¾ÕµÚ ¼º°ø ÇÁ·¹ÀÓÀÌ ¸ğµÎ ÀÖÀ¸¸é º¸°£ Àû¿ë
+
+                    // ì•ë’¤ ì„±ê³µ í”„ë ˆì„ì´ ëª¨ë‘ ìˆìœ¼ë©´ ë³´ê°„ ì ìš©
                     if (prevSuccessFrame.HasValue && nextSuccessFrame.HasValue)
                     {
                         var prevRect = successfulFrames[prevSuccessFrame.Value];
                         var nextRect = successfulFrames[nextSuccessFrame.Value];
-                        
+
                         int totalFramesBetween = nextSuccessFrame.Value - prevSuccessFrame.Value;
                         int currentOffset = frameIdx - prevSuccessFrame.Value;
-                        
-                        // ¼±Çü º¸°£ °è»ê (À§Ä¡ ¹× Å©±â ¸ğµÎ º¸°£)
+
+                        // ì„ í˜• ë³´ê°„ ê³„ì‚° (ìœ„ì¹˜ ë° í¬ê¸° ëª¨ë‘ ë³´ê°„)
                         double ratio = (double)currentOffset / totalFramesBetween;
-                        
+
                         int interpolatedX = (int)(prevRect.X + (nextRect.X - prevRect.X) * ratio);
                         int interpolatedY = (int)(prevRect.Y + (nextRect.Y - prevRect.Y) * ratio);
                         int interpolatedWidth = (int)(prevRect.Width + (nextRect.Width - prevRect.Width) * ratio);
                         int interpolatedHeight = (int)(prevRect.Height + (nextRect.Height - prevRect.Height) * ratio);
-                        
-                        // ¹Ú½º À§Ä¡ ¹× Å©±â ¾÷µ¥ÀÌÆ®
+
+                        // ë°•ìŠ¤ ìœ„ì¹˜ ë° í¬ê¸° ì—…ë°ì´íŠ¸
                         box.Rectangle = new Rectangle(interpolatedX, interpolatedY, interpolatedWidth, interpolatedHeight);
-                        
+
                         interpolatedCount++;
-                        
+
                         // per-frame interpolation log suppressed
                     }
                 }
-                
-                System.Diagnostics.Debug.WriteLine($"[ÀüÃ¼ ¹üÀ§ Àçº¸°£ ¿Ï·á] {waypoint.Label} ID={waypoint.ObjectId}: {interpolatedCount}°³ ÇÁ·¹ÀÓ º¸°£µÊ");
+
+                System.Diagnostics.Debug.WriteLine($"[ì „ì²´ ë²”ìœ„ ì¬ë³´ê°„ ì™„ë£Œ] {waypoint.Label} ID={waypoint.ObjectId}: {interpolatedCount}ê°œ í”„ë ˆì„ ë³´ê°„ë¨");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ÀüÃ¼ ¹üÀ§ Àçº¸°£ ¿À·ù] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[ì „ì²´ ë²”ìœ„ ì¬ë³´ê°„ ì˜¤ë¥˜] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
             }
-            
+
             return interpolatedCount;
         }
 

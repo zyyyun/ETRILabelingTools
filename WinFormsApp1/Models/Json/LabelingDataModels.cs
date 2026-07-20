@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 
 namespace WinFormsApp1
@@ -31,6 +31,12 @@ namespace WinFormsApp1
         [JsonProperty("body_annotation_id")] public int BodyAnnotationId { get; set; }
     }
 
+    public class PlateLinkData
+    {
+        [JsonProperty("plate_annotation_id")] public int PlateAnnotationId { get; set; }
+        [JsonProperty("body_annotation_id")] public int BodyAnnotationId { get; set; }
+    }
+
     public class AnnotationData
     {
         [JsonProperty("id")] public int Id { get; set; }
@@ -40,6 +46,7 @@ namespace WinFormsApp1
         [JsonProperty("area")] public int Area { get; set; }
         [JsonProperty("iscrowd")] public int Iscrowd { get; set; }
         [JsonProperty("track_id")] public int TrackId { get; set; }
+        [JsonProperty("vehicle_instance_id", NullValueHandling = NullValueHandling.Ignore)] public int? VehicleInstanceId { get; set; }
         [JsonProperty("track_info")] public TrackInfo TrackInfo { get; set; }
         [JsonProperty("interacting_object", NullValueHandling = NullValueHandling.Ignore)] public string InteractingObject { get; set; }
         [JsonProperty("event_instance_id", NullValueHandling = NullValueHandling.Ignore)] public string EventInstanceId { get; set; }
@@ -75,5 +82,6 @@ namespace WinFormsApp1
         [JsonProperty("categories")] public List<CategoryData> Categories { get; set; }
         [JsonProperty("failure_ranges")] public Dictionary<string, List<(int start, int end)>>? FailureRanges { get; set; }
         [JsonProperty("face_links", NullValueHandling = NullValueHandling.Ignore)] public List<FaceLinkData>? FaceLinks { get; set; }
+        [JsonProperty("plate_links", NullValueHandling = NullValueHandling.Ignore)] public List<PlateLinkData>? PlateLinks { get; set; }
     }
 }

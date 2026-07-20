@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -327,19 +327,26 @@ namespace WinFormsApp1
                     {
                         label = "vehicle";
                     }
-                    else if (catId >= 25 && catId <= 28)
+                    else if (catId >= 25 && catId <= 32)
                     {
                         label = "event";
+                    }
+                    else if (catId == 33)
+                    {
+                        label = "vehicle"; // plate
                     }
                     else if (tempCategoryMap.ContainsKey(catId)) // ✅ tempCategoryMap 사용
                     {
                         // fallback: 카테고리 이름으로 판단
                         string categoryName = tempCategoryMap[catId].Name;
                         if (categoryName.Contains("car") || categoryName.Contains("motorcycle") || 
-                            categoryName.Contains("scooter") || categoryName.Contains("bicycle"))
+                            categoryName.Contains("scooter") || categoryName.Contains("bicycle") ||
+                            categoryName.Contains("plate"))
                             label = "vehicle";
                         else if (categoryName.Contains("contact") || categoryName.Contains("exchange") || 
-                                 categoryName.Contains("board") || categoryName.Contains("final"))
+                                 categoryName.Contains("board") || categoryName.Contains("final") ||
+                                 categoryName.Contains("disembark") || categoryName.Contains("controlled_delivery") ||
+                                 categoryName.Contains("camouflage") || categoryName.Contains("throw"))
                             label = "event";
                         else if (categoryName.StartsWith("person"))
                             label = "person";
@@ -356,6 +363,8 @@ namespace WinFormsApp1
                     // EventId 계산 로직 수정: CategoryId에서 역산
                     int personId = 0;
                     int vehicleId = 0;
+                    int vehicleInstanceId = annotation.VehicleInstanceId.GetValueOrDefault();
+                    string vehiclePartType = null;
                     int eventId = 0;
                     
                     if (label == "person")
@@ -364,13 +373,16 @@ namespace WinFormsApp1
                     }
                     else if (label == "vehicle")
                     {
-                        // Vehicle: CategoryId 21~24 → VehicleId 1~4
+                        // Vehicle: CategoryId 21~24 → VehicleId 1~4 (type), 33 → plate
                         vehicleId = catId >= 21 && catId <= 24 ? (catId - 20) : trackId;
+                        // Legacy JSON used track_id for VehicleId; use it as an instance fallback only when the new field is absent.
+                        if (vehicleInstanceId == 0) vehicleInstanceId = trackId;
+                        vehiclePartType = catId == 33 ? "plate" : "body";
                     }
                     else if (label == "event")
                     {
-                        // Event: CategoryId 25~28 → EventId 1~4
-                        eventId = catId >= 25 && catId <= 28 ? (catId - 24) : trackId;
+                        // Event: CategoryId 25~32 → EventId 1~8
+                        eventId = catId >= 25 && catId <= 32 ? (catId - 24) : trackId;
                     }
 
                     var box = new BoundingBox
@@ -380,6 +392,8 @@ namespace WinFormsApp1
                         Label = label,
                         PersonId = personId,
                         VehicleId = vehicleId,
+                        VehicleInstanceId = vehicleInstanceId,
+                        VehiclePartType = vehiclePartType,
                         EventId = eventId,
                         EventInstanceId = annotation.EventInstanceId,
                         Action = "waypoint",
@@ -404,7 +418,7 @@ namespace WinFormsApp1
                         // ObjectId 결정 (Label에 따라)
                         int objectId = 0;
                         if (box.Label == "person") objectId = box.PersonId;
-                        else if (box.Label == "vehicle") objectId = box.VehicleId;
+                        else if (box.Label == "vehicle") objectId = TrackingIdentityHelper.GetNumericIdentity(box);
                         else if (box.Label == "event") objectId = box.EventId;
 
                         // ✅ Dictionary 기반 중복 체크 (O(1) 조회) - Race Condition 방지
@@ -516,7 +530,10 @@ namespace WinFormsApp1
                     waypointIndex++;
                 }
 
+                WaypointNormalizer.NormalizeInPlace(tempWaypointMarkers);
+
                 FaceLinkHelper.ApplyFaceLinks(labelingData.FaceLinks, tempBoxesByAnnotationId, tempAnnotationsById);
+                PlateLinkHelper.ApplyPlateLinks(labelingData.PlateLinks, tempBoxesByAnnotationId, tempAnnotationsById);
 
                 // ✅ Person attributes 복원 (최적화: waypoint 매핑 미리 생성 + 일괄 처리)
                 // Waypoint 매핑을 미리 생성하여 반복 검색 제거
@@ -947,6 +964,7 @@ namespace WinFormsApp1
                     System.Diagnostics.Debug.WriteLine($"[JSON 저장] 새 파일 생성: {savePath}");
                 }
 
+                WaypointNormalizer.NormalizeInPlace(waypointMarkers);
                 ExportToJsonExtended(savePath);
             }
             catch (Exception ex)
@@ -1112,13 +1130,14 @@ namespace WinFormsApp1
                 var images = new List<ImageInfo>();
                 var annotations = new List<AnnotationData>();
                 var faceLinks = new List<FaceLinkData>();
+                var plateLinks = new List<PlateLinkData>();
                 var categories = new Dictionary<int, CategoryData>();
 
                 // 모든 속성 목록 정의 (Weight/BodyShape로 통합)
                 var allAttributeNames = new HashSet<string>
                 {
                     // View
-                    "Occlusion", "BodyView",
+                    "Occlusion", "BodyView", "Camouflage",
                     // Biometric
                     "Age", "Gender", "Height", "Weight/BodyShape", "Face",
                     // Head/Hair
@@ -1194,10 +1213,21 @@ namespace WinFormsApp1
                     {
                         // 박스의 라벨 타입에 맞는 ID 가져오기
                         int boxId = GetBoxId(box);
-                        
-                        // 스펙에 맞는 Category ID와 Name 사용
-                        int categoryId = GetCategoryId(box.Label, boxId);
-                        string categoryName = GetCategoryName(box.Label, boxId);
+                        int categoryBoxId = box.Label == "vehicle" ? box.VehicleId : boxId;
+                        // 스펙에 맞는 Category ID와 Name 사용 (vehicle plate는 VehiclePartType 기준으로 별도 처리)
+                        int categoryId;
+                        string categoryName;
+                        if (string.Equals(box.Label, "vehicle", StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(box.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase))
+                        {
+                            categoryId = LabelCatalogHelper.GetPlateCategoryId();
+                            categoryName = LabelCatalogHelper.GetVehicleCategoryName(box.VehicleId, box.VehiclePartType);
+                        }
+                        else
+                        {
+                            categoryId = GetCategoryId(box.Label, categoryBoxId);
+                            categoryName = GetCategoryName(box.Label, categoryBoxId);
+                        }
                         
                         if (!categories.ContainsKey(categoryId))
                         {
@@ -1323,7 +1353,8 @@ namespace WinFormsApp1
                             Bbox = new int[] { box.Rectangle.X, box.Rectangle.Y, box.Rectangle.Width, box.Rectangle.Height },
                             Area = box.Rectangle.Width * box.Rectangle.Height,
                             Iscrowd = 0,
-                            TrackId = boxId,
+                            TrackId = box.Label == "vehicle" ? box.VehicleId : GetDrawingIdentityId(box),
+                        VehicleInstanceId = box.Label == "vehicle" && box.VehicleInstanceId > 0 ? box.VehicleInstanceId : (int?)null,
                             TrackInfo = new TrackInfo
                             {
                                 Entry = new TrackEntry
@@ -1548,6 +1579,23 @@ namespace WinFormsApp1
                         }
                     }
 
+                    foreach (var plateBox in frameGroup.Where(box => string.Equals(box.Label, "vehicle", StringComparison.OrdinalIgnoreCase) && string.Equals(box.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var plateLink = PlateLinkHelper.TryCreatePlateLink(plateBox, currentFrameAnnotations.Values, currentFrameAnnotations);
+                        if (plateLink != null)
+                        {
+                            plateLinks.Add(plateLink);
+                        }
+                        else if (!plateBox.LinkedVehicleInstanceId.HasValue)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[PlateLinkExport] Missing linked body id for plate box at frame {plateBox.FrameIndex}.");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[PlateLinkExport] Failed to match body annotation for linked plate box at frame {plateBox.FrameIndex}.");
+                        }
+                    }
+
                     imageId++;
                 }
 
@@ -1566,7 +1614,8 @@ namespace WinFormsApp1
                     Annotations = annotations,
                     Categories = categories.Values.ToList(),
                     FailureRanges = waypointFailureRanges,
-                    FaceLinks = faceLinks.Count > 0 ? faceLinks : null
+                    FaceLinks = faceLinks.Count > 0 ? faceLinks : null,
+                    PlateLinks = plateLinks.Count > 0 ? plateLinks : null
                 };
 
                 // null 값도 포함하여 직렬화
@@ -1613,7 +1662,7 @@ namespace WinFormsApp1
             else
             {
                 // 여러 Event 중 선택
-                string[] eventTypes = { "contact", "exchange", "board", "final_exchange", "throw" };
+                var eventTypes = LabelCatalogHelper.EventTypes;
                 var eventNames = eventBoxesAtFrame.Select(b => 
                 {
                     string name = b.EventId > 0 && b.EventId <= eventTypes.Length 
@@ -1665,7 +1714,7 @@ namespace WinFormsApp1
             }
             
             // 삭제 확인
-            string[] eventTypes2 = { "contact", "exchange", "board", "final_exchange", "throw" };
+            var eventTypes2 = LabelCatalogHelper.EventTypes;
             string eventName = targetEvent.EventId > 0 && targetEvent.EventId <= eventTypes2.Length 
                 ? eventTypes2[targetEvent.EventId - 1] 
                 : targetEvent.EventId.ToString();
