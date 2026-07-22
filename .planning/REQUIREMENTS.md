@@ -9,7 +9,7 @@ Last updated: 2026-07-21
 - [ ] **EVT-03**: User can draw an event bbox on the exit frame without the tool creating a second event waypoint.
 - [ ] **EVT-04**: User can view an event only within its confirmed entry and exit range, and the event bbox disappears after the exit frame.
 - [ ] **EVT-05**: User can delete an event waypoint and all derived event artifacts for that segment are removed together.
-- [ ] **EVT-06**: User can change an event type from any frame and the change applies to every non-deleted box in that Event Waypoint only.
+- [x] **EVT-06**: User can change an event type from any frame and the change applies to every non-deleted box in that Event Waypoint only.
 
 ## Tracking And Identity
 
