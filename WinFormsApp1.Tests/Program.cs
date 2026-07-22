@@ -47,6 +47,8 @@ static class Program
             ("vehicle tracking comparison uses effective identity", VehicleTrackingComparisonUsesEffectiveIdentity),
             ("vehicle waypoint matching includes body and linked plate", VehicleWaypointMatchingIncludesBodyAndLinkedPlate),
             ("event workflow skips vehicle waypoint side effects", EventWorkflowSkipsVehicleWaypointSideEffects),
+            ("event type update resolves active boxes by event instance", EventTypeUpdateResolvesActiveBoxesByEventInstance),
+            ("event type update legacy fallback stays inside one waypoint", EventTypeUpdateLegacyFallbackStaysInsideOneWaypoint),
             ("active list owner prefers current list selection", ActiveListOwnerPrefersCurrentListSelection),
             ("active list owner falls back to remaining selected list", ActiveListOwnerFallsBackToRemainingSelection),
             ("plate a-frame lookup selects body without losing plate identity", PlateAFrameLookupSelectsBodyWithoutLosingPlateIdentity),
@@ -177,6 +179,88 @@ static class Program
         AssertTrue(
             !VehicleEventWorkflowHelper.ShouldSkipVehicleWaypointSideEffects("event", 0),
             "Without event boxes in range, vehicle side effects should not be blocked by this helper.");
+    }
+
+    private static void EventTypeUpdateResolvesActiveBoxesByEventInstance()
+    {
+        var selected = new BoundingBox
+        {
+            Label = "event",
+            EventId = 1,
+            EventInstanceId = "event-a",
+            FrameIndex = 12,
+            Rectangle = new Rectangle(0, 0, 10, 10)
+        };
+        var sameWaypointDifferentRectangle = new BoundingBox
+        {
+            Label = "event",
+            EventId = 1,
+            EventInstanceId = "event-a",
+            FrameIndex = 13,
+            Rectangle = new Rectangle(20, 20, 30, 30)
+        };
+        var deleted = new BoundingBox
+        {
+            Label = "event",
+            EventId = 1,
+            EventInstanceId = "event-a",
+            FrameIndex = 14,
+            IsDeleted = true
+        };
+        var otherWaypoint = new BoundingBox
+        {
+            Label = "event",
+            EventId = 1,
+            EventInstanceId = "event-b",
+            FrameIndex = 12
+        };
+        var waypoint = new WaypointMarker
+        {
+            Label = "event",
+            EventInstanceId = "event-a",
+            ObjectId = 1,
+            EntryFrame = 10,
+            ExitFrame = 20
+        };
+
+        var resolved = EventWaypointUpdateHelper.ResolveActiveBoxes(
+            selected,
+            new[] { selected, sameWaypointDifferentRectangle, deleted, otherWaypoint },
+            new[] { waypoint });
+
+        AssertEqual(2, resolved.Count, "Only active boxes with the selected EventInstanceId should be updated.");
+        AssertTrue(resolved.Contains(selected), "The selected event box should be included.");
+        AssertTrue(resolved.Contains(sameWaypointDifferentRectangle), "Rectangle changes must not split an event waypoint.");
+        AssertTrue(!resolved.Contains(deleted), "Deleted event boxes must remain unchanged.");
+        AssertTrue(!resolved.Contains(otherWaypoint), "Same-type boxes in another event instance must remain unchanged.");
+    }
+
+    private static void EventTypeUpdateLegacyFallbackStaysInsideOneWaypoint()
+    {
+        var selected = new BoundingBox { Label = "event", EventId = 2, FrameIndex = 35 };
+        var sameLegacyWaypoint = new BoundingBox { Label = "event", EventId = 2, FrameIndex = 36 };
+        var outsideRange = new BoundingBox { Label = "event", EventId = 2, FrameIndex = 60 };
+        var differentPriorType = new BoundingBox { Label = "event", EventId = 3, FrameIndex = 37 };
+        var modernBox = new BoundingBox { Label = "event", EventId = 2, EventInstanceId = "modern", FrameIndex = 38 };
+        var waypoint = new WaypointMarker
+        {
+            Label = "event",
+            ObjectId = 2,
+            EntryFrame = 30,
+            ExitFrame = 40
+        };
+
+        var resolved = EventWaypointUpdateHelper.ResolveActiveBoxes(
+            selected,
+            new[] { selected, sameLegacyWaypoint, outsideRange, differentPriorType, modernBox },
+            new[] { waypoint });
+
+        AssertEqual(2, resolved.Count, "Legacy updates should stay in the selected waypoint range and prior EventId.");
+        AssertTrue(resolved.Contains(selected), "The selected legacy event box should be included.");
+        AssertTrue(resolved.Contains(sameLegacyWaypoint), "Matching legacy boxes inside the range should be included.");
+        AssertTrue(!resolved.Contains(outsideRange), "Legacy boxes outside the waypoint range must not be updated.");
+        AssertTrue(!resolved.Contains(differentPriorType), "A different prior EventId must not be updated.");
+        AssertTrue(!resolved.Contains(modernBox), "Legacy fallback must not update a modern event instance.");
     }
 
     private static void ActiveListOwnerPrefersCurrentListSelection()
