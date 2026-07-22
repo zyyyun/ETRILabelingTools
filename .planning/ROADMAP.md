@@ -65,6 +65,26 @@ Last updated: 2026-07-22
 2. Entry and Exit use the same video-time formatting as the Person and Vehicle Waypoint lists, not JSON timestamps.
 3. Each row retains the current event type and interacting-object information while remaining selectable for existing waypoint actions.
 
+### Phase 6: Prevent stale event boxes after waypoint box edits
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 6 to break down)
+
+### Phase 7: Synchronize event boxes when the tracked object changes
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 6
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 7 to break down)
+
 ## Verify Phase
 
 **Purpose:** Run the milestone-level PPT regression and UAT gate after all numbered feature phases are complete.

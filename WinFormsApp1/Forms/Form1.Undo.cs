@@ -72,6 +72,11 @@ namespace WinFormsApp1
                     {
                         change.Box.EventId = change.OriginalEventId;
                     }
+                    if (action.EventWaypointMarkerChange != null)
+                    {
+                        action.EventWaypointMarkerChange.Waypoint.ObjectId = action.EventWaypointMarkerChange.OriginalObjectId;
+                        action.EventWaypointMarkerChange.Waypoint.EventInstanceId = action.EventWaypointMarkerChange.OriginalEventInstanceId;
+                    }
                     InvalidateBoxCache();
                     UpdateWaypointListView();
                     if (selectedBox != null)
@@ -136,6 +141,11 @@ namespace WinFormsApp1
                     foreach (var change in action.EventIdChanges)
                     {
                         change.Box.EventId = change.NewEventId;
+                    }
+                    if (action.EventWaypointMarkerChange != null)
+                    {
+                        action.EventWaypointMarkerChange.Waypoint.ObjectId = action.EventWaypointMarkerChange.NewObjectId;
+                        action.EventWaypointMarkerChange.Waypoint.EventInstanceId = action.EventWaypointMarkerChange.NewEventInstanceId;
                     }
                     InvalidateBoxCache();
                     UpdateWaypointListView();

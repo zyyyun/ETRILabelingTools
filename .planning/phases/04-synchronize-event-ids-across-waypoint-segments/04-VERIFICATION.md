@@ -1,8 +1,8 @@
 ---
 phase: 04-synchronize-event-ids-across-waypoint-segments
 verified: 2026-07-22T08:46:00+09:00
-status: gaps_found
-score: 6/8 must-haves verified automatically; 1 UAT gap found
+status: human_needed
+score: 6/8 must-haves verified automatically; UAT retest required
 ---
 
 # Phase 4: Synchronize Event IDs Across Waypoint Segments Verification Report
@@ -12,7 +12,7 @@ an event in one frame updates every box in that waypoint while preserving the
 segment identity.
 
 **Verified:** 2026-07-22T08:46:00+09:00
-**Status:** gaps_found
+**Status:** human_needed
 
 ## Goal Achievement
 
@@ -26,7 +26,7 @@ segment identity.
 | 4 | Legacy data is restricted to frame range plus original EventId. | VERIFIED | Harness test `event type update legacy fallback stays inside one waypoint` passes. |
 | 5 | Deleted boxes are not updated. | VERIFIED | Instance resolver test excludes an `IsDeleted` box. |
 | 6 | One grouped history record contains before/after IDs for all changed boxes. | VERIFIED | `UndoActionType.EventIdChange` restores or reapplies every `EventIdChange` snapshot. |
-| 7 | Event Waypoint list and current-frame Event panel visibly refresh after update. | BLOCKED | QA PPT 3 reports that changing an event name changes only the selected frame and does not update the waypoint name. |
+| 7 | Event Waypoint list and current-frame Event panel visibly refresh after update. | NEEDS HUMAN | `04-02` adds mixed-metadata scope resolution and identity-scoped list lookup; QA must retest PPT 3 in WinForms. |
 | 8 | One Undo and one Redo visibly restore/reapply the full waypoint. | NEEDS HUMAN | Source uses one grouped undo action, but keyboard/UI interaction cannot be exercised by the harness. |
 
 **Score:** 6/8 truths verified automatically; 2 require human confirmation.
@@ -56,7 +56,7 @@ segment identity.
 
 | Requirement | Status | Blocking Issue |
 |-------------|--------|----------------|
-| EVT-06: Event type updates every non-deleted box in that Event Waypoint only. | BLOCKED | QA PPT 3 reproduced a selected-frame-only event-name change; the waypoint-level update did not occur. |
+| EVT-06: Event type updates every non-deleted box in that Event Waypoint only. | SATISFIED (automated) | `04-02` adds mixed-marker regression coverage; running UI retest remains pending. |
 
 **Coverage:** 1/1 requirement satisfied by automated coverage.
 
@@ -65,7 +65,7 @@ segment identity.
 No phase-specific blockers found. Schema drift check found no schema changes.
 Codebase drift check was skipped because `.planning/codebase/STRUCTURE.md` is absent.
 
-## QA UAT Finding
+## QA UAT Finding And Code Closure
 
 QA recorded PPT 3 as blocked in
 `.planning/verification/event-waypoint-regression/04-PPT-VERIFICATION.md`:
@@ -73,7 +73,7 @@ changing an Event Waypoint's event name changed only the selected frame and
 did not change the waypoint name. This is a direct failure of `EVT-06`, not a
 failure inferred from an unrun UAT.
 
-Code inspection identifies two gap paths to close:
+`04-02` closed two code paths exposed by this result:
 
 1. `EventWaypointUpdateHelper.ResolveActiveBoxes` fails closed when a selected
    box has an `EventInstanceId` but its matching legacy waypoint marker does
@@ -88,7 +88,7 @@ The Event panel column-order issue in the same QA report remains Phase 5
 (`UI-04`). Vehicle identity findings remain outside this phase's `EVT-06`
 scope.
 
-## Human Verification Required After Gap Closure
+## Human Verification Required
 
 ### 1. Immediate event UI refresh
 **Test:** In a waypoint containing active event boxes on multiple frames, change the
@@ -109,10 +109,9 @@ waypoint; Redo reapplies the new EventId for every one of those boxes.
 
 ## Gaps Summary
 
-One UAT-confirmed `EVT-06` gap requires an additional Phase 4 plan. The plan
-must support unambiguous mixed `EventInstanceId` metadata, retain fail-closed
-behavior for ambiguity, synchronize the marker's displayed type, and make the
-Event Waypoint list resolve boxes by waypoint identity.
+The automated code gap is closed by `04-02`: the harness covers the mixed
+marker case, ambiguity, and overlapping list rows. PPT 3 and atomic Undo/Redo
+still require QA confirmation in the running application.
 
 ## Verification Metadata
 

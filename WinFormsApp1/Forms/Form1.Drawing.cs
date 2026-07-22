@@ -1584,10 +1584,7 @@ namespace WinFormsApp1
                 else if (waypoint.Label == "event")
                 {
                     // Event: [Event, Frame Time, 揶쏆빘猿?P/V)] ??좎럩???좎럥以???좎럩??
-                    var eventBox = boundingBoxes
-                        .FirstOrDefault(b => b.Label == "event" && 
-                                           b.FrameIndex >= waypoint.EntryFrame && 
-                                           b.FrameIndex <= waypoint.ExitFrame);
+                    var eventBox = EventWaypointUpdateHelper.FindDisplayBox(boundingBoxes, waypoint);
 
                     string eventName = "contact";
                     if (eventBox != null)
@@ -2691,11 +2688,11 @@ namespace WinFormsApp1
                             int eventId = Array.IndexOf(eventTypes, eType) + 1;
                         if (eventId > 0)
                         {
-                                var relatedBoxes = EventWaypointUpdateHelper.ResolveActiveBoxes(
+                                var scope = EventWaypointUpdateHelper.ResolveActiveScope(
                                     currentBox,
                                     boundingBoxes,
                                     waypointMarkers);
-                                var changes = EventWaypointUpdateHelper.CreateEventIdChanges(relatedBoxes, eventId);
+                                var changes = EventWaypointUpdateHelper.CreateEventIdChanges(scope?.Boxes, eventId);
 
                                 if (changes.Count == 0)
                                     return;
@@ -2703,7 +2700,17 @@ namespace WinFormsApp1
                                 AddUndoAction(new UndoAction
                                 {
                                     Type = UndoActionType.EventIdChange,
-                                    EventIdChanges = changes
+                                    EventIdChanges = changes,
+                                    EventWaypointMarkerChange = scope == null ? null : new EventWaypointMarkerChange
+                                    {
+                                        Waypoint = scope.Waypoint,
+                                        OriginalObjectId = scope.Waypoint.ObjectId,
+                                        NewObjectId = eventId,
+                                        OriginalEventInstanceId = scope.Waypoint.EventInstanceId,
+                                        NewEventInstanceId = string.IsNullOrWhiteSpace(scope.Waypoint.EventInstanceId)
+                                            ? currentBox.EventInstanceId
+                                            : scope.Waypoint.EventInstanceId
+                                    }
                                 });
                             
                                 // Event ????癰궰??????좎럩???EventId???Rectangle??揶쎛??獄쏅벡?ゅ뜝???좎럥???좎???
@@ -2711,6 +2718,10 @@ namespace WinFormsApp1
                                 {
                                     SetBoxId(change.Box, "event", eventId);
                                 }
+
+                                scope.Waypoint.ObjectId = eventId;
+                                if (string.IsNullOrWhiteSpace(scope.Waypoint.EventInstanceId))
+                                    scope.Waypoint.EventInstanceId = currentBox.EventInstanceId;
 
                                 InvalidateBoxCache();
                                 UpdateWaypointListView();

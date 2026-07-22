@@ -50,6 +50,9 @@ static class Program
             ("event type update resolves active boxes by event instance", EventTypeUpdateResolvesActiveBoxesByEventInstance),
             ("event type update legacy fallback stays inside one waypoint", EventTypeUpdateLegacyFallbackStaysInsideOneWaypoint),
             ("event type update creates reversible snapshots", EventTypeUpdateCreatesReversibleSnapshots),
+            ("event type update resolves mixed marker metadata", EventTypeUpdateResolvesMixedMarkerMetadata),
+            ("event type update rejects ambiguous mixed markers", EventTypeUpdateRejectsAmbiguousMixedMarkers),
+            ("event waypoint display selects matching instance", EventWaypointDisplaySelectsMatchingInstance),
             ("active list owner prefers current list selection", ActiveListOwnerPrefersCurrentListSelection),
             ("active list owner falls back to remaining selected list", ActiveListOwnerFallsBackToRemainingSelection),
             ("plate a-frame lookup selects body without losing plate identity", PlateAFrameLookupSelectsBodyWithoutLosingPlateIdentity),
@@ -278,6 +281,45 @@ static class Program
         AssertEqual(1, second.EventId, "Creating snapshots must not mutate EventId before the UI applies the change.");
         AssertEqual("event-a", first.EventInstanceId, "Changing EventId must not alter EventInstanceId.");
         AssertEqual("event-a", second.EventInstanceId, "Changing EventId must not alter EventInstanceId.");
+    }
+
+    private static void EventTypeUpdateResolvesMixedMarkerMetadata()
+    {
+        var selected = new BoundingBox { Label = "event", EventId = 2, EventInstanceId = "event-a", FrameIndex = 35 };
+        var sameWaypoint = new BoundingBox { Label = "event", EventId = 2, EventInstanceId = "event-a", FrameIndex = 36 };
+        var deleted = new BoundingBox { Label = "event", EventId = 2, EventInstanceId = "event-a", FrameIndex = 37, IsDeleted = true };
+        var other = new BoundingBox { Label = "event", EventId = 2, EventInstanceId = "event-b", FrameIndex = 35 };
+        var marker = new WaypointMarker { Label = "event", ObjectId = 2, EntryFrame = 30, ExitFrame = 40 };
+
+        var scope = EventWaypointUpdateHelper.ResolveActiveScope(selected, new[] { selected, sameWaypoint, deleted, other }, new[] { marker });
+
+        AssertTrue(scope != null, "One blank-instance marker with the prior EventId should resolve mixed metadata.");
+        AssertTrue(ReferenceEquals(marker, scope!.Waypoint), "The resolved marker must be available for synchronized waypoint updates.");
+        AssertEqual(2, scope.Boxes.Count, "Mixed metadata must update only active boxes in the selected event instance.");
+        AssertTrue(!scope.Boxes.Contains(deleted) && !scope.Boxes.Contains(other), "Deleted and different-instance boxes must remain outside the scope.");
+    }
+
+    private static void EventTypeUpdateRejectsAmbiguousMixedMarkers()
+    {
+        var selected = new BoundingBox { Label = "event", EventId = 2, EventInstanceId = "event-a", FrameIndex = 35 };
+        var first = new WaypointMarker { Label = "event", ObjectId = 2, EntryFrame = 30, ExitFrame = 40 };
+        var second = new WaypointMarker { Label = "event", ObjectId = 2, EntryFrame = 34, ExitFrame = 45 };
+
+        var scope = EventWaypointUpdateHelper.ResolveActiveScope(selected, new[] { selected }, new[] { first, second });
+
+        AssertTrue(scope == null, "Ambiguous blank-instance markers must fail closed.");
+    }
+
+    private static void EventWaypointDisplaySelectsMatchingInstance()
+    {
+        var waypoint = new WaypointMarker { Label = "event", ObjectId = 3, EventInstanceId = "event-b", EntryFrame = 10, ExitFrame = 20 };
+        var wrong = new BoundingBox { Label = "event", EventId = 3, EventInstanceId = "event-a", FrameIndex = 12 };
+        var deleted = new BoundingBox { Label = "event", EventId = 3, EventInstanceId = "event-b", FrameIndex = 13, IsDeleted = true };
+        var matching = new BoundingBox { Label = "event", EventId = 3, EventInstanceId = "event-b", FrameIndex = 14 };
+
+        var display = EventWaypointUpdateHelper.FindDisplayBox(new[] { wrong, deleted, matching }, waypoint);
+
+        AssertTrue(ReferenceEquals(matching, display), "The event row must use the active box from its own EventInstanceId.");
     }
 
     private static void ActiveListOwnerPrefersCurrentListSelection()

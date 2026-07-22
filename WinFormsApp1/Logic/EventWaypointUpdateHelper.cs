@@ -11,6 +11,21 @@ namespace WinFormsApp1
         public int NewEventId { get; set; }
     }
 
+    public class EventWaypointScope
+    {
+        public WaypointMarker Waypoint { get; set; } = null!;
+        public List<BoundingBox> Boxes { get; set; } = new List<BoundingBox>();
+    }
+
+    public class EventWaypointMarkerChange
+    {
+        public WaypointMarker Waypoint { get; set; } = null!;
+        public int OriginalObjectId { get; set; }
+        public int NewObjectId { get; set; }
+        public string OriginalEventInstanceId { get; set; } = string.Empty;
+        public string NewEventInstanceId { get; set; } = string.Empty;
+    }
+
     public static class EventWaypointUpdateHelper
     {
         public static List<EventIdChange> CreateEventIdChanges(
@@ -41,13 +56,18 @@ namespace WinFormsApp1
             IEnumerable<BoundingBox> boxes,
             IEnumerable<WaypointMarker> waypoints)
         {
+            return ResolveActiveScope(selectedBox, boxes, waypoints)?.Boxes ?? new List<BoundingBox>();
+        }
+
+        public static EventWaypointScope? ResolveActiveScope(
+            BoundingBox selectedBox,
+            IEnumerable<BoundingBox> boxes,
+            IEnumerable<WaypointMarker> waypoints)
+        {
             if (selectedBox == null ||
                 !string.Equals(selectedBox.Label, "event", StringComparison.OrdinalIgnoreCase) ||
-                boxes == null ||
-                waypoints == null)
-            {
-                return new List<BoundingBox>();
-            }
+                boxes == null || waypoints == null)
+                return null;
 
             var eventWaypoints = waypoints
                 .Where(waypoint => waypoint != null &&
@@ -67,10 +87,19 @@ namespace WinFormsApp1
 
                 if (instanceWaypoints.Count != 1)
                 {
-                    return new List<BoundingBox>();
+                    var mixedWaypoints = eventWaypoints
+                        .Where(waypoint => string.IsNullOrWhiteSpace(waypoint.EventInstanceId) &&
+                            waypoint.ObjectId == selectedBox.EventId)
+                        .ToList();
+
+                    if (mixedWaypoints.Count != 1)
+                        return null;
+
+                    return CreateScope(boxes, mixedWaypoints[0], box =>
+                        string.Equals(box.EventInstanceId, selectedBox.EventInstanceId, StringComparison.Ordinal));
                 }
 
-                return GetActiveEventBoxes(boxes, instanceWaypoints[0], box =>
+                return CreateScope(boxes, instanceWaypoints[0], box =>
                     string.Equals(box.EventInstanceId, selectedBox.EventInstanceId, StringComparison.Ordinal));
             }
 
@@ -81,12 +110,39 @@ namespace WinFormsApp1
 
             if (legacyWaypoints.Count != 1)
             {
-                return new List<BoundingBox>();
+                return null;
             }
 
-            return GetActiveEventBoxes(boxes, legacyWaypoints[0], box =>
+            return CreateScope(boxes, legacyWaypoints[0], box =>
                 string.IsNullOrWhiteSpace(box.EventInstanceId) &&
                 box.EventId == selectedBox.EventId);
+        }
+
+        public static BoundingBox? FindDisplayBox(
+            IEnumerable<BoundingBox> boxes,
+            WaypointMarker waypoint)
+        {
+            if (boxes == null || waypoint == null)
+                return null;
+
+            return boxes.FirstOrDefault(box => box != null &&
+                !box.IsDeleted &&
+                string.Equals(box.Label, "event", StringComparison.OrdinalIgnoreCase) &&
+                box.FrameIndex >= waypoint.EntryFrame &&
+                box.FrameIndex <= waypoint.ExitFrame &&
+                TrackingIdentityHelper.MatchesWaypoint(box, waypoint));
+        }
+
+        private static EventWaypointScope CreateScope(
+            IEnumerable<BoundingBox> boxes,
+            WaypointMarker waypoint,
+            Func<BoundingBox, bool> matchesWaypoint)
+        {
+            return new EventWaypointScope
+            {
+                Waypoint = waypoint,
+                Boxes = GetActiveEventBoxes(boxes, waypoint, matchesWaypoint)
+            };
         }
 
         private static List<BoundingBox> GetActiveEventBoxes(

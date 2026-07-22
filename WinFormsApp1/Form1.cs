@@ -32,6 +32,7 @@ namespace WinFormsApp1
         public int OriginalObjectId { get; set; }
         public List<BoundingBox> TrackedBoxes { get; set; }
         public List<EventIdChange> EventIdChanges { get; set; } = new List<EventIdChange>();
+        public EventWaypointMarkerChange? EventWaypointMarkerChange { get; set; }
     }
 
 
