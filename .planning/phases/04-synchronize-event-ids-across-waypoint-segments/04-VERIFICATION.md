@@ -1,8 +1,8 @@
 ---
 phase: 04-synchronize-event-ids-across-waypoint-segments
 verified: 2026-07-22T08:46:00+09:00
-status: human_needed
-score: 6/8 must-haves verified
+status: gaps_found
+score: 6/8 must-haves verified automatically; 1 UAT gap found
 ---
 
 # Phase 4: Synchronize Event IDs Across Waypoint Segments Verification Report
@@ -12,7 +12,7 @@ an event in one frame updates every box in that waypoint while preserving the
 segment identity.
 
 **Verified:** 2026-07-22T08:46:00+09:00
-**Status:** human_needed
+**Status:** gaps_found
 
 ## Goal Achievement
 
@@ -26,7 +26,7 @@ segment identity.
 | 4 | Legacy data is restricted to frame range plus original EventId. | VERIFIED | Harness test `event type update legacy fallback stays inside one waypoint` passes. |
 | 5 | Deleted boxes are not updated. | VERIFIED | Instance resolver test excludes an `IsDeleted` box. |
 | 6 | One grouped history record contains before/after IDs for all changed boxes. | VERIFIED | `UndoActionType.EventIdChange` restores or reapplies every `EventIdChange` snapshot. |
-| 7 | Event Waypoint list and current-frame Event panel visibly refresh after update. | NEEDS HUMAN | Source calls `UpdateWaypointListView`, `UpdateObjectInfo`, and `UpdateBboxListDisplay`; running UI confirmation is required. |
+| 7 | Event Waypoint list and current-frame Event panel visibly refresh after update. | BLOCKED | QA PPT 3 reports that changing an event name changes only the selected frame and does not update the waypoint name. |
 | 8 | One Undo and one Redo visibly restore/reapply the full waypoint. | NEEDS HUMAN | Source uses one grouped undo action, but keyboard/UI interaction cannot be exercised by the harness. |
 
 **Score:** 6/8 truths verified automatically; 2 require human confirmation.
@@ -56,7 +56,7 @@ segment identity.
 
 | Requirement | Status | Blocking Issue |
 |-------------|--------|----------------|
-| EVT-06: Event type updates every non-deleted box in that Event Waypoint only. | SATISFIED (automated) | Manual UI confirmation remains pending, not a code gap. |
+| EVT-06: Event type updates every non-deleted box in that Event Waypoint only. | BLOCKED | QA PPT 3 reproduced a selected-frame-only event-name change; the waypoint-level update did not occur. |
 
 **Coverage:** 1/1 requirement satisfied by automated coverage.
 
@@ -65,7 +65,30 @@ segment identity.
 No phase-specific blockers found. Schema drift check found no schema changes.
 Codebase drift check was skipped because `.planning/codebase/STRUCTURE.md` is absent.
 
-## Human Verification Required
+## QA UAT Finding
+
+QA recorded PPT 3 as blocked in
+`.planning/verification/event-waypoint-regression/04-PPT-VERIFICATION.md`:
+changing an Event Waypoint's event name changed only the selected frame and
+did not change the waypoint name. This is a direct failure of `EVT-06`, not a
+failure inferred from an unrun UAT.
+
+Code inspection identifies two gap paths to close:
+
+1. `EventWaypointUpdateHelper.ResolveActiveBoxes` fails closed when a selected
+   box has an `EventInstanceId` but its matching legacy waypoint marker does
+   not. The existing waypoint lookup elsewhere supports this mixed metadata,
+   so the update resolver must do so safely as well.
+2. `UpdateWaypointListView` selects the first event box in a frame range
+   without identity matching. It must resolve the display box for its specific
+   waypoint, rather than allowing an overlapping segment to provide a stale
+   event type.
+
+The Event panel column-order issue in the same QA report remains Phase 5
+(`UI-04`). Vehicle identity findings remain outside this phase's `EVT-06`
+scope.
+
+## Human Verification Required After Gap Closure
 
 ### 1. Immediate event UI refresh
 **Test:** In a waypoint containing active event boxes on multiple frames, change the
@@ -86,14 +109,16 @@ waypoint; Redo reapplies the new EventId for every one of those boxes.
 
 ## Gaps Summary
 
-**No automated code gaps found.** Phase completion awaits only the two human
-WinForms checks above; UAT has not been run and no UAT failure is inferred.
+One UAT-confirmed `EVT-06` gap requires an additional Phase 4 plan. The plan
+must support unambiguous mixed `EventInstanceId` metadata, retain fail-closed
+behavior for ambiguity, synchronize the marker's displayed type, and make the
+Event Waypoint list resolve boxes by waypoint identity.
 
 ## Verification Metadata
 
 **Verification approach:** Goal-backward from `04-01-PLAN.md` must-haves
 **Automated checks:** x64 Debug solution build passed; test harness passed 48/48
-**Human checks required:** 2
+**Human checks required after gap closure:** 2
 **Total verification time:** 5 min
 
 ---
