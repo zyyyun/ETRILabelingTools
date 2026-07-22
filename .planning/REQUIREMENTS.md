@@ -9,6 +9,7 @@ Last updated: 2026-07-21
 - [ ] **EVT-03**: User can draw an event bbox on the exit frame without the tool creating a second event waypoint.
 - [ ] **EVT-04**: User can view an event only within its confirmed entry and exit range, and the event bbox disappears after the exit frame.
 - [ ] **EVT-05**: User can delete an event waypoint and all derived event artifacts for that segment are removed together.
+- [ ] **EVT-06**: User can change an event type from any frame and the change applies to every non-deleted box in that Event Waypoint only.
 
 ## Tracking And Identity
 
@@ -21,6 +22,7 @@ Last updated: 2026-07-21
 - [ ] **UI-01**: User can switch between person, vehicle, and event waypoint lists and the current selection state always reflects the visible target list.
 - [ ] **UI-02**: User can click empty space in a waypoint list to clear the active selection before issuing another action.
 - [ ] **UI-03**: User can delete a selected vehicle or event waypoint while a person waypoint had been selected earlier and the tool deletes only the current target.
+- [ ] **UI-04**: User can read Event Waypoints with the same Entry, Exit, and Object columns used by Person and Vehicle Waypoints.
 
 ## Regression Verification
 
@@ -50,12 +52,14 @@ Last updated: 2026-07-21
 | EVT-03 | 1 |
 | EVT-04 | 2 |
 | EVT-05 | 2 |
+| EVT-06 | 4 |
 | TRK-01 | 3 |
 | TRK-02 | 3 |
 | TRK-03 | 2 |
 | UI-01 | 3 |
 | UI-02 | 3 |
 | UI-03 | 3 |
+| UI-04 | 5 |
 | QA-01 | 4 |
 | QA-02 | 4 |
 | QA-03 | 4 |

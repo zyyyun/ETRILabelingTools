@@ -1,11 +1,11 @@
 # Milestone v1.0 Roadmap
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Summary
 
-- Total phases: 4
-- Requirements mapped: 14
+- Total phases: 5
+- Requirements mapped: 16
 - Milestone goal: stabilize Event Waypoint creation, exit handling, assisted tracking, and deletion behavior
 
 ## Phase 1: Normalize Event Creation And Exit Finalization
@@ -41,21 +41,37 @@ Last updated: 2026-07-21
 2. Vehicle identities stay stable instead of splitting into mismatched IDs such as `01` and `02`.
 3. Waypoint deletion always targets the currently selected list item and empty-space clicks clear stale selections.
 
-## Phase 4: Reproduce PPT Scenarios And Lock In Regression Coverage
+## Phase 4: Synchronize Event IDs Across Waypoint Segments
 
-**Goal:** Validate the reproduced field issues against a repeatable regression checklist and capture results for follow-up work.
+**Goal:** Treat `EventId` as a property of an Event Waypoint so changing an event in one frame updates every box in that waypoint while preserving the segment identity.
 
-**Requirements:** `QA-01`, `QA-02`, `QA-03`
+**Requirements:** `EVT-06`
+**Depends on:** Phase 3
 
 **Success criteria:**
-1. Each PPT bug scenario is replayed and marked fixed, partial, or blocked with notes.
-2. Ghost `contact` or orphaned event waypoint creation is explicitly checked.
-3. Regression results are documented in a milestone verification artifact for reuse in later changes.
+1. Changing an event type updates every non-deleted event box in the same waypoint, regardless of per-frame rectangle changes.
+2. The operation is scoped by `EventInstanceId` and never changes another event segment that happens to share an event type.
+3. The Event Waypoint list and the current-frame event panel refresh to show the updated event type immediately.
 
-## Next Up
+### Phase 5: Align Event Waypoint Panel Columns
 
-**Phase 1: Normalize Event Creation And Exit Finalization**
+**Goal:** Make Event Waypoints use the same Entry, Exit, and Object columns as Person and Vehicle Waypoints.
 
-Recommended next command once execution begins:
+**Requirements:** `UI-04`
+**Depends on:** Phase 4
 
-`$gsd-discuss-phase 1`
+**Success criteria:**
+1. The Event Waypoint list displays `Entry`, `Exit`, and `객체` columns in that order.
+2. Entry and Exit use the same video-time formatting as the Person and Vehicle Waypoint lists, not JSON timestamps.
+3. Each row retains the current event type and interacting-object information while remaining selectable for existing waypoint actions.
+
+## Verify Phase
+
+**Purpose:** Run the milestone-level PPT regression and UAT gate after all numbered feature phases are complete.
+
+**Artifacts:** `.planning/verification/event-waypoint-regression/`
+
+**Success criteria:**
+1. Each reproduced PPT scenario is replayed and recorded as fixed, partial, or blocked with notes.
+2. Ghost `contact`, orphaned event waypoints, and event lifetime behavior are explicitly checked.
+3. The verification evidence remains reusable for later feature phases without changing numbered Phase ordering.
