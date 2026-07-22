@@ -21,7 +21,7 @@ using System.Threading.Tasks;
 
 namespace WinFormsApp1
 {
-    public enum UndoActionType { AddBox, RemoveBox, ModifyBox, Tracking }
+    public enum UndoActionType { AddBox, RemoveBox, ModifyBox, Tracking, EventIdChange }
 
     public class UndoAction
     {
@@ -31,6 +31,7 @@ namespace WinFormsApp1
         public string OriginalLabel { get; set; }
         public int OriginalObjectId { get; set; }
         public List<BoundingBox> TrackedBoxes { get; set; }
+        public List<EventIdChange> EventIdChanges { get; set; } = new List<EventIdChange>();
     }
 
 

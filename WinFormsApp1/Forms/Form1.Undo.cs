@@ -66,6 +66,17 @@ namespace WinFormsApp1
                     }
                     InvalidateBoxCache();
                     break;
+
+                case UndoActionType.EventIdChange:
+                    foreach (var change in action.EventIdChanges)
+                    {
+                        change.Box.EventId = change.OriginalEventId;
+                    }
+                    InvalidateBoxCache();
+                    UpdateWaypointListView();
+                    if (selectedBox != null)
+                        UpdateObjectInfo(selectedBox);
+                    break;
             }
 
             redoStack.Push(action);
@@ -119,6 +130,17 @@ namespace WinFormsApp1
                         boundingBoxes.Add(box);
                     }
                     InvalidateBoxCache();
+                    break;
+
+                case UndoActionType.EventIdChange:
+                    foreach (var change in action.EventIdChanges)
+                    {
+                        change.Box.EventId = change.NewEventId;
+                    }
+                    InvalidateBoxCache();
+                    UpdateWaypointListView();
+                    if (selectedBox != null)
+                        UpdateObjectInfo(selectedBox);
                     break;
             }
 

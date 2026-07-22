@@ -49,6 +49,7 @@ static class Program
             ("event workflow skips vehicle waypoint side effects", EventWorkflowSkipsVehicleWaypointSideEffects),
             ("event type update resolves active boxes by event instance", EventTypeUpdateResolvesActiveBoxesByEventInstance),
             ("event type update legacy fallback stays inside one waypoint", EventTypeUpdateLegacyFallbackStaysInsideOneWaypoint),
+            ("event type update creates reversible snapshots", EventTypeUpdateCreatesReversibleSnapshots),
             ("active list owner prefers current list selection", ActiveListOwnerPrefersCurrentListSelection),
             ("active list owner falls back to remaining selected list", ActiveListOwnerFallsBackToRemainingSelection),
             ("plate a-frame lookup selects body without losing plate identity", PlateAFrameLookupSelectsBodyWithoutLosingPlateIdentity),
@@ -261,6 +262,22 @@ static class Program
         AssertTrue(!resolved.Contains(outsideRange), "Legacy boxes outside the waypoint range must not be updated.");
         AssertTrue(!resolved.Contains(differentPriorType), "A different prior EventId must not be updated.");
         AssertTrue(!resolved.Contains(modernBox), "Legacy fallback must not update a modern event instance.");
+    }
+
+    private static void EventTypeUpdateCreatesReversibleSnapshots()
+    {
+        var first = new BoundingBox { Label = "event", EventId = 1, EventInstanceId = "event-a" };
+        var second = new BoundingBox { Label = "event", EventId = 1, EventInstanceId = "event-a" };
+
+        var changes = EventWaypointUpdateHelper.CreateEventIdChanges(new[] { first, second }, 4);
+
+        AssertEqual(2, changes.Count, "Every selected active box needs one event-id snapshot.");
+        AssertTrue(changes.TrueForAll(change => change.OriginalEventId == 1 && change.NewEventId == 4), "Snapshots must preserve both the original and chosen event IDs.");
+        AssertTrue(changes.TrueForAll(change => ReferenceEquals(change.Box, first) || ReferenceEquals(change.Box, second)), "Snapshots must retain stable box references for undo and redo.");
+        AssertEqual(1, first.EventId, "Creating snapshots must not mutate EventId before the UI applies the change.");
+        AssertEqual(1, second.EventId, "Creating snapshots must not mutate EventId before the UI applies the change.");
+        AssertEqual("event-a", first.EventInstanceId, "Changing EventId must not alter EventInstanceId.");
+        AssertEqual("event-a", second.EventInstanceId, "Changing EventId must not alter EventInstanceId.");
     }
 
     private static void ActiveListOwnerPrefersCurrentListSelection()

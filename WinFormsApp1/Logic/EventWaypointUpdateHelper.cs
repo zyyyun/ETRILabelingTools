@@ -4,8 +4,38 @@ using System.Linq;
 
 namespace WinFormsApp1
 {
+    public class EventIdChange
+    {
+        public BoundingBox Box { get; set; } = null!;
+        public int OriginalEventId { get; set; }
+        public int NewEventId { get; set; }
+    }
+
     public static class EventWaypointUpdateHelper
     {
+        public static List<EventIdChange> CreateEventIdChanges(
+            IEnumerable<BoundingBox> boxes,
+            int newEventId)
+        {
+            if (boxes == null || newEventId <= 0)
+            {
+                return new List<EventIdChange>();
+            }
+
+            return boxes
+                .Where(box => box != null &&
+                    !box.IsDeleted &&
+                    string.Equals(box.Label, "event", StringComparison.OrdinalIgnoreCase) &&
+                    box.EventId != newEventId)
+                .Select(box => new EventIdChange
+                {
+                    Box = box,
+                    OriginalEventId = box.EventId,
+                    NewEventId = newEventId
+                })
+                .ToList();
+        }
+
         public static List<BoundingBox> ResolveActiveBoxes(
             BoundingBox selectedBox,
             IEnumerable<BoundingBox> boxes,

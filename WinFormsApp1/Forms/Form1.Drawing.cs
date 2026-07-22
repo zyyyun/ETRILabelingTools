@@ -2691,35 +2691,32 @@ namespace WinFormsApp1
                             int eventId = Array.IndexOf(eventTypes, eType) + 1;
                         if (eventId > 0)
                         {
-                                int oldEventId = currentBox.EventId;
-                                SetBoxId(currentBox, "event", eventId);
+                                var relatedBoxes = EventWaypointUpdateHelper.ResolveActiveBoxes(
+                                    currentBox,
+                                    boundingBoxes,
+                                    waypointMarkers);
+                                var changes = EventWaypointUpdateHelper.CreateEventIdChanges(relatedBoxes, eventId);
+
+                                if (changes.Count == 0)
+                                    return;
+
+                                AddUndoAction(new UndoAction
+                                {
+                                    Type = UndoActionType.EventIdChange,
+                                    EventIdChanges = changes
+                                });
                             
                                 // Event ????癰궰??????좎럩???EventId???Rectangle??揶쎛??獄쏅벡?ゅ뜝???좎럥???좎???
-                                var waypoint = waypointMarkers.FirstOrDefault(w =>
-                                    currentBox.FrameIndex >= w.EntryFrame &&
-                                    currentBox.FrameIndex <= w.ExitFrame);
-                                
-                                if (waypoint != null)
+                                foreach (var change in changes)
                                 {
-                                    var relatedBoxes = boundingBoxes.Where(b =>
-                                        b.Label == "event" &&
-                                        b.EventId == oldEventId &&
-                                        b.Rectangle.X == currentBox.Rectangle.X &&
-                                        b.Rectangle.Y == currentBox.Rectangle.Y &&
-                                        b.Rectangle.Width == currentBox.Rectangle.Width &&
-                                        b.Rectangle.Height == currentBox.Rectangle.Height &&
-                                        b.FrameIndex >= waypoint.EntryFrame &&
-                                        b.FrameIndex <= waypoint.ExitFrame).ToList();
-                                    
-                                    foreach (var relatedBox in relatedBoxes)
-                                    {
-                                        SetBoxId(relatedBox, "event", eventId);
-                                    }
+                                    SetBoxId(change.Box, "event", eventId);
                                 }
-                                
+
+                                InvalidateBoxCache();
+                                UpdateWaypointListView();
                                 UpdateObjectInfo(currentBox);
-                    UpdateBboxListDisplay();
-                    pictureBoxVideo.Invalidate();
+                                UpdateBboxListDisplay();
+                                pictureBoxVideo.Invalidate();
                             }
                         }
                     }
