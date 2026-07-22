@@ -53,6 +53,7 @@ static class Program
             ("event type update resolves mixed marker metadata", EventTypeUpdateResolvesMixedMarkerMetadata),
             ("event type update rejects ambiguous mixed markers", EventTypeUpdateRejectsAmbiguousMixedMarkers),
             ("event waypoint display selects matching instance", EventWaypointDisplaySelectsMatchingInstance),
+            ("event waypoint list row uses video time and event name", EventWaypointListRowUsesVideoTimeAndEventName),
             ("active list owner prefers current list selection", ActiveListOwnerPrefersCurrentListSelection),
             ("active list owner falls back to remaining selected list", ActiveListOwnerFallsBackToRemainingSelection),
             ("plate a-frame lookup selects body without losing plate identity", PlateAFrameLookupSelectsBodyWithoutLosingPlateIdentity),
@@ -320,6 +321,24 @@ static class Program
         var display = EventWaypointUpdateHelper.FindDisplayBox(new[] { wrong, deleted, matching }, waypoint);
 
         AssertTrue(ReferenceEquals(matching, display), "The event row must use the active box from its own EventInstanceId.");
+    }
+
+    private static void EventWaypointListRowUsesVideoTimeAndEventName()
+    {
+        var waypoint = new WaypointMarker
+        {
+            Label = "event",
+            EntryTime = "00:06:05",
+            ExitTime = "00:07:01",
+            InteractingObject = "vehicle_car_01"
+        };
+
+        var row = EventWaypointListRowHelper.Create(waypoint, "contact");
+
+        AssertEqual("00:06:05", row.Entry, "Event Entry must use the waypoint video-time value.");
+        AssertEqual("00:07:01", row.Exit, "Event Exit must use the waypoint video-time value.");
+        AssertEqual("contact", row.Object, "The Object column must display the event name.");
+        AssertEqual("vehicle_car_01", waypoint.InteractingObject, "Hiding interacting-object data must not remove it from the waypoint.");
     }
 
     private static void ActiveListOwnerPrefersCurrentListSelection()

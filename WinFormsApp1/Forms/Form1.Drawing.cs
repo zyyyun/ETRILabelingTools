@@ -1593,16 +1593,12 @@ namespace WinFormsApp1
                     }
 
                     // ???뚎됱쓥: Event ??좎럥已?
-                    item = new ListViewItem(eventName);
+                    var eventRow = EventWaypointListRowHelper.Create(waypoint, eventName);
+                    item = new ListViewItem(eventRow.Entry);
                     // ??甕곕뜆?? timestamp (JSON images[].timestamp??좎럩苑?癰귣벊?? ??좎럩?앭뜝???좎럥彛?EntryTime)
-                    string ts = null;
-                    if (frameTimestampMap.TryGetValue(waypoint.EntryFrame, out var jsonTs))
-                        ts = jsonTs;
-                    if (string.IsNullOrEmpty(ts))
-                        ts = GetSubtitleTimestampForFrame(waypoint.EntryFrame);
-                    item.SubItems.Add(!string.IsNullOrEmpty(ts) ? ts : waypoint.EntryTime);
+                    item.SubItems.Add(eventRow.Exit);
                     // ??甕곕뜆?? 揶쏆빘猿?P/V) ??좎럩???
-                    item.SubItems.Add(waypoint.InteractingObject ?? "");
+                    item.SubItems.Add(eventRow.Object);
 
                     item.ForeColor = waypoint.MarkerColor;
                     item.Tag = waypoint;

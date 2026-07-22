@@ -534,13 +534,11 @@
             this.listViewEventWaypoints.FullRowSelect = true;
             this.listViewEventWaypoints.TabStop = false;
             this.listViewEventWaypoints.BackColor = System.Drawing.Color.FromArgb(224, 255, 224); // 연한 초록
-            this.listViewEventWaypoints.Columns.Add("Event", 70);
             this.listViewEventWaypoints.Columns.Add("Entry", 80);
             this.listViewEventWaypoints.Columns.Add("Exit", 80);
-            this.listViewEventWaypoints.Columns.Add("객체", 70);
+            this.listViewEventWaypoints.Columns.Add("객체", 95);
             this.listViewEventWaypoints.Click += new System.EventHandler(this.listViewEventWaypoints_Click);
             this.listViewEventWaypoints.MouseDown += new System.Windows.Forms.MouseEventHandler(this.listViewWaypoints_MouseDown);
-            this.listViewEventWaypoints.MouseUp += new System.Windows.Forms.MouseEventHandler(this.listViewEventWaypoints_MouseUp);
 
             this.groupBoxEventWaypoint.Controls.Add(this.listViewEventWaypoints);
 
