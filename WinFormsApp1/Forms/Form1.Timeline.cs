@@ -11,6 +11,39 @@ namespace WinFormsApp1
         #region Timeline
         private static readonly Font timelineFont = new Font("Segoe UI", 7F, FontStyle.Bold);
         private static readonly Font timelineLabelFont = new Font("Segoe UI", 7F, FontStyle.Bold);
+        private string activeWaypointListOwner;
+
+        private void ActivateWaypointListOwner(string owner)
+        {
+            activeWaypointListOwner = owner;
+
+            if (!string.Equals(owner, "person", StringComparison.OrdinalIgnoreCase))
+            {
+                listViewPersonWaypoints.SelectedItems.Clear();
+            }
+
+            if (!string.Equals(owner, "vehicle", StringComparison.OrdinalIgnoreCase))
+            {
+                listViewVehicleWaypoints.SelectedItems.Clear();
+            }
+
+            if (!string.Equals(owner, "event", StringComparison.OrdinalIgnoreCase))
+            {
+                listViewEventWaypoints.SelectedItems.Clear();
+            }
+        }
+
+        private void ClearWaypointListOwner(string owner)
+        {
+            if (string.Equals(activeWaypointListOwner, owner, StringComparison.OrdinalIgnoreCase))
+            {
+                activeWaypointListOwner = WaypointSelectionHelper.ResolveActiveListOwner(
+                    activeWaypointListOwner,
+                    listViewPersonWaypoints.SelectedItems.Count > 0,
+                    listViewVehicleWaypoints.SelectedItems.Count > 0,
+                    listViewEventWaypoints.SelectedItems.Count > 0);
+            }
+        }
 
         private void panelTimeline_Paint(object sender, PaintEventArgs e)
         {
@@ -259,6 +292,7 @@ namespace WinFormsApp1
                 suppressWaypointClickOnce = false;
                 return;
             }
+            ActivateWaypointListOwner("person");
             // Person Waypoint ????????????????????Entry ?????諛몃마??????諛몃마?????筌?痢??????
             if (listViewPersonWaypoints.SelectedItems.Count > 0)
             {
@@ -278,6 +312,7 @@ namespace WinFormsApp1
                 selectedWaypoint = null; // ??????影?력????????⑤뜪??
                 UpdateWaypointInfo(null); // ??Waypoint ??轅붽틓?????????????멸괜???
                 panelTimeline.Invalidate();
+                ClearWaypointListOwner("person");
             }
         }
 
@@ -288,6 +323,7 @@ namespace WinFormsApp1
                 suppressWaypointClickOnce = false;
                 return;
             }
+            ActivateWaypointListOwner("vehicle");
             // Vehicle Waypoint ?????????????????????????諛몃마??????諛몃마?????筌?痢??????(????獒뺣폍???????諛몃마???
             if (listViewVehicleWaypoints.SelectedItems.Count > 0)
             {
@@ -306,6 +342,7 @@ namespace WinFormsApp1
                 selectedWaypoint = null; // ??????影?력????????⑤뜪??
                 UpdateWaypointInfo(null); // ??Waypoint ??轅붽틓?????????????멸괜???
                 panelTimeline.Invalidate();
+                ClearWaypointListOwner("vehicle");
             }
         }
 
@@ -317,6 +354,7 @@ namespace WinFormsApp1
                 suppressWaypointClickOnce = false;
                 return;
             }
+            ActivateWaypointListOwner("event");
             if (listViewEventWaypoints.SelectedItems.Count > 0)
             {
                 var selectedItem = listViewEventWaypoints.SelectedItems[0];
@@ -335,6 +373,7 @@ namespace WinFormsApp1
                 selectedWaypoint = null; // ??????影?력????????⑤뜪??
                 UpdateWaypointInfo(null); // ??Waypoint ??轅붽틓?????????????멸괜???
                 panelTimeline.Invalidate();
+                ClearWaypointListOwner("event");
             }
         }
 
@@ -345,7 +384,29 @@ namespace WinFormsApp1
             if (listView == null) return;
 
             var hit = listView.HitTest(e.Location);
-            if (hit.Item == null) return;
+            if (listView == listViewPersonWaypoints)
+                ActivateWaypointListOwner("person");
+            else if (listView == listViewVehicleWaypoints)
+                ActivateWaypointListOwner("vehicle");
+            else if (listView == listViewEventWaypoints)
+                ActivateWaypointListOwner("event");
+
+            if (hit.Item == null)
+            {
+                listView.SelectedItems.Clear();
+                selectedWaypoint = null;
+                UpdateWaypointInfo(null);
+                panelTimeline.Invalidate();
+
+                if (listView == listViewPersonWaypoints)
+                    ClearWaypointListOwner("person");
+                else if (listView == listViewVehicleWaypoints)
+                    ClearWaypointListOwner("vehicle");
+                else if (listView == listViewEventWaypoints)
+                    ClearWaypointListOwner("event");
+
+                return;
+            }
 
             if (hit.Item.Tag is WaypointMarker waypoint)
             {
@@ -420,8 +481,8 @@ namespace WinFormsApp1
             {
                 targetBox = boundingBoxes
                     .FirstOrDefault(b => b.FrameIndex == currentFrameIndex &&
-                                       b.Label == "vehicle" &&
-                                       b.VehicleId == waypoint.ObjectId &&
+                                       TrackingIdentityHelper.MatchesWaypoint(b, waypoint) &&
+                                       !TrackingIdentityHelper.IsPlate(b) &&
                                        !b.IsDeleted);
             }
             else if (waypoint.Label == "event")
@@ -562,17 +623,26 @@ namespace WinFormsApp1
                 WaypointMarker waypoint = null;
                 string waypointType = string.Empty;
 
-                if (listViewPersonWaypoints.SelectedItems.Count > 0)
+                string owner = WaypointSelectionHelper.ResolveActiveListOwner(
+                    activeWaypointListOwner,
+                    listViewPersonWaypoints.SelectedItems.Count > 0,
+                    listViewVehicleWaypoints.SelectedItems.Count > 0,
+                    listViewEventWaypoints.SelectedItems.Count > 0);
+
+                if (string.Equals(owner, "person", StringComparison.OrdinalIgnoreCase) &&
+                    listViewPersonWaypoints.SelectedItems.Count > 0)
                 {
                     waypoint = listViewPersonWaypoints.SelectedItems[0].Tag as WaypointMarker;
                     waypointType = "Person";
                 }
-                else if (listViewVehicleWaypoints.SelectedItems.Count > 0)
+                else if (string.Equals(owner, "vehicle", StringComparison.OrdinalIgnoreCase) &&
+                    listViewVehicleWaypoints.SelectedItems.Count > 0)
                 {
                     waypoint = listViewVehicleWaypoints.SelectedItems[0].Tag as WaypointMarker;
                     waypointType = "Vehicle";
                 }
-                else if (listViewEventWaypoints.SelectedItems.Count > 0)
+                else if (string.Equals(owner, "event", StringComparison.OrdinalIgnoreCase) &&
+                    listViewEventWaypoints.SelectedItems.Count > 0)
                 {
                     waypoint = listViewEventWaypoints.SelectedItems[0].Tag as WaypointMarker;
                     waypointType = "Event";
@@ -614,13 +684,16 @@ namespace WinFormsApp1
                 else if (waypoint.Label == "vehicle")
                 {
                     boxesToDelete = boundingBoxes
-                        .Where(b => b.Label == "vehicle" && b.VehicleId == waypoint.ObjectId && b.FrameIndex >= waypoint.EntryFrame && b.FrameIndex <= waypoint.ExitFrame)
+                        .Where(b => TrackingIdentityHelper.MatchesWaypoint(b, waypoint) &&
+                                    b.FrameIndex >= waypoint.EntryFrame &&
+                                    b.FrameIndex <= waypoint.ExitFrame)
                         .ToList();
                 }
                 else if (waypoint.Label == "event")
                 {
-                    boxesToDelete = boundingBoxes
-                        .Where(b => b.Label == "event" && b.EventId == waypoint.ObjectId && b.FrameIndex >= waypoint.EntryFrame && b.FrameIndex <= waypoint.ExitFrame)
+                    boxesToDelete = EventFinalizationHelper.GetEventBoxesForWaypoint(
+                        boundingBoxes,
+                        waypoint)
                         .ToList();
                 }
 
@@ -641,6 +714,8 @@ namespace WinFormsApp1
                     UpdateWaypointInfo(null);
                 }
 
+                activeWaypointListOwner = null;
+
                 waypointMarkers.Remove(waypoint);
                 UpdateWaypointListView();
                 InvalidateBoxCache();
@@ -649,11 +724,15 @@ namespace WinFormsApp1
                 panelTimeline.Invalidate();
                 pictureBoxVideo.Invalidate();
 
+                bool saved = SaveCurrentLabelingData();
+
                 MessageBox.Show(
-                    $"삭제된 박스 수: {boxesToDelete.Count}\n\n삭제가 완료되었습니다.",
-                    "알림",
+                    saved
+                        ? $"삭제된 박스 수: {boxesToDelete.Count}\n\n삭제가 완료되었습니다."
+                        : $"삭제된 박스 수: {boxesToDelete.Count}\n\n메모리에서는 삭제되었지만 JSON 저장에 실패했습니다. 다시 저장해 주세요.",
+                    saved ? "알림" : "저장 경고",
                     MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                    saved ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
             }
             catch (Exception ex)
             {

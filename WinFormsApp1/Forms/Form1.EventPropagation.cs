@@ -106,6 +106,13 @@ namespace WinFormsApp1
         /// </summary>
         private void CreateEventWaypoint(BoundingBox box)
         {
+            if (box?.Label == "event")
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Event Finalization Guard] Ignored eager CreateEventWaypoint call for frame {box.FrameIndex}, instance={box.EventInstanceId}");
+            }
+            return;
+
             if (box.Label != "event") return;
 
             TimeSpan entryTime = TimeSpan.FromSeconds(box.FrameIndex / fps);
@@ -136,6 +143,17 @@ namespace WinFormsApp1
         private void PropagateEventBoxToEnd(BoundingBox box)
         {
             if (box.Label != "event") return;
+
+            var finalizedWaypoint = FindWaypointForBox(box);
+            if (finalizedWaypoint == null || !string.Equals(finalizedWaypoint.Label, "event", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Event Finalization Guard] Skipped PropagateEventBoxToEnd without a finalized event waypoint. frame={box.FrameIndex}, instance={box.EventInstanceId}");
+                return;
+            }
+
+            PropagateEventBoxWithinRange(box, finalizedWaypoint.ExitFrame);
+            return;
 
             int startFrame = box.FrameIndex + 1;
             int endFrame = totalFrames - 1;
@@ -186,6 +204,15 @@ namespace WinFormsApp1
         {
             if (box.Label != "event") return;
 
+            var finalizedWaypoint = FindWaypointForBox(box);
+            if (finalizedWaypoint == null || !string.Equals(finalizedWaypoint.Label, "event", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Event Lifetime Guard] Skipped PropagateEventBoxWithinRange without a finalized event waypoint. frame={box.FrameIndex}, instance={box.EventInstanceId}");
+                return;
+            }
+
+            endFrame = Math.Min(endFrame, finalizedWaypoint.ExitFrame);
             int startFrame = box.FrameIndex + 1;
             if (startFrame > endFrame) return;
 
@@ -194,11 +221,8 @@ namespace WinFormsApp1
                 bool exists = boundingBoxes.Any(b =>
                     b.FrameIndex == frame &&
                     b.Label == "event" &&
-                    b.EventId == box.EventId &&
-                    b.Rectangle.X == box.Rectangle.X &&
-                    b.Rectangle.Y == box.Rectangle.Y &&
-                    b.Rectangle.Width == box.Rectangle.Width &&
-                    b.Rectangle.Height == box.Rectangle.Height);
+                    !b.IsDeleted &&
+                    string.Equals(b.EventInstanceId, box.EventInstanceId, StringComparison.Ordinal));
 
                 if (!exists)
                 {
@@ -231,6 +255,33 @@ namespace WinFormsApp1
         {
             if (box.Label != "event")
             {
+                return;
+            }
+
+            var scopedEventWaypoint = FindWaypointForBox(box);
+            if (scopedEventWaypoint != null)
+            {
+                var scopedBoxesToRemove = EventFinalizationHelper.GetEventBoxesForWaypoint(
+                    boundingBoxes,
+                    scopedEventWaypoint,
+                    startFrame: box.FrameIndex + 1);
+
+                foreach (var boxToRemove in scopedBoxesToRemove)
+                {
+                    boundingBoxes.Remove(boxToRemove);
+                }
+
+                if (scopedBoxesToRemove.Count > 0)
+                {
+                    waypointMarkers.Remove(scopedEventWaypoint);
+                    InvalidateBoxCache();
+                    UpdateBoxCount();
+                    UpdateBboxListDisplay();
+                    UpdateWaypointListView();
+                    panelTimeline.Invalidate();
+                    System.Diagnostics.Debug.WriteLine($"[Event Lifetime Guard] Removed {scopedBoxesToRemove.Count} propagated boxes for instance {scopedEventWaypoint.EventInstanceId}");
+                }
+
                 return;
             }
 
@@ -281,6 +332,12 @@ namespace WinFormsApp1
         /// </summary>
         private void PropagateEventBoxIfNeeded(BoundingBox box)
         {
+            if (box?.Label == "event")
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Event Lifetime Guard] Manual-tracking-first mode: PropagateEventBoxIfNeeded skipped for instance={box.EventInstanceId}, frame={box.FrameIndex}");
+                return;
+            }
             System.Diagnostics.Debug.WriteLine($"[Event 전파 시작] FrameIndex={box.FrameIndex}, Label={box.Label}, EventId={box.EventId}");
             
             // Event 라벨이 아니면 전파하지 않음
@@ -370,6 +427,12 @@ namespace WinFormsApp1
         /// </summary>
         private void PropagateEventBoxFromCurrentFrame(BoundingBox box)
         {
+            if (box?.Label == "event")
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[Event Lifetime Guard] Manual-tracking-first mode: PropagateEventBoxFromCurrentFrame skipped for instance={box.EventInstanceId}, frame={box.FrameIndex}");
+                return;
+            }
             // Event 라벨이 아니면 전파하지 않음
             if (box.Label != "event")
                 return;

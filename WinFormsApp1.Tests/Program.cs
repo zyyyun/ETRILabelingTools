@@ -20,6 +20,10 @@ static class Program
             ("video controls height preserves object info", VideoControlsHeightPreservesObjectInfo),
             ("timeline panel height fits all rows", TimelinePanelHeightFitsAllRows),
             ("timeline width stops before object info", TimelineWidthStopsBeforeObjectInfo),
+            ("pending event range reuses existing event instance id", PendingEventRangeReusesExistingInstanceId),
+            ("pending event range ignores different event ids", PendingEventRangeIgnoresDifferentEventIds),
+            ("event clamp trims only matching instance overflow", EventClampTrimsOnlyMatchingInstanceOverflow),
+            ("event clamp can trim all waypoint overflows", EventClampCanTrimAllWaypointOverflows),
             ("clip resolver keeps disjoint person clips separate", ClipResolverKeepsDisjointPersonClipsSeparate),
             ("clip resolver chooses latest containing clip for nested waypoints", ClipResolverChoosesLatestContainingClip),
             ("clip resolver prefers event instance id", ClipResolverPrefersEventInstanceId),
@@ -41,6 +45,10 @@ static class Program
             ("line width constants reflect reduced thickness", LineWidthConstantsReflectReducedThickness),
             ("selected face or plate does not hide parent body", SelectedSubBoxDoesNotHideParentBody),
             ("vehicle tracking comparison uses effective identity", VehicleTrackingComparisonUsesEffectiveIdentity),
+            ("vehicle waypoint matching includes body and linked plate", VehicleWaypointMatchingIncludesBodyAndLinkedPlate),
+            ("event workflow skips vehicle waypoint side effects", EventWorkflowSkipsVehicleWaypointSideEffects),
+            ("active list owner prefers current list selection", ActiveListOwnerPrefersCurrentListSelection),
+            ("active list owner falls back to remaining selected list", ActiveListOwnerFallsBackToRemainingSelection),
             ("plate a-frame lookup selects body without losing plate identity", PlateAFrameLookupSelectsBodyWithoutLosingPlateIdentity),
             ("independent plate lookup ignores vehicle body", IndependentPlateLookupIgnoresVehicleBody),
             ("vehicle waypoints merge overlaps and keep disjoint clips", VehicleWaypointsMergeOverlapsAndKeepDisjointClips),
@@ -110,6 +118,95 @@ static class Program
 
         AssertTrue(TrackingIdentityHelper.AreSameTrackingTarget(bodyAtA, bodyAtB), "Vehicle body boxes with the same instance must match.");
         AssertEqual(7, TrackingIdentityHelper.GetNumericIdentity(plate), "Plate tracking identity must resolve to its linked vehicle instance.");
+    }
+    private static void VehicleWaypointMatchingIncludesBodyAndLinkedPlate()
+    {
+        var waypoint = new WaypointMarker
+        {
+            Label = "vehicle",
+            ObjectId = 7,
+            EntryFrame = 10,
+            ExitFrame = 20
+        };
+        var body = new BoundingBox
+        {
+            Label = "vehicle",
+            VehicleId = 3,
+            VehicleInstanceId = 7,
+            VehiclePartType = "body",
+            FrameIndex = 12
+        };
+        var plate = new BoundingBox
+        {
+            Label = "vehicle",
+            VehicleId = 3,
+            VehicleInstanceId = 7,
+            LinkedVehicleInstanceId = 7,
+            VehiclePartType = "plate",
+            FrameIndex = 12
+        };
+        var legacyBody = new BoundingBox
+        {
+            Label = "vehicle",
+            VehicleId = 3,
+            VehicleInstanceId = 0,
+            VehiclePartType = "body",
+            FrameIndex = 12
+        };
+        var legacyWaypoint = new WaypointMarker
+        {
+            Label = "vehicle",
+            ObjectId = 3,
+            EntryFrame = 10,
+            ExitFrame = 20
+        };
+
+        AssertTrue(TrackingIdentityHelper.MatchesWaypoint(body, waypoint), "Current vehicle body must match by instance id.");
+        AssertTrue(TrackingIdentityHelper.MatchesWaypoint(plate, waypoint), "Linked plate must match its vehicle waypoint.");
+        AssertTrue(TrackingIdentityHelper.MatchesWaypoint(legacyBody, legacyWaypoint), "Legacy vehicle data must match by VehicleId fallback.");
+    }
+
+    private static void EventWorkflowSkipsVehicleWaypointSideEffects()
+    {
+        AssertTrue(
+            VehicleEventWorkflowHelper.ShouldSkipVehicleWaypointSideEffects("event", 1),
+            "Event-driven workflows with entry event boxes should not mutate vehicle waypoint state as a side effect.");
+        AssertTrue(
+            !VehicleEventWorkflowHelper.ShouldSkipVehicleWaypointSideEffects("vehicle", 1),
+            "Vehicle workflows should still process vehicle waypoint state normally.");
+        AssertTrue(
+            !VehicleEventWorkflowHelper.ShouldSkipVehicleWaypointSideEffects("event", 0),
+            "Without event boxes in range, vehicle side effects should not be blocked by this helper.");
+    }
+
+    private static void ActiveListOwnerPrefersCurrentListSelection()
+    {
+        string owner = WaypointSelectionHelper.ResolveActiveListOwner(
+            currentOwner: "vehicle",
+            personSelected: true,
+            vehicleSelected: true,
+            eventSelected: false);
+
+        AssertEqual("vehicle", owner, "The currently active list should stay authoritative when it still has a selection.");
+    }
+
+    private static void ActiveListOwnerFallsBackToRemainingSelection()
+    {
+        string owner = WaypointSelectionHelper.ResolveActiveListOwner(
+            currentOwner: "person",
+            personSelected: false,
+            vehicleSelected: true,
+            eventSelected: false);
+
+        AssertEqual("vehicle", owner, "When the old owner is cleared, ownership should fall back to the remaining selected list.");
+
+        string none = WaypointSelectionHelper.ResolveActiveListOwner(
+            currentOwner: "event",
+            personSelected: false,
+            vehicleSelected: false,
+            eventSelected: false);
+
+        AssertTrue(none == null, "If no list has a selection, there should be no active owner.");
     }
     private static void PlateAFrameLookupSelectsBodyWithoutLosingPlateIdentity()
     {
@@ -306,6 +403,117 @@ static class Program
     {
         int width = TimelineLayoutHelper.CalculateTimelineWidth(panelTimelineLeft: 70, objectInfoLeft: 1230, reservedGap: 8, minimumWidth: 100);
         AssertEqual(1152, width, "Timeline width should stop before object info with reserved gap.");
+    }
+
+    private static void PendingEventRangeReusesExistingInstanceId()
+    {
+        var existing = new BoundingBox
+        {
+            Label = "event",
+            EventId = 4,
+            EventInstanceId = "event-a",
+            FrameIndex = 100
+        };
+
+        var exitFrameCandidate = new BoundingBox
+        {
+            Label = "event",
+            EventId = 4,
+            EventInstanceId = "event-b",
+            FrameIndex = 140
+        };
+
+        string reused = EventFinalizationHelper.FindPendingEventInstanceId(
+            new[] { existing },
+            exitFrameCandidate,
+            entryFrame: 100,
+            currentFrame: 140);
+
+        AssertEqual("event-a", reused, "Exit-frame event boxes should reuse the existing pending event instance id.");
+    }
+
+    private static void PendingEventRangeIgnoresDifferentEventIds()
+    {
+        var existing = new BoundingBox
+        {
+            Label = "event",
+            EventId = 4,
+            EventInstanceId = "event-a",
+            FrameIndex = 100
+        };
+
+        var differentEvent = new BoundingBox
+        {
+            Label = "event",
+            EventId = 7,
+            EventInstanceId = "event-b",
+            FrameIndex = 140
+        };
+
+        string reused = EventFinalizationHelper.FindPendingEventInstanceId(
+            new[] { existing },
+            differentEvent,
+            entryFrame: 100,
+            currentFrame: 140);
+
+        AssertTrue(reused == null, "Pending instance reuse must ignore boxes from other event ids.");
+    }
+
+    private static void EventClampTrimsOnlyMatchingInstanceOverflow()
+    {
+        var waypoint = new WaypointMarker
+        {
+            Label = "event",
+            ObjectId = 4,
+            EventInstanceId = "event-a",
+            EntryFrame = 100,
+            ExitFrame = 120
+        };
+
+        var keptInRange = new BoundingBox { Label = "event", EventId = 4, EventInstanceId = "event-a", FrameIndex = 120 };
+        var removedOverflow = new BoundingBox { Label = "event", EventId = 4, EventInstanceId = "event-a", FrameIndex = 121 };
+        var siblingInstance = new BoundingBox { Label = "event", EventId = 4, EventInstanceId = "event-b", FrameIndex = 125 };
+
+        var boxes = new List<BoundingBox> { keptInRange, removedOverflow, siblingInstance };
+        int removed = EventFinalizationHelper.ClampEventBoxesToWaypointExit(boxes, waypoint);
+
+        AssertEqual(1, removed, "Only the overflowing boxes from the matching event instance should be trimmed.");
+        AssertTrue(boxes.Contains(keptInRange), "The last valid frame should remain.");
+        AssertTrue(!boxes.Contains(removedOverflow), "Overflow box should be removed.");
+        AssertTrue(boxes.Contains(siblingInstance), "Sibling event instances must remain untouched.");
+    }
+
+    private static void EventClampCanTrimAllWaypointOverflows()
+    {
+        var waypointA = new WaypointMarker
+        {
+            Label = "event",
+            ObjectId = 4,
+            EventInstanceId = "event-a",
+            EntryFrame = 100,
+            ExitFrame = 120
+        };
+        var waypointB = new WaypointMarker
+        {
+            Label = "event",
+            ObjectId = 7,
+            EventInstanceId = "event-b",
+            EntryFrame = 200,
+            ExitFrame = 205
+        };
+
+        var boxes = new List<BoundingBox>
+        {
+            new() { Label = "event", EventId = 4, EventInstanceId = "event-a", FrameIndex = 121 },
+            new() { Label = "event", EventId = 7, EventInstanceId = "event-b", FrameIndex = 206 },
+            new() { Label = "event", EventId = 7, EventInstanceId = "event-b", FrameIndex = 205 }
+        };
+
+        int removed = EventFinalizationHelper.ClampAllEventBoxesToWaypoints(boxes, new[] { waypointA, waypointB });
+
+        AssertEqual(2, removed, "All waypoint-specific event overflow boxes should be trimmed.");
+        AssertEqual(1, boxes.Count, "Only in-range event boxes should remain.");
+        AssertEqual(205, boxes[0].FrameIndex, "The in-range event box should be preserved.");
     }
 
     private static void ClipResolverKeepsDisjointPersonClipsSeparate()

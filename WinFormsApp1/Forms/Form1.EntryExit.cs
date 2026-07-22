@@ -95,6 +95,9 @@ namespace WinFormsApp1
                     var entryPersonBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "person").ToList();
                     var entryVehicleBoxes = WaypointGroupingHelper.GetVehicleWaypointBodies(boundingBoxes, entryFrameIndex.Value);
                     var entryEventBoxes = boundingBoxes.Where(b => b.FrameIndex == entryFrameIndex.Value && b.Label == "event").ToList();
+                    bool skipVehicleWaypointSideEffects = VehicleEventWorkflowHelper.ShouldSkipVehicleWaypointSideEffects(
+                        currentSelectedLabel,
+                        entryEventBoxes.Count);
 
                     if (entryPersonBoxes.Count == 0 && entryVehicleBoxes.Count == 0 && entryEventBoxes.Count == 0)
                     {
@@ -171,6 +174,13 @@ namespace WinFormsApp1
 
                     foreach (var vehicleBox in entryVehicleBoxes)
                     {
+                        if (skipVehicleWaypointSideEffects)
+                        {
+                            System.Diagnostics.Debug.WriteLine(
+                                $"[Vehicle Event Guard] Skipping vehicle waypoint side effect for instance={TrackingIdentityHelper.GetNumericIdentity(vehicleBox)} during event workflow.");
+                            continue;
+                        }
+
                         int vehicleInstanceId = TrackingIdentityHelper.GetNumericIdentity(vehicleBox);
                         if (vehicleInstanceId <= 0)
                         {
@@ -237,6 +247,11 @@ namespace WinFormsApp1
                                     b.FrameIndex >= entryFrameIndex.Value &&
                                     b.FrameIndex <= exitFrameIndex.Value)
                         .ToList();
+
+                    EventFinalizationHelper.NormalizePendingEventInstanceIds(
+                        eventBoxesInRange,
+                        currentEntryFrame,
+                        currentExitFrame);
 
                     var eventGroups = eventBoxesInRange
                         .GroupBy(b => string.IsNullOrWhiteSpace(b.EventInstanceId)

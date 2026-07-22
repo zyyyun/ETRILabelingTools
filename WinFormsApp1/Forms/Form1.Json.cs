@@ -919,18 +919,22 @@ namespace WinFormsApp1
                     MessageBoxIcon.Error);
             }
         }
-        private void SaveCurrentLabelingData()
+        private bool SaveCurrentLabelingData()
         {
-            if (string.IsNullOrEmpty(currentVideoFile) || boundingBoxes.Count == 0)
-                return;
+            if (string.IsNullOrEmpty(currentVideoFile))
+                return false;
 
             try
             {
+                EventFinalizationHelper.ClampAllEventBoxesToWaypoints(
+                    boundingBoxes,
+                    waypointMarkers);
+
                 string videoDir = Path.GetDirectoryName(currentVideoFile);
                 if (string.IsNullOrEmpty(videoDir) || !Directory.Exists(videoDir))
                 {
                     MessageBox.Show("비디오 파일의 디렉토리를 찾을 수 없습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
+                    return false;
                 }
 
                 string saveDir = Path.Combine(videoDir, "labels");
@@ -946,7 +950,7 @@ namespace WinFormsApp1
                 catch (Exception ex)
                 {
                     MessageBox.Show($"라벨 저장 디렉토리 생성 실패: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
+                    return false;
                 }
 
                 // ✅ 기존에 로드된 파일에 저장, 없으면 _labels.json으로 생성
@@ -965,11 +969,14 @@ namespace WinFormsApp1
                 }
 
                 WaypointNormalizer.NormalizeInPlace(waypointMarkers);
-                ExportToJsonExtended(savePath);
+                if (!ExportToJsonExtended(savePath))
+                    return false;
+                return true;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"라벨링 데이터 저장 중 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
 
@@ -1123,7 +1130,7 @@ namespace WinFormsApp1
             return currentList.OrderBy(x => x).SequenceEqual(previousList.OrderBy(x => x));
         }
 
-        private void ExportToJsonExtended(string filePath)
+        private bool ExportToJsonExtended(string filePath)
         {
             try
             {
@@ -1626,10 +1633,12 @@ namespace WinFormsApp1
                 };
                 string json = JsonConvert.SerializeObject(labelingData, settings);
                 File.WriteAllText(filePath, json);
+                return true;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"JSON 내보내기 오류: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
         /// <summary>
@@ -1639,7 +1648,7 @@ namespace WinFormsApp1
         {
             // 현재 프레임에 Event 박스가 있는지 확인
             var eventBoxesAtFrame = boundingBoxes
-                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "event")
+                .Where(b => b.FrameIndex == currentFrameIndex && b.Label == "event" && !b.IsDeleted)
                 .ToList();
             
             if (eventBoxesAtFrame.Count == 0)
@@ -1659,6 +1668,14 @@ namespace WinFormsApp1
             {
                 targetEvent = eventBoxesAtFrame[0];
             }
+
+            if (selectedBox != null &&
+                string.Equals(selectedBox.Label, "event", StringComparison.OrdinalIgnoreCase) &&
+                selectedBox.FrameIndex == currentFrameIndex &&
+                !selectedBox.IsDeleted)
+            {
+                targetEvent = selectedBox;
+            }
             else
             {
                 // 여러 Event 중 선택
@@ -1676,10 +1693,9 @@ namespace WinFormsApp1
             }
             
             // 현재 Event의 Waypoint 찾기 (Event Label, EventId로 매칭)
-            var eventWaypoint = waypointMarkers.FirstOrDefault(w =>
-                w.Label == "event" &&
-                currentFrameIndex >= w.EntryFrame &&
-                currentFrameIndex <= w.ExitFrame);
+            var eventWaypoint = targetEvent != null
+                ? FindWaypointForBox(targetEvent)
+                : null;
             
             if (eventWaypoint == null)
             {
@@ -1692,15 +1708,11 @@ namespace WinFormsApp1
             }
             
             // 현재 프레임부터 영상 끝까지 삭제 (Q키로 종료)
-            var boxesToDelete = boundingBoxes
-                .Where(b => 
-                    b.Label == "event" &&
-                    b.EventId == targetEvent.EventId &&
-                    b.Rectangle.X == targetEvent.Rectangle.X &&
-                    b.Rectangle.Y == targetEvent.Rectangle.Y &&
-                    b.Rectangle.Width == targetEvent.Rectangle.Width &&
-                    b.Rectangle.Height == targetEvent.Rectangle.Height &&
-                    b.FrameIndex >= currentFrameIndex)
+            int newExitFrame = currentFrameIndex - 1;
+            var boxesToDelete = EventFinalizationHelper.GetEventBoxesForWaypoint(
+                boundingBoxes,
+                eventWaypoint,
+                startFrame: currentFrameIndex)
                 .ToList();
             
             if (boxesToDelete.Count == 0)
@@ -1734,9 +1746,13 @@ namespace WinFormsApp1
                 }
                 
                 // Event Waypoint의 ExitFrame을 현재 프레임 -1로 업데이트
-                eventWaypoint.ExitFrame = currentFrameIndex - 1;
-                TimeSpan exitTime = TimeSpan.FromSeconds((currentFrameIndex - 1) / fps);
+                eventWaypoint.ExitFrame = newExitFrame;
+                TimeSpan exitTime = TimeSpan.FromSeconds(newExitFrame / fps);
                 eventWaypoint.ExitTime = exitTime.ToString(@"hh\:mm\:ss");
+
+                EventFinalizationHelper.ClampEventBoxesToWaypointExit(
+                    boundingBoxes,
+                    eventWaypoint);
                 
                 InvalidateBoxCache();
                 UpdateBoxCount();

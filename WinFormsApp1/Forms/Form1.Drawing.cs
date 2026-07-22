@@ -371,6 +371,21 @@ namespace WinFormsApp1
                             drawingBox.PersonPartType = drawingBox.Label == "person" ? "body" : null;
                         }
 
+                        if (string.Equals(drawingBox.Label, "event", StringComparison.OrdinalIgnoreCase) &&
+                            entryFrameIndex.HasValue)
+                        {
+                            string pendingInstanceId = EventFinalizationHelper.FindPendingEventInstanceId(
+                                boundingBoxes,
+                                drawingBox,
+                                entryFrameIndex.Value,
+                                currentFrameIndex);
+
+                            if (!string.IsNullOrWhiteSpace(pendingInstanceId))
+                            {
+                                drawingBox.EventInstanceId = pendingInstanceId;
+                            }
+                        }
+
                         boundingBoxes.Add(drawingBox);
                         shouldAddDrawingBox = true;
                     }

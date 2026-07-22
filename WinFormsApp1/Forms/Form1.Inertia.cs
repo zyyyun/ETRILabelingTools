@@ -580,7 +580,7 @@ InvalidateBoxCache();
         private void ProcessDisappearedRangesAtFrame(WaypointMarker waypoint, int returnFrame)
         {
             int boxId = waypoint.ObjectId;
-            string key = $"{waypoint.Label}_{boxId}";
+            string key = GetTrackingIdentityKey(waypoint);
 
             if (!disappearedRanges.ContainsKey(key))
                 return;
@@ -615,7 +615,7 @@ InvalidateBoxCache();
         private void ProcessDisappearedRanges(WaypointMarker waypoint)
         {
             int boxId = waypoint.ObjectId;
-            string key = $"{waypoint.Label}_{boxId}";
+            string key = GetTrackingIdentityKey(waypoint);
 
             if (!disappearedRanges.ContainsKey(key))
                 return;
@@ -669,7 +669,7 @@ InvalidateBoxCache();
         private void DetectContinuousAbsence(WaypointMarker waypoint)
         {
             int boxId = waypoint.ObjectId;
-            string key = $"{waypoint.Label}_{boxId}";
+            string key = GetTrackingIdentityKey(waypoint);
 
             // waypoint 범위 내의 박스 찾기
             var boxesInWaypoint = boundingBoxes
@@ -753,6 +753,32 @@ InvalidateBoxCache();
         {
             int boxId = waypoint.ObjectId;
             int deletedCount = 0;
+
+            if (string.Equals(waypoint.Label, "event", StringComparison.OrdinalIgnoreCase))
+            {
+                var eventBoxesToDelete = EventFinalizationHelper.GetEventBoxesForWaypoint(
+                    boundingBoxes,
+                    waypoint,
+                    startFrame: startFrame)
+                    .Where(box => box.FrameIndex <= endFrame)
+                    .ToList();
+
+                foreach (var box in eventBoxesToDelete)
+                {
+                    boundingBoxes.Remove(box);
+                    deletedCount++;
+                }
+
+                if (deletedCount > 0)
+                {
+                    InvalidateBoxCache();
+                    UpdateBoxCount();
+                    UpdateBboxListDisplay();
+                    System.Diagnostics.Debug.WriteLine($"[Event 박스 정리] {key}: 프레임 {startFrame}~{endFrame}에서 {deletedCount}개 박스 제거");
+                }
+
+                return;
+            }
 
             var boxesToDelete = boundingBoxes
                 .Where(b =>
