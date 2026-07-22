@@ -85,6 +85,16 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 7 to break down)
 
+### Phase 8: Delete face and plate annotations by frame or waypoint
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 7
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 8 to break down)
+
 ## Verify Phase
 
 **Purpose:** Run the milestone-level PPT regression and UAT gate after all numbered feature phases are complete.

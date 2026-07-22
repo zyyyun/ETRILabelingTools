@@ -48,3 +48,4 @@ Last activity: 2026-07-22 -- Phase 05 planning complete
 - Phase 4 moved: Promoted former Phase 3.1 event-ID synchronization work to integer Phase 4
 - Phase 6 added: Prevent stale event boxes after waypoint box edits
 - Phase 7 added: Synchronize event boxes when the tracked object changes
+- Phase 8 added: Delete face and plate annotations by frame or waypoint
