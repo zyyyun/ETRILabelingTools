@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Event Waypoint Stabilization
-status: executing
-last_updated: "2026-07-23T04:35:28.246Z"
+status: verifying
+last_updated: "2026-07-23T04:52:51.681Z"
 last_activity: 2026-07-23
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 13
-  completed_plans: 12
-  percent: 75
+  completed_plans: 13
+  percent: 88
 ---
 
 # State
@@ -19,7 +19,7 @@ progress:
 
 Phase: 06 (prevent-stale-event-boxes-after-waypoint-box-edits) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-23
 
 ## Decisions
@@ -27,6 +27,7 @@ Last activity: 2026-07-23
 - Stabilization milestone selected over isolated hotfixes.
 - Scope anchored to the July 20, 2026 PPT reproduction set.
 - `.planning` initialized in this workspace because no prior GSD structure existed.
+- [Phase 06]: Manual WinForms smoke verification for D-01 through D-06 is deferred to the milestone-wide Verify Phase; it is not approved by Plan 06-02.
 
 ## Blockers
 
