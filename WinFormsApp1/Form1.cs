@@ -1480,9 +1480,9 @@ namespace WinFormsApp1
             // Vehicle categories (21~24)
             {"car", 21}, {"motorcycle", 22}, {"e_scooter", 23}, {"bicycle", 24},
             
-            // Event categories (25~32)
-            {"contact", 25}, {"exchange", 26}, {"board", 27}, {"final_exchange", 28},
-            {"disembark", 29}, {"controlled_delivery", 30}, {"camouflage", 31}, {"throw", 32},
+            // Event categories (25~31)
+            {"contact", 25}, {"throw", 26}, {"final_exchange", 27}, {"get on", 28},
+            {"get off", 29}, {"suspect", 30}, {"controlled_delivery", 31},
 
             // Vehicle plate category (33)
             {"plate", 33}

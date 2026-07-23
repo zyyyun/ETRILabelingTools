@@ -382,7 +382,14 @@ namespace WinFormsApp1
                     else if (label == "event")
                     {
                         // Event: CategoryId 25~32 → EventId 1~8
-                        eventId = catId >= 25 && catId <= 32 ? (catId - 24) : trackId;
+                        string categoryName = tempCategoryMap.TryGetValue(catId, out var category)
+                            ? category.Name
+                            : null;
+                        eventId = LabelCatalogHelper.GetEventIdFromImportedCategory(catId, categoryName);
+                        if (eventId == 0)
+                        {
+                            eventId = trackId;
+                        }
                     }
 
                     var box = new BoundingBox

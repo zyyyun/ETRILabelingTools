@@ -5,7 +5,8 @@ namespace WinFormsApp1
     public static class LabelCatalogHelper
     {
         public static readonly string[] VehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
-        public static readonly string[] EventTypes = { "contact", "exchange", "board", "final_exchange", "disembark", "controlled_delivery", "camouflage", "throw" };
+        public static readonly string[] EventTypes = { "contact", "throw", "final_exchange", "get on", "get off", "suspect", "controlled_delivery" };
+        private static readonly string[] LegacyEventTypes = { "contact", "exchange", "board", "final_exchange", "disembark", "controlled_delivery", "camouflage", "throw" };
 
         public static string[] GetEventComboItems()
         {
@@ -39,6 +40,50 @@ namespace WinFormsApp1
         {
             int index = Array.IndexOf(EventTypes, eventName);
             return index >= 0 ? 25 + index : 25;
+        }
+
+        public static int GetEventIdFromImportedCategory(int categoryId, string? categoryName)
+        {
+            int eventId = GetEventId(NormalizeImportedEventType(categoryName));
+            if (eventId > 0)
+            {
+                return eventId;
+            }
+
+            // JSON without category names predates the renamed catalog, so retain its numeric meaning.
+            string? legacyEventType = categoryId >= 25 && categoryId <= 32
+                ? LegacyEventTypes[categoryId - 25]
+                : null;
+            return GetEventId(NormalizeImportedEventType(legacyEventType));
+        }
+
+        private static int GetEventId(string? eventType)
+        {
+            int index = Array.IndexOf(EventTypes, eventType);
+            return index >= 0 ? index + 1 : 0;
+        }
+
+        private static string? NormalizeImportedEventType(string? eventType)
+        {
+            if (string.IsNullOrWhiteSpace(eventType))
+            {
+                return null;
+            }
+
+            string normalized = eventType.Trim().ToLowerInvariant();
+            if (normalized.StartsWith("event_", StringComparison.Ordinal))
+            {
+                normalized = normalized.Substring("event_".Length);
+            }
+
+            return normalized switch
+            {
+                "exchange" => "throw",
+                "board" => "get on",
+                "disembark" => "get off",
+                "camouflage" => "suspect",
+                _ => normalized
+            };
         }
 
         public static string GetVehicleCategoryName(int vehicleId, string vehiclePartType)
