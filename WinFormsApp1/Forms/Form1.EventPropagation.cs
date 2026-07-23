@@ -443,9 +443,7 @@ namespace WinFormsApp1
                 EventRectanglePropagation = batch
             });
 
-            InvalidateBoxCache();
-            UpdateBoxCount();
-            UpdateBboxListDisplay();
+            RefreshEventSurfaces();
             return;
 
             if (box?.Label == "event")
@@ -533,6 +531,16 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[Event 전파] 업데이트할 박스 없음 (이미 존재하거나 범위 밖)");
             }
+        }
+
+        private void RefreshEventSurfaces()
+        {
+            InvalidateBoxCache();
+            UpdateBoxCount();
+            UpdateBboxListDisplay();
+            UpdateEventListDisplay();
+            UpdateWaypointListView();
+            pictureBoxVideo.Invalidate();
         }
     }
 }

@@ -2771,12 +2771,17 @@ namespace WinFormsApp1
             AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
             
             // ?????좎룞????좎럥?믣뜝???좎럩??(??좎럩????좎럡援????? ??좎럩????좎룞??)
+            bool deletedEventBox = string.Equals(selectedBox.Label, "event", StringComparison.OrdinalIgnoreCase);
             selectedBox.IsDeleted = true;
             
             selectedBox = null;
             ClearSidebarHighlights(); // ????좎럩???좎럩????λ뜃由??
             UpdateBoxCount();
             UpdateBboxListDisplay();
+            if (deletedEventBox)
+            {
+                RefreshEventSurfaces();
+            }
             pictureBoxVideo.Invalidate();
         }
 
