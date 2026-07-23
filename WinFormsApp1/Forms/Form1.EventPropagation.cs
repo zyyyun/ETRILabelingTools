@@ -425,18 +425,21 @@ namespace WinFormsApp1
         /// <summary>
         /// Event 박스가 중간 프레임에서 수정되었을 때 해당 프레임부터 Exit까지 전파
         /// </summary>
-        private void PropagateEventBoxFromCurrentFrame(BoundingBox box, Rectangle sourceBefore)
+        private void PropagateEventBoxFromCurrentFrame(BoundingBox box, Rectangle sourceBefore, bool wasManuallyAdjustedBeforeEdit)
         {
             if (box == null || !string.Equals(box.Label, "event", StringComparison.OrdinalIgnoreCase))
                 return;
 
             var plan = EventWaypointBoxPropagationHelper.PlanPropagation(
                 box, boundingBoxes, waypointMarkers, manuallyAdjustedFrames);
-            if (plan.Updates.Count == 0 && plan.Additions.Count == 0)
-                return;
-
-            var batch = EventRectanglePropagationUndoHelper.CreateBatch(box, sourceBefore, plan);
-            EventRectanglePropagationUndoHelper.ApplyForward(boundingBoxes, batch);
+            var batch = EventRectanglePropagationUndoHelper.CreateBatch(
+                box,
+                sourceBefore,
+                plan,
+                TrackingIdentityHelper.GetIdentityKey(box),
+                box.FrameIndex,
+                wasManuallyAdjustedBeforeEdit);
+            EventRectanglePropagationUndoHelper.ApplyForward(boundingBoxes, batch, manuallyAdjustedFrames);
             AddUndoAction(new UndoAction
             {
                 Type = UndoActionType.EventRectanglePropagation,
@@ -444,93 +447,6 @@ namespace WinFormsApp1
             });
 
             RefreshEventSurfaces();
-            return;
-
-            if (box?.Label == "event")
-            {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[Event Lifetime Guard] Manual-tracking-first mode: PropagateEventBoxFromCurrentFrame skipped for instance={box.EventInstanceId}, frame={box.FrameIndex}");
-                return;
-            }
-            // Event 라벨이 아니면 전파하지 않음
-            if (box.Label != "event")
-                return;
-
-            // 현재 박스가 속한 Waypoint 찾기
-            var waypoint = waypointMarkers.FirstOrDefault(w =>
-                box.FrameIndex >= w.EntryFrame &&
-                box.FrameIndex <= w.ExitFrame);
-
-            if (waypoint == null)
-            {
-                System.Diagnostics.Debug.WriteLine($"[Event 전파 실패] 프레임 {box.FrameIndex}에 해당하는 Waypoint를 찾을 수 없습니다.");
-                return;
-            }
-
-            int startFrame = box.FrameIndex + 1; // 다음 프레임부터
-            int endFrame = waypoint.ExitFrame;
-
-            // 현재 프레임이 Exit 프레임이면 전파할 필요 없음
-            if (box.FrameIndex >= endFrame)
-                return;
-
-            System.Diagnostics.Debug.WriteLine($"[Event 전파] 프레임 {box.FrameIndex}에서 수정 감지, {startFrame}~{endFrame}까지 전파 시작");
-
-            // 현재 프레임 이후의 동일한 Event 박스들을 찾아서 업데이트
-            var boxesToUpdate = boundingBoxes.Where(b =>
-                b.FrameIndex > box.FrameIndex &&
-                b.FrameIndex <= endFrame &&
-                b.Label == "event" &&
-                b.EventId == box.EventId).ToList();
-
-            int updatedCount = 0;
-            foreach (var targetBox in boxesToUpdate)
-            {
-                targetBox.Rectangle = box.Rectangle;
-                updatedCount++;
-            }
-
-            // 업데이트된 박스가 없으면 새로 생성
-            if (updatedCount == 0)
-            {
-                for (int frame = startFrame; frame <= endFrame; frame++)
-                {
-                    bool exists = boundingBoxes.Any(b =>
-                        b.FrameIndex == frame &&
-                        b.Label == "event" &&
-                        b.EventId == box.EventId);
-
-                    if (!exists)
-                    {
-                        var newBox = new BoundingBox
-                        {
-                            Rectangle = box.Rectangle,
-                            Label = box.Label,
-                            FrameIndex = frame,
-                            PersonId = box.PersonId,
-                            VehicleId = box.VehicleId,
-                            EventId = box.EventId,
-                            EventInstanceId = box.EventInstanceId,
-                            Action = "waypoint"
-                        };
-                        boundingBoxes.Add(newBox);
-                        updatedCount++;
-                    }
-                }
-            }
-
-            if (updatedCount > 0)
-            {
-                InvalidateBoxCache();
-                UpdateBoxCount();
-                UpdateBboxListDisplay();
-                
-                System.Diagnostics.Debug.WriteLine($"[Event 전파 완료] {updatedCount}개 프레임 업데이트됨 ({startFrame}~{endFrame})");
-            }
-            else
-            {
-                System.Diagnostics.Debug.WriteLine($"[Event 전파] 업데이트할 박스 없음 (이미 존재하거나 범위 밖)");
-            }
         }
 
         private void RefreshEventSurfaces()

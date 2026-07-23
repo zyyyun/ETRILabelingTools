@@ -34,6 +34,7 @@ namespace WinFormsApp1
         public List<EventIdChange> EventIdChanges { get; set; } = new List<EventIdChange>();
         public EventWaypointMarkerChange? EventWaypointMarkerChange { get; set; }
         public EventRectanglePropagationBatch EventRectanglePropagation { get; set; }
+        public bool IsTombstone { get; set; }
     }
 
 

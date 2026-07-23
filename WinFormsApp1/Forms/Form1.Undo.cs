@@ -40,8 +40,19 @@ namespace WinFormsApp1
                     break;
 
                 case UndoActionType.RemoveBox:
-                    boundingBoxes.Add(action.Box);
+                    if (action.IsTombstone)
+                    {
+                        EventTombstoneUndoHelper.ApplyUndo(action.Box);
+                    }
+                    else
+                    {
+                        boundingBoxes.Add(action.Box);
+                    }
                     InvalidateBoxCache();
+                    if (action.IsTombstone && string.Equals(action.Box.Label, "event", StringComparison.OrdinalIgnoreCase))
+                    {
+                        RefreshEventSurfaces();
+                    }
                     break;
 
                 case UndoActionType.ModifyBox:
@@ -84,7 +95,7 @@ namespace WinFormsApp1
                     break;
 
                 case UndoActionType.EventRectanglePropagation:
-                    EventRectanglePropagationUndoHelper.ApplyUndo(boundingBoxes, action.EventRectanglePropagation);
+                    EventRectanglePropagationUndoHelper.ApplyUndo(boundingBoxes, action.EventRectanglePropagation, manuallyAdjustedFrames);
                     InvalidateBoxCache();
                     UpdateEventListDisplay();
                     UpdateWaypointListView();
@@ -115,10 +126,21 @@ namespace WinFormsApp1
                     break;
 
                 case UndoActionType.RemoveBox:
-                    boundingBoxes.Remove(action.Box);
+                    if (action.IsTombstone)
+                    {
+                        EventTombstoneUndoHelper.ApplyRedo(action.Box);
+                    }
+                    else
+                    {
+                        boundingBoxes.Remove(action.Box);
+                    }
                     InvalidateBoxCache();
                     if (selectedBox == action.Box)
                         selectedBox = null;
+                    if (action.IsTombstone && string.Equals(action.Box.Label, "event", StringComparison.OrdinalIgnoreCase))
+                    {
+                        RefreshEventSurfaces();
+                    }
                     break;
 
                 case UndoActionType.ModifyBox:
@@ -161,7 +183,7 @@ namespace WinFormsApp1
                     break;
 
                 case UndoActionType.EventRectanglePropagation:
-                    EventRectanglePropagationUndoHelper.ApplyForward(boundingBoxes, action.EventRectanglePropagation);
+                    EventRectanglePropagationUndoHelper.ApplyForward(boundingBoxes, action.EventRectanglePropagation, manuallyAdjustedFrames);
                     InvalidateBoxCache();
                     UpdateEventListDisplay();
                     UpdateWaypointListView();

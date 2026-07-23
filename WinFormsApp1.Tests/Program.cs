@@ -70,6 +70,9 @@ static class Program
             ,("event box propagation isolates different event instances", EventBoxPropagationIsolatesDifferentEventInstances)
             ,("event box propagation rejects ambiguous scopes without removals", EventBoxPropagationRejectsAmbiguousScopesWithoutRemovals)
             ,("event rectangle propagation undo redo is atomic", EventRectanglePropagationUndoRedoIsAtomic)
+            ,("event edit requires a geometry change", EventEditRequiresGeometryChange)
+            ,("event rectangle propagation restores manual source provenance", EventRectanglePropagationRestoresManualSourceProvenance)
+            ,("event tombstone undo redo retains the original box", EventTombstoneUndoRedoRetainsOriginalBox)
         };
 
         try
@@ -1243,6 +1246,57 @@ static class Program
         AssertEqual(new System.Drawing.Rectangle(10, 20, 30, 40), source.Rectangle, "One redo must reapply the source rectangle.");
         AssertEqual(source.Rectangle, target.Rectangle, "One redo must reapply the existing target rectangle.");
         AssertTrue(boxes.Contains(created), "One redo must restore the same derived box reference.");
+    }
+
+    private static void EventRectanglePropagationRestoresManualSourceProvenance()
+    {
+        var source = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(1, 2, 30, 40));
+        var sourceBefore = source.Rectangle;
+        source.Rectangle = new System.Drawing.Rectangle(10, 20, 30, 40);
+        var manuallyAdjustedFrames = new Dictionary<string, List<int>>
+        {
+            [TrackingIdentityHelper.GetIdentityKey(source)] = new List<int> { source.FrameIndex }
+        };
+        var batch = EventRectanglePropagationUndoHelper.CreateBatch(
+            source,
+            sourceBefore,
+            new EventWaypointBoxPropagationPlan(
+                Array.Empty<EventWaypointBoxUpdate>(),
+                Array.Empty<EventWaypointBoxAddition>()),
+            TrackingIdentityHelper.GetIdentityKey(source),
+            source.FrameIndex,
+            wasManuallyAdjustedBeforeEdit: false);
+        var boxes = new List<BoundingBox> { source };
+
+        EventRectanglePropagationUndoHelper.ApplyUndo(boxes, batch, manuallyAdjustedFrames);
+        AssertEqual(sourceBefore, source.Rectangle, "A source-only batch must restore the edited source rectangle.");
+        AssertTrue(!manuallyAdjustedFrames.ContainsKey(TrackingIdentityHelper.GetIdentityKey(source)), "Undo must remove the source manual-frame marker created by the edit.");
+
+        EventRectanglePropagationUndoHelper.ApplyForward(boxes, batch, manuallyAdjustedFrames);
+        AssertEqual(new System.Drawing.Rectangle(10, 20, 30, 40), source.Rectangle, "Redo must reapply a source-only edit.");
+        AssertTrue(manuallyAdjustedFrames.TryGetValue(TrackingIdentityHelper.GetIdentityKey(source), out var frames) && frames.Contains(source.FrameIndex), "Redo must restore the source manual-frame marker with the rectangle batch.");
+    }
+
+    private static void EventEditRequiresGeometryChange()
+    {
+        var original = new System.Drawing.Rectangle(1, 2, 30, 40);
+        AssertTrue(!EventRectanglePropagationUndoHelper.HasGeometryChanged(original, original), "A click without movement or resize must not become an event edit.");
+        AssertTrue(EventRectanglePropagationUndoHelper.HasGeometryChanged(original, new System.Drawing.Rectangle(2, 2, 30, 40)), "A changed rectangle must remain eligible for an event edit.");
+    }
+
+    private static void EventTombstoneUndoRedoRetainsOriginalBox()
+    {
+        var tombstone = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(1, 2, 30, 40));
+        var boxes = new List<BoundingBox> { tombstone };
+        tombstone.IsDeleted = true;
+
+        EventTombstoneUndoHelper.ApplyUndo(tombstone);
+        AssertTrue(ReferenceEquals(tombstone, boxes.Single()), "Undo must restore the original tombstone object rather than add a clone.");
+        AssertTrue(!tombstone.IsDeleted, "Undo must reactivate the original event tombstone.");
+
+        EventTombstoneUndoHelper.ApplyRedo(tombstone);
+        AssertTrue(ReferenceEquals(tombstone, boxes.Single()), "Redo must retain the original tombstone object.");
+        AssertTrue(tombstone.IsDeleted, "Redo must tombstone the original event box again.");
     }
 
     private static BoundingBox CreateEventBox(int frameIndex, string eventInstanceId, System.Drawing.Rectangle rectangle)

@@ -419,17 +419,19 @@ namespace WinFormsApp1
                 isResizing = false;
                 currentResizeHandle = ResizeHandle.None;
 
-                RecordManuallyAdjustedFrame(selectedBox);
+                bool geometryChanged = selectedBox != null && EventRectanglePropagationUndoHelper.HasGeometryChanged(originalResizeRect, selectedBox.Rectangle);
 
                 InvalidateBoxCache();
                 UpdateObjectInfo(selectedBox);
                 UpdateBboxListDisplay();
 
-                if (selectedBox != null && selectedBox.Label == "event")
+                if (geometryChanged && selectedBox != null && selectedBox.Label == "event")
                 {
-                    PropagateEventBoxFromCurrentFrame(selectedBox, originalResizeRect);
+                    bool wasManuallyAdjustedBeforeEdit = WasManuallyAdjustedFrame(selectedBox);
+                    RecordManuallyAdjustedFrame(selectedBox);
+                    PropagateEventBoxFromCurrentFrame(selectedBox, originalResizeRect, wasManuallyAdjustedBeforeEdit);
                 }
-                else
+                else if (geometryChanged && selectedBox != null)
                 {
                     var undoBox = CloneBoundingBox(selectedBox);
                     undoBox.Rectangle = originalResizeRect;
@@ -451,16 +453,14 @@ namespace WinFormsApp1
                 {
                     isDragging = false;
 
-                    if (selectedBox != null)
+                    bool geometryChanged = selectedBox != null && EventRectanglePropagationUndoHelper.HasGeometryChanged(originalDragRect, selectedBox.Rectangle);
+                    if (geometryChanged && selectedBox != null && selectedBox.Label == "event")
                     {
+                        bool wasManuallyAdjustedBeforeEdit = WasManuallyAdjustedFrame(selectedBox);
                         RecordManuallyAdjustedFrame(selectedBox);
+                        PropagateEventBoxFromCurrentFrame(selectedBox, originalDragRect, wasManuallyAdjustedBeforeEdit);
                     }
-
-                    if (selectedBox != null && selectedBox.Label == "event")
-                    {
-                        PropagateEventBoxFromCurrentFrame(selectedBox, originalDragRect);
-                    }
-                    else if (selectedBox != null)
+                    else if (geometryChanged && selectedBox != null)
                     {
                         var undoBox = CloneBoundingBox(selectedBox);
                         undoBox.Rectangle = originalDragRect;
@@ -2768,7 +2768,12 @@ namespace WinFormsApp1
                 return;
             }
             
-            AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
+            AddUndoAction(new UndoAction
+            {
+                Type = UndoActionType.RemoveBox,
+                Box = string.Equals(selectedBox.Label, "event", StringComparison.OrdinalIgnoreCase) ? selectedBox : CloneBoundingBox(selectedBox),
+                IsTombstone = string.Equals(selectedBox.Label, "event", StringComparison.OrdinalIgnoreCase)
+            });
             
             // ?????좎룞????좎럥?믣뜝???좎럩??(??좎럩????좎럡援????? ??좎럩????좎룞??)
             bool deletedEventBox = string.Equals(selectedBox.Label, "event", StringComparison.OrdinalIgnoreCase);
@@ -2885,6 +2890,17 @@ private WaypointMarker FindWaypointForBox(BoundingBox box)
         }
         
         // ??獄쏅벡?????좎룞??????좎럥?ゅ뜝???좎럥猷?疫꿸퀡以?
+        private bool WasManuallyAdjustedFrame(BoundingBox box)
+        {
+            if (box == null)
+            {
+                return false;
+            }
+
+            string key = GetDrawingIdentityKey(box);
+            return manuallyAdjustedFrames.TryGetValue(key, out var frames) && frames.Contains(box.FrameIndex);
+        }
+
         private void RecordDisappearanceIntent(BoundingBox box)
         {
             if (box == null) return;
