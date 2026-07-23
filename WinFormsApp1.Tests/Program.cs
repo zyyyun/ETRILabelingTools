@@ -64,6 +64,11 @@ static class Program
             ,("plate deletion stays within linked parent waypoint", PlateDeletionStaysWithinLinkedParentWaypoint)
             ,("sub annotation deletion rejects ambiguous parent waypoints", SubAnnotationDeletionRejectsAmbiguousParentWaypoints)
             ,("deleted child annotations cannot create export links", DeletedChildAnnotationsCannotCreateExportLinks)
+            ,("event box propagation updates only the forward same-instance range", EventBoxPropagationUpdatesForwardSameInstanceRange)
+            ,("event box propagation respects later manual adjustments", EventBoxPropagationRespectsLaterManualAdjustments)
+            ,("event box propagation preserves deleted tombstones", EventBoxPropagationPreservesDeletedTombstones)
+            ,("event box propagation isolates different event instances", EventBoxPropagationIsolatesDifferentEventInstances)
+            ,("event box propagation rejects ambiguous scopes without removals", EventBoxPropagationRejectsAmbiguousScopesWithoutRemovals)
         };
 
         try
@@ -1118,6 +1123,123 @@ static class Program
         AssertTrue(activeBoxes.Contains(body), "The parent body annotation must remain exportable.");
         AssertTrue(FaceLinkHelper.TryCreateFaceLink(deletedFace, annotationsByBox.Values, annotationsByBox) == null, "A deleted face without an exported annotation must not create a face link.");
     }
+
+    private static void EventBoxPropagationUpdatesForwardSameInstanceRange()
+    {
+        var source = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(10, 20, 30, 40));
+        var beforeSource = CreateEventBox(9, "instance-a", new System.Drawing.Rectangle(1, 2, 3, 4));
+        var existingTarget = CreateEventBox(11, "instance-a", new System.Drawing.Rectangle(5, 6, 7, 8));
+        var boxes = new List<BoundingBox> { beforeSource, source, existingTarget };
+
+        var plan = EventWaypointBoxPropagationHelper.PlanPropagation(
+            source,
+            boxes,
+            new[] { CreateEventWaypoint("instance-a", 8, 13) },
+            new Dictionary<string, List<int>>());
+
+        AssertEqual(1, plan.Updates.Count, "Only the existing same-instance box after the source frame should update.");
+        AssertTrue(ReferenceEquals(existingTarget, plan.Updates[0].Box), "Updates must retain stable target box references.");
+        AssertEqual(source.Rectangle, plan.Updates[0].Rectangle, "The planned update must use the edited source rectangle.");
+        AssertEqual(2, plan.Additions.Count, "Missing forward frames through the exit frame should receive derived boxes.");
+        AssertTrue(plan.Additions.All(addition => addition.Box.FrameIndex is 12 or 13), "Only missing frames after the source through exit should be created.");
+        AssertTrue(plan.Updates.All(update => update.Box.FrameIndex > source.FrameIndex), "No frame before or at the source frame may be updated.");
+        AssertEqual(new System.Drawing.Rectangle(1, 2, 3, 4), beforeSource.Rectangle, "Earlier frames must remain unchanged.");
+    }
+
+    private static void EventBoxPropagationRespectsLaterManualAdjustments()
+    {
+        var source = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(10, 20, 30, 40));
+        var manualTarget = CreateEventBox(11, "instance-a", new System.Drawing.Rectangle(80, 81, 82, 83));
+        var plan = EventWaypointBoxPropagationHelper.PlanPropagation(
+            source,
+            new[] { source, manualTarget },
+            new[] { CreateEventWaypoint("instance-a", 10, 12) },
+            new Dictionary<string, List<int>>
+            {
+                [TrackingIdentityHelper.GetIdentityKey(source)] = new List<int> { 11 }
+            });
+
+        AssertTrue(plan.Updates.All(update => update.Box.FrameIndex != 11), "A later manually adjusted frame must not be updated.");
+        AssertTrue(plan.Additions.All(addition => addition.Box.FrameIndex != 11), "A later manually adjusted frame must not be recreated.");
+        AssertEqual(new System.Drawing.Rectangle(80, 81, 82, 83), manualTarget.Rectangle, "Manual target rectangles must remain unchanged.");
+        AssertTrue(plan.Additions.Any(addition => addition.Box.FrameIndex == 12), "Unprotected later frames should remain eligible for creation.");
+    }
+
+    private static void EventBoxPropagationPreservesDeletedTombstones()
+    {
+        var source = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(10, 20, 30, 40));
+        var tombstone = CreateEventBox(11, "instance-a", new System.Drawing.Rectangle(1, 1, 1, 1));
+        tombstone.IsDeleted = true;
+        var plan = EventWaypointBoxPropagationHelper.PlanPropagation(
+            source,
+            new[] { source, tombstone },
+            new[] { CreateEventWaypoint("instance-a", 10, 12) },
+            new Dictionary<string, List<int>>());
+
+        AssertTrue(plan.Updates.All(update => !ReferenceEquals(update.Box, tombstone)), "Deleted tombstones must not be updated.");
+        AssertTrue(plan.Additions.All(addition => addition.Box.FrameIndex != 11), "Deleted tombstones must block replacement creation at their frame.");
+        AssertTrue(plan.Additions.Any(addition => addition.Box.FrameIndex == 12), "A deleted frame must not suppress propagation for later frames.");
+        AssertTrue(tombstone.IsDeleted, "Planning must not clear a tombstone.");
+    }
+
+    private static void EventBoxPropagationIsolatesDifferentEventInstances()
+    {
+        var source = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(10, 20, 30, 40));
+        var differentInstance = CreateEventBox(11, "instance-b", new System.Drawing.Rectangle(90, 91, 92, 93));
+        var plan = EventWaypointBoxPropagationHelper.PlanPropagation(
+            source,
+            new[] { source, differentInstance },
+            new[] { CreateEventWaypoint("instance-a", 10, 12) },
+            new Dictionary<string, List<int>>());
+
+        AssertTrue(plan.Updates.All(update => !ReferenceEquals(update.Box, differentInstance)), "An EventId-only match must never update another EventInstanceId.");
+        AssertEqual(new System.Drawing.Rectangle(90, 91, 92, 93), differentInstance.Rectangle, "Different event instances must retain their rectangles.");
+        AssertTrue(plan.Additions.Any(addition => addition.Box.FrameIndex == 11), "A different instance must not block creation for the selected instance.");
+    }
+
+    private static void EventBoxPropagationRejectsAmbiguousScopesWithoutRemovals()
+    {
+        var source = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(10, 20, 30, 40));
+        var plan = EventWaypointBoxPropagationHelper.PlanPropagation(
+            source,
+            new[] { source },
+            new[]
+            {
+                CreateEventWaypoint("instance-a", 10, 12),
+                CreateEventWaypoint("instance-a", 10, 13)
+            },
+            new Dictionary<string, List<int>>());
+
+        AssertEqual(0, plan.Updates.Count, "Ambiguous event waypoint scopes must fail closed.");
+        AssertEqual(0, plan.Additions.Count, "Ambiguous event waypoint scopes must not create boxes.");
+        AssertTrue(typeof(EventWaypointBoxPropagationPlan).GetProperty("Removals") == null, "D-05: propagation plans must not expose a deletion operation.");
+    }
+
+    private static BoundingBox CreateEventBox(int frameIndex, string eventInstanceId, System.Drawing.Rectangle rectangle)
+    {
+        return new BoundingBox
+        {
+            Label = "event",
+            EventId = 3,
+            EventInstanceId = eventInstanceId,
+            Action = "waypoint",
+            FrameIndex = frameIndex,
+            Rectangle = rectangle
+        };
+    }
+
+    private static WaypointMarker CreateEventWaypoint(string eventInstanceId, int entryFrame, int exitFrame)
+    {
+        return new WaypointMarker
+        {
+            Label = "event",
+            ObjectId = 3,
+            EventInstanceId = eventInstanceId,
+            EntryFrame = entryFrame,
+            ExitFrame = exitFrame
+        };
+    }
+
     private static void AssertEqual<T>(T expected, T actual, string message)
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))
