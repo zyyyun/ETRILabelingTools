@@ -34,12 +34,17 @@ created: 2026-07-23
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 06-01-01 | 01 | 1 | D-01, D-02, D-03 | T-06-01 | Only same-instance derived boxes after the source frame update; later manual frames remain unchanged. | unit | `dotnet run --project WinFormsApp1.Tests/WinFormsApp1.Tests.csproj --no-restore` | Wave 0 | pending |
 | 06-01-02 | 01 | 1 | D-04, D-05 | T-06-02 | A deleted frame remains deleted and no later box is removed by a single-frame deletion. | unit | `dotnet run --project WinFormsApp1.Tests/WinFormsApp1.Tests.csproj --no-restore` | Wave 0 | pending |
-| 06-02-01 | 02 | 2 | D-06 | T-06-03 | Drag, resize, and single-frame delete refresh the canvas, Event list, and waypoint list. | manual UI smoke | N/A | Existing UI | pending |
+| 06-02-01 | 02 | 2 | D-01, D-02, D-03 | T-06-03 | One event drag/resize is one grouped Undo/Redo transaction: source rectangle, helper-updated rectangles, and helper-created boxes reverse and reapply together. | deterministic harness | `dotnet run --project WinFormsApp1.Tests/WinFormsApp1.Tests.csproj --no-restore` | Wave 2 | pending |
+| 06-02-02 | 02 | 2 | D-06 | T-06-04 | Drag, resize, and single-frame delete refresh the canvas, Event list, and waypoint list. | manual UI smoke | N/A | Existing UI | pending |
 
 ## Wave 0 Requirements
 
 - [ ] Add helper-level regression cases to `WinFormsApp1.Tests/Program.cs` for forward-only propagation, manual-frame protection, tombstone preservation, and `EventInstanceId` isolation.
 - [ ] Expose a non-UI propagation seam in `WinFormsApp1/Logic/EventWaypointBoxPropagationHelper.cs` or extend `EventWaypointUpdateHelper.cs` so the cases can run without a WinForms form.
+
+## Wave 2 Requirements
+
+- [ ] Add a deterministic grouped-history regression in `WinFormsApp1.Tests/Program.cs`: after one simulated event edit with a source snapshot, one existing target, and one created target, one Undo restores both pre-edit rectangles and removes the created box; one Redo reapplies all three mutations. The regression must fail if a separate source `ModifyBox` action is required.
 
 ## Manual-Only Verifications
 

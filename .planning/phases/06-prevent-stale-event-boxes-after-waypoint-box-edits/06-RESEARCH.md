@@ -210,22 +210,16 @@ RefreshEventEditSurfaces();
 
 ## Assumptions Log
 
-| # | Claim | Section | Risk if Wrong |
+| # | Claim | Section | Resolution |
 |---|---|---|---|
-| A1 | Existing undo infrastructure can be extended to atomically restore a propagation batch without a larger refactor. | Common Pitfalls | Undo may leave propagated rectangles inconsistent; inspect `Form1.Undo.cs` before choosing task shape. |
-| A2 | In-memory manual-frame provenance is acceptable after save/reload because the locked decisions do not require provenance persistence. | Summary | A later edit after reload could overwrite a previously manual correction; user confirmation is needed if cross-session protection is required. |
+| A1 | Event edits require a dedicated grouped history action because `ModifyBox` is a single-box entry and is pushed before propagation in the resize path. | Common Pitfalls | Resolved: replace or merge that entry so the source snapshot, propagated updates, and additions are one transaction. [VERIFIED: `Form1.Drawing.cs:419-431`, `Form1.Undo.cs:47-60`; DECISION: Phase 6 revision] |
+| A2 | Manual-frame provenance remains in memory only in Phase 6. | Summary | Resolved: preserve JSON compatibility; cross-session provenance is deferred. [VERIFIED: `Form1.cs:1341-1342`, `Form1.Json.cs:1164-1165`; DECISION: Phase 6 revision] |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **수동 보정 보호를 저장/재시작 이후에도 유지해야 하는가?**
-   - What we know: 현재 `manuallyAdjustedFrames`는 `Form1`의 메모리 필드이고 export는 `BoundingBox`의 비삭제 항목만 변환한다. [VERIFIED: codebase grep — `Form1.cs:1341-1342`, `Form1.Json.cs:1164-1165`]
-   - What's unclear: Phase 6의 “durable”이 세션 내 지속인지 JSON round-trip 지속인지. [ASSUMED]
-   - Recommendation: 명시적 요구가 없으면 JSON schema 변경을 피하고 현재 세션 상태로 구현한다. 재시작 보존이 필요하다고 확인되면 optional provenance metadata와 backward-compatible loader를 별도 결정으로 추가한다. [ASSUMED]
+1. **Manual-correction provenance persistence:** Phase 6 uses the existing in-memory `manuallyAdjustedFrames` collection keyed by `event_instance_{EventInstanceId}`. It does not add JSON fields or alter import/export; therefore, provenance does not survive application restart. Cross-session provenance is explicitly deferred, while same-session D-03 protection is required. [VERIFIED: `Form1.cs:1341-1342`, `Form1.Json.cs:1164-1165`; DECISION: Phase 6 revision]
 
-2. **전파 batch의 undo 범위는 무엇인가?**
-   - What we know: source 편집은 현재 한 box snapshot을 기록한다. [VERIFIED: codebase grep — `Form1.Drawing.cs:419-423`]
-   - What's unclear: `UndoAction`이 여러 update/create를 하나로 되돌릴 수 있는지. [ASSUMED]
-   - Recommendation: 구현 시작 시 `Form1.Undo.cs`를 확인하고, 지원이 없으면 Phase 6 계획에 batch snapshot 확장을 포함한다. [ASSUMED]
+2. **Propagation-batch Undo scope:** One manual event-box drag or resize is one Undo/Redo transaction. The transaction includes the source box's before/after rectangle, every helper-planned existing-box rectangle mutation, and every helper-planned created box. The event-edit path must replace or merge the pre-existing `ModifyBox` entry in `Form1.Drawing.cs`; it must never push that entry and then add a second propagation action. Undo restores the source and all existing targets and removes created targets; Redo reapplies all three categories. [VERIFIED: `Form1.Drawing.cs:419-431`, `Form1.Undo.cs:47-60`; DECISION: Phase 6 revision]
 
 ## Environment Availability
 
