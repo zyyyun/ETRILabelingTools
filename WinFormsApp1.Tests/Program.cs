@@ -996,8 +996,8 @@ static class Program
 
     private static void EventCatalogIncludesNewValues()
     {
-        var expected = new[] { "contact", "throw", "final_exchange", "get on", "get off", "suspect", "controlled_delivery" };
-        AssertEqual(expected.Length, LabelCatalogHelper.EventTypes.Length, "Event catalog should contain 7 event types.");
+        var expected = new[] { "contact", "throw", "final_exchange", "get on", "get off", "suspect", "controlled_delivery", "camouflage" };
+        AssertEqual(expected.Length, LabelCatalogHelper.EventTypes.Length, "Event catalog should contain 8 event types.");
         for (int i = 0; i < expected.Length; i++)
         {
             AssertEqual(expected[i], LabelCatalogHelper.EventTypes[i], $"Event type at index {i} should match the expected catalog order.");
@@ -1006,12 +1006,13 @@ static class Program
         AssertEqual(25, LabelCatalogHelper.GetEventCategoryId("contact"), "contact should map to category id 25.");
         AssertEqual(26, LabelCatalogHelper.GetEventCategoryId("throw"), "throw should map to category id 26.");
         AssertEqual(31, LabelCatalogHelper.GetEventCategoryId("controlled_delivery"), "controlled_delivery should map to category id 31.");
+        AssertEqual(32, LabelCatalogHelper.GetEventCategoryId("camouflage"), "camouflage should map to category id 32.");
         AssertEqual(33, LabelCatalogHelper.GetPlateCategoryId(), "plate should map to category id 33.");
 
         AssertEqual(2, LabelCatalogHelper.GetEventIdFromImportedCategory(26, "exchange"), "Legacy exchange should migrate to throw.");
         AssertEqual(4, LabelCatalogHelper.GetEventIdFromImportedCategory(27, "board"), "Legacy board should migrate to get on.");
         AssertEqual(5, LabelCatalogHelper.GetEventIdFromImportedCategory(29, "disembark"), "Legacy disembark should migrate to get off.");
-        AssertEqual(6, LabelCatalogHelper.GetEventIdFromImportedCategory(31, "camouflage"), "Legacy camouflage should migrate to suspect.");
+        AssertEqual(8, LabelCatalogHelper.GetEventIdFromImportedCategory(31, "camouflage"), "Legacy camouflage should remain camouflage.");
         AssertEqual(2, LabelCatalogHelper.GetEventIdFromImportedCategory(32, "throw"), "Legacy throw should retain its event meaning.");
         AssertEqual(2, LabelCatalogHelper.GetEventIdFromImportedCategory(26, "throw"), "New category names must override legacy numeric positions.");
     }

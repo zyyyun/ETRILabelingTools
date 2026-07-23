@@ -5,7 +5,7 @@ namespace WinFormsApp1
     public static class LabelCatalogHelper
     {
         public static readonly string[] VehicleTypes = { "car", "motorcycle", "e_scooter", "bicycle" };
-        public static readonly string[] EventTypes = { "contact", "throw", "final_exchange", "get on", "get off", "suspect", "controlled_delivery" };
+        public static readonly string[] EventTypes = { "contact", "throw", "final_exchange", "get on", "get off", "suspect", "controlled_delivery", "camouflage" };
         private static readonly string[] LegacyEventTypes = { "contact", "exchange", "board", "final_exchange", "disembark", "controlled_delivery", "camouflage", "throw" };
 
         public static string[] GetEventComboItems()
@@ -81,7 +81,6 @@ namespace WinFormsApp1
                 "exchange" => "throw",
                 "board" => "get on",
                 "disembark" => "get off",
-                "camouflage" => "suspect",
                 _ => normalized
             };
         }
