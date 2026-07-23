@@ -60,6 +60,10 @@ static class Program
             ("independent plate lookup ignores vehicle body", IndependentPlateLookupIgnoresVehicleBody),
             ("vehicle waypoints merge overlaps and keep disjoint clips", VehicleWaypointsMergeOverlapsAndKeepDisjointClips),
             ("child rectangle follows tracked parent", ChildRectangleFollowsTrackedParent)
+            ,("face deletion stays within linked parent waypoint", FaceDeletionStaysWithinLinkedParentWaypoint)
+            ,("plate deletion stays within linked parent waypoint", PlateDeletionStaysWithinLinkedParentWaypoint)
+            ,("sub annotation deletion rejects ambiguous parent waypoints", SubAnnotationDeletionRejectsAmbiguousParentWaypoints)
+            ,("deleted child annotations cannot create export links", DeletedChildAnnotationsCannotCreateExportLinks)
         };
 
         try
@@ -1050,6 +1054,69 @@ static class Program
         AssertEqual(2f, DrawingStyleHelper.DefaultBoxPenWidth, "Normal box pen width should be reduced to 2.");
         AssertEqual(3f, DrawingStyleHelper.SelectedBoxPenWidth, "Selected box pen width should be reduced to 3.");
         AssertEqual(2f, DrawingStyleHelper.DraftBoxPenWidth, "Draft box pen width should be reduced to 2.");
+    }
+
+    private static void FaceDeletionStaysWithinLinkedParentWaypoint()
+    {
+        var selectedFace = new BoundingBox { Label = "person", PersonPartType = "face", PersonId = 5, LinkedPersonId = 5, FrameIndex = 12 };
+        var sameFaceLater = new BoundingBox { Label = "person", PersonPartType = "face", PersonId = 5, LinkedPersonId = 5, FrameIndex = 15 };
+        var sameFaceOutside = new BoundingBox { Label = "person", PersonPartType = "face", PersonId = 5, LinkedPersonId = 5, FrameIndex = 21 };
+        var otherFace = new BoundingBox { Label = "person", PersonPartType = "face", PersonId = 6, LinkedPersonId = 6, FrameIndex = 12 };
+        var body = new BoundingBox { Label = "person", PersonPartType = "body", PersonId = 5, FrameIndex = 12 };
+        var scope = SubAnnotationDeletionHelper.GetWaypointScopedSubAnnotations(
+            new[] { selectedFace, sameFaceLater, sameFaceOutside, otherFace, body },
+            new[] { new WaypointMarker { Label = "person", ObjectId = 5, EntryFrame = 10, ExitFrame = 20 } },
+            selectedFace);
+
+        AssertEqual(2, scope.Count, "Face deletion should include only same-person faces inside the parent waypoint.");
+        AssertTrue(scope.Contains(selectedFace) && scope.Contains(sameFaceLater), "Selected and later same-person faces should be included.");
+        AssertTrue(!scope.Contains(sameFaceOutside) && !scope.Contains(otherFace) && !scope.Contains(body), "Faces outside the range, other identities, and bodies must remain excluded.");
+    }
+
+    private static void PlateDeletionStaysWithinLinkedParentWaypoint()
+    {
+        var selectedPlate = new BoundingBox { Label = "vehicle", VehiclePartType = "plate", VehicleInstanceId = 7, LinkedVehicleInstanceId = 7, FrameIndex = 12 };
+        var samePlateLater = new BoundingBox { Label = "vehicle", VehiclePartType = "plate", VehicleInstanceId = 7, LinkedVehicleInstanceId = 7, FrameIndex = 18 };
+        var otherPlate = new BoundingBox { Label = "vehicle", VehiclePartType = "plate", VehicleInstanceId = 8, LinkedVehicleInstanceId = 8, FrameIndex = 12 };
+        var body = new BoundingBox { Label = "vehicle", VehiclePartType = "body", VehicleInstanceId = 7, FrameIndex = 12 };
+        var scope = SubAnnotationDeletionHelper.GetWaypointScopedSubAnnotations(
+            new[] { selectedPlate, samePlateLater, otherPlate, body },
+            new[] { new WaypointMarker { Label = "vehicle", ObjectId = 7, EntryFrame = 10, ExitFrame = 20 } },
+            selectedPlate);
+
+        AssertEqual(2, scope.Count, "Plate deletion should include only same-vehicle plates inside the parent waypoint.");
+        AssertTrue(scope.Contains(selectedPlate) && scope.Contains(samePlateLater), "Selected and later same-vehicle plates should be included.");
+        AssertTrue(!scope.Contains(otherPlate) && !scope.Contains(body), "Other vehicle plates and the vehicle body must remain excluded.");
+    }
+
+    private static void SubAnnotationDeletionRejectsAmbiguousParentWaypoints()
+    {
+        var face = new BoundingBox { Label = "person", PersonPartType = "face", PersonId = 5, LinkedPersonId = 5, FrameIndex = 12 };
+        var scope = SubAnnotationDeletionHelper.GetWaypointScopedSubAnnotations(
+            new[] { face },
+            new[]
+            {
+                new WaypointMarker { Label = "person", ObjectId = 5, EntryFrame = 10, ExitFrame = 20 },
+                new WaypointMarker { Label = "person", ObjectId = 5, EntryFrame = 11, ExitFrame = 21 }
+            },
+            face);
+
+        AssertEqual(0, scope.Count, "Ambiguous parent waypoints must fail closed without a deletion scope.");
+    }
+
+    private static void DeletedChildAnnotationsCannotCreateExportLinks()
+    {
+        var body = new BoundingBox { Label = "person", PersonPartType = "body", PersonId = 5, FrameIndex = 12 };
+        var deletedFace = new BoundingBox { Label = "person", PersonPartType = "face", PersonId = 5, LinkedPersonId = 5, FrameIndex = 12, IsDeleted = true };
+        var activeBoxes = new[] { body, deletedFace }.Where(box => !box.IsDeleted).ToList();
+        var annotationsByBox = new Dictionary<BoundingBox, AnnotationData>
+        {
+            [body] = new AnnotationData { Id = 101, TrackId = 5 }
+        };
+
+        AssertEqual(1, activeBoxes.Count, "Only the active parent body should reach export annotation construction.");
+        AssertTrue(activeBoxes.Contains(body), "The parent body annotation must remain exportable.");
+        AssertTrue(FaceLinkHelper.TryCreateFaceLink(deletedFace, annotationsByBox.Values, annotationsByBox) == null, "A deleted face without an exported annotation must not create a face link.");
     }
     private static void AssertEqual<T>(T expected, T actual, string message)
     {
