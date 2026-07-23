@@ -1524,7 +1524,7 @@ namespace WinFormsApp1
         {
             // ?????좎룞???좎룞?? ??좎룞?? 獄쏅벡?ゅ뜝?燁삳똻???
             int activeCount = boundingBoxes.Count(b => !b.IsDeleted);
-            labelBoxCount.Text = $"獄쏅벡??揶쏆뮇?? {activeCount}";
+            labelBoxCount.Text = $"활성 박스 수: {activeCount}";
         }
 
         // ????좎럥????좎럥?????좎럩??JSON ??좎럩?ゅ뜝???좎럩??
@@ -1535,7 +1535,7 @@ namespace WinFormsApp1
             if (!string.IsNullOrEmpty(currentJsonFile))
             {
                 string fileName = Path.GetFileName(currentJsonFile);
-                labelCurrentJsonFile.Text = $"??좎룞??{fileName}";
+                labelCurrentJsonFile.Text = $"현재 JSON: {fileName}";
             }
             else
             {
@@ -1778,9 +1778,9 @@ namespace WinFormsApp1
                     if (waypointScopedAttrs.Count > 0)
                     {
                         // ??좎럩苑????癰귣떯由??ル뿪苡???좎럩??(????좎럩苑??餓κ쑬而?퐛?됱몵???닌됲뀋)
-                        var attrLines = waypointScopedAttrs.Select(kvp => $"  ??{kvp.Key}: {kvp.Value}");
+                        var attrLines = waypointScopedAttrs.Select(kvp => $"  • {kvp.Key}: {kvp.Value}");
                         string attrText = string.Join("\n", attrLines);
-                        labelText += $"\n??좎럩苑?\n{attrText}";
+                        labelText = labelText.Split('\n')[0] + $"\n속성\n{attrText}";
                     }
                 }
             }
@@ -1820,7 +1820,7 @@ namespace WinFormsApp1
             }
             else
             {
-                MessageBox.Show($"Person ??좎럥爰???좎?源?? ??좎럩??ID: {currentAssignedId}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Person 라벨이 선택되었습니다. ID: {currentAssignedId}", "정보", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -1834,7 +1834,7 @@ namespace WinFormsApp1
             }
             else
             {
-                MessageBox.Show($"Vehicle ??좎럥爰???좎?源?? ??좎럩??ID: {currentAssignedId}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Vehicle 라벨이 선택되었습니다. ID: {currentAssignedId}", "정보", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -1848,7 +1848,7 @@ namespace WinFormsApp1
             }
             else
             {
-                MessageBox.Show($"Event ??좎럥爰???좎?源?? ??좎럩??ID: {currentAssignedId}", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"Event 라벨이 선택되었습니다. ID: {currentAssignedId}", "정보", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
@@ -2079,7 +2079,7 @@ namespace WinFormsApp1
         {
             isPersonExpanded = !isPersonExpanded;
             panelPersonList.Visible = isPersonExpanded;
-            labelPersonList.Text = isPersonExpanded ? "??person" : "> person";
+            labelPersonList.Text = isPersonExpanded ? "▼ person" : "> person";
             
             // ??좎럥瑗????좎럩?쒎뜝???좎럥彛???좎럩????좎럥???좎???
             if (isPersonExpanded)
@@ -2095,7 +2095,7 @@ namespace WinFormsApp1
         {
             isVehicleExpanded = !isVehicleExpanded;
             panelVehicleList.Visible = isVehicleExpanded;
-            labelVehicleList.Text = isVehicleExpanded ? "??vehicle" : "> vehicle";
+            labelVehicleList.Text = isVehicleExpanded ? "▼ vehicle" : "> vehicle";
             
             // ??좎럥瑗????좎럩?쒎뜝???좎럥彛???좎럩????좎럥???좎???
             if (isVehicleExpanded)
@@ -2111,7 +2111,7 @@ namespace WinFormsApp1
         {
             isEventExpanded = !isEventExpanded;
             panelEventList.Visible = isEventExpanded;
-            labelEventList.Text = isEventExpanded ? "??event" : "> event";
+            labelEventList.Text = isEventExpanded ? "▼ event" : "> event";
             
             // ??좎럥瑗????좎럩?쒎뜝???좎럥彛???좎럩????좎럥???좎???
             if (isEventExpanded)
@@ -3003,14 +3003,14 @@ private WaypointMarker FindWaypointForBox(BoundingBox box)
 
         private void btnAddLabel_Click(object sender, EventArgs e)
         {
-            string labelName = ShowInputDialog("????좎럥爰??곕톪??", "??좎럥爰???좎럥已????좎럥???좎럩苑??(?? person_02):");
+            string labelName = ShowInputDialog("사용자 라벨 추가", "새 라벨 이름을 입력하세요. (예: person_02)");
 
             if (string.IsNullOrWhiteSpace(labelName))
                 return;
 
             if (customLabels.Any(l => l.Name == labelName))
             {
-                MessageBox.Show("??좎룞?? 鈺곕똻???좎럥????좎럥爰??좎럥???", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("이미 같은 이름의 라벨이 있습니다.", "경고", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -3106,7 +3106,7 @@ private WaypointMarker FindWaypointForBox(BoundingBox box)
             }
             else
             {
-                MessageBox.Show("?믪눦?? BBox????좎?源??좎럩竊??좎럩??", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("라벨을 변경할 BBox를 먼저 선택하세요.", "정보", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 

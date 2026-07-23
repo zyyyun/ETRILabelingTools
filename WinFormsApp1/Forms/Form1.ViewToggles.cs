@@ -13,14 +13,14 @@ namespace WinFormsApp1
             // ???곸긽 ?ъ깮 以묒뿉???좉? 遺덇? (硫붿떆吏諛뺤뒪 ?놁씠 踰꾪듉留?鍮꾪솢?깊솕)
             if (isPlaying)
             {
-                MessageBox.Show("?띿꽦媛?議고쉶???곸긽???쇱떆?뺤????곹깭?먯꽌留??ъ슜?????덉뒿?덈떎.\n癒쇱? ?곸긽???쇱떆?뺤??댁＜?몄슂.", 
-                    "?뚮┝", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("속성 보기 창은 동영상이 일시 정지된 상태에서만 사용할 수 있습니다.\n먼저 재생을 일시 정지하세요.", "안내", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
                 return;
             }
             
             // ???좉?: 耳쒖졇 ?덉쑝硫??꾧퀬, 爰쇱졇 ?덉쑝硫?耳쒓린
             isAttributeViewEnabled = !isAttributeViewEnabled;
-            btnToggleAttributeView.Text = isAttributeViewEnabled ? "?띿꽦媛?議고쉶 ?꾧린" : "?띿꽦媛?議고쉶";
+            btnToggleAttributeView.Text = isAttributeViewEnabled ? "속성 보기 닫기" : "속성 보기";
             btnToggleAttributeView.BackColor = isAttributeViewEnabled 
                 ? System.Drawing.Color.FromArgb(239, 68, 68) // 鍮④컯 (?꾧린)
                 : System.Drawing.Color.FromArgb(100, 116, 139); // ?뚯깋 (議고쉶)
@@ -37,7 +37,7 @@ namespace WinFormsApp1
             // 踰꾪듉 UI ?낅뜲?댄듃
             if (btnToggleAttributeView != null)
             {
-                btnToggleAttributeView.Text = isAttributeViewEnabled ? "?띿꽦媛?議고쉶 ?꾧린" : "?띿꽦媛?議고쉶";
+                btnToggleAttributeView.Text = isAttributeViewEnabled ? "속성 보기 닫기" : "속성 보기";
                 btnToggleAttributeView.BackColor = isAttributeViewEnabled 
                     ? System.Drawing.Color.FromArgb(239, 68, 68) // 鍮④컯 (?꾧린)
                     : System.Drawing.Color.FromArgb(100, 116, 139); // ?뚯깋 (議고쉶)
@@ -169,15 +169,15 @@ namespace WinFormsApp1
                     {
                         System.Diagnostics.Debug.WriteLine($"[YOLO ?먯? ?좉?] YOLO ?ъ슜 遺덇? - isYoloAvailable: {isYoloAvailable}, videoCapture: {(videoCapture != null ? "not null" : "null")}, IsOpened: {(videoCapture != null && videoCapture.IsOpened() ? "true" : "false")}");
                         MessageBox.Show(
-                            "YOLO 紐⑤뜽???ъ슜?????놁뒿?덈떎.\n" +
-                            "鍮꾨뵒?ㅺ? 濡쒕뱶?섏뼱 ?덈뒗吏 ?뺤씤?댁＜?몄슂.",
-                            "YOLO ?먯? 遺덇?",
+                            "YOLO 모델을 사용할 수 없습니다.\n" +
+                            "비디오가 로드되어 있는지 확인하세요.",
+                            "YOLO 감지 비활성화",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Information);
                         showYoloDetections = false;
                         if (btnToggleYoloDetections != null)
                         {
-                            btnToggleYoloDetections.Text = "YOLO ?먯?";
+                            btnToggleYoloDetections.Text = "YOLO";
                             btnToggleYoloDetections.BackColor = System.Drawing.Color.FromArgb(100, 116, 139);
                         }
                     }
@@ -198,8 +198,8 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[YOLO ?먯? ?좉? ?ㅻ쪟] {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show(
-                    $"YOLO ?먯? ?좉? 以??ㅻ쪟 諛쒖깮:\n{ex.Message}",
-                    "?ㅻ쪟",
+                    $"YOLO 감지 중 오류가 발생했습니다.\n{ex.Message}",
+                    "오류",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
                 // ?곹깭 蹂듭썝
@@ -246,8 +246,8 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[Skeleton ?좉? ?ㅻ쪟] {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show(
-                    $"Skeleton ?좉? 以??ㅻ쪟 諛쒖깮:\n{ex.Message}",
-                    "?ㅻ쪟",
+                    $"Skeleton 표시 중 오류가 발생했습니다.\n{ex.Message}",
+                    "오류",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }
@@ -396,8 +396,8 @@ namespace WinFormsApp1
                                 SafeInvoke(() =>
                                 {
                                     MessageBox.Show(
-                                        $"YOLO 紐⑤뜽 濡쒕뱶 ?ㅽ뙣:\n\n{errorMessage}",
-                                        "YOLO ?ㅻ쪟",
+                                        $"YOLO 모델 로드에 실패했습니다:\n\n{errorMessage}",
+                                        "YOLO 오류",
                                         MessageBoxButtons.OK,
                                         MessageBoxIcon.Error);
                                 });
@@ -569,8 +569,8 @@ namespace WinFormsApp1
                                     SafeInvoke(() =>
                                     {
                                         MessageBox.Show(
-                                            $"YOLO ?먯? 以??ㅻ쪟 諛쒖깮:\n{ex.Message}",
-                                            "YOLO ?먯? ?ㅻ쪟",
+                                            $"YOLO 감지 중 오류가 발생했습니다.\n{ex.Message}",
+                                            "YOLO 오류",
                                             MessageBoxButtons.OK,
                                             MessageBoxIcon.Error);
                                     });
@@ -708,8 +708,8 @@ namespace WinFormsApp1
                             this.Invoke((MethodInvoker)(() =>
                             {
                                 MessageBox.Show(
-                                    $"YOLO 紐⑤뜽 濡쒕뱶 ?ㅽ뙣:\n\n{errorMessage}",
-                                    "YOLO ?ㅻ쪟",
+                                    $"YOLO 모델 로드에 실패했습니다:\n\n{errorMessage}",
+                                    "YOLO 오류",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Error);
                             }));
@@ -894,8 +894,8 @@ namespace WinFormsApp1
                             try
                             {
                                 MessageBox.Show(
-                                    $"YOLO ?먯? 以??ㅻ쪟 諛쒖깮:\n{ex.Message}",
-                                    "YOLO ?먯? ?ㅻ쪟",
+                                    $"YOLO 감지 중 오류가 발생했습니다.\n{ex.Message}",
+                                    "YOLO 오류",
                                     MessageBoxButtons.OK,
                                     MessageBoxIcon.Error);
                             }
@@ -923,8 +923,8 @@ namespace WinFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"[YOLO ?먯? ?쒖옉 ?ㅻ쪟] {ex.Message}\n{ex.StackTrace}");
                 MessageBox.Show(
-                    $"YOLO ?먯? ?쒖옉 以??ㅻ쪟 諛쒖깮:\n{ex.Message}",
-                    "YOLO ?먯? ?ㅻ쪟",
+                    $"YOLO 감지 시작 중 오류가 발생했습니다.\n{ex.Message}",
+                    "YOLO 오류",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
             }

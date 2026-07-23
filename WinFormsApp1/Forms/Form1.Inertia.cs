@@ -1356,12 +1356,12 @@ InvalidateBoxCache();
                 // ? 재추적 완료 후 연속 박스 부재 구간 자동 감지
                 DetectContinuousAbsence(waypoint);
 
-                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n관성 보간:\n- 재추적 범위: {inertiaAppliedFrames}개 프레임\n- 전체 범위 재보간: {additionalInterpolatedFrames}개 프레임\n- 총 보간: {totalInterpolated}개 프레임\n\n?? JSON 저장 완료", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"재추적이 완료되었습니다.\n추가된 박스: {newTrackedBoxes.Count}개\n\n관성 보간:\n- 재추적 범위: {inertiaAppliedFrames}개 프레임\n- 전체 범위 재보간: {additionalInterpolatedFrames}개 프레임\n- 총 보간: {totalInterpolated}개 프레임\n\nJSON 저장이 완료되었습니다.", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[부분 재추적 오류] {waypoint.Label} ID={waypoint.ObjectId}: {ex.Message}");
-                MessageBox.Show($"재추적 중 오류 발생:\n\n{ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"재추적 중 오류가 발생했습니다.\n\n{ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {
