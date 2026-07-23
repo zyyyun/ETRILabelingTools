@@ -20,6 +20,7 @@ static class Program
             ("video controls height preserves object info", VideoControlsHeightPreservesObjectInfo),
             ("timeline panel height fits all rows", TimelinePanelHeightFitsAllRows),
             ("timeline width stops before object info", TimelineWidthStopsBeforeObjectInfo),
+            ("waypoint exit column navigates to exit frame", WaypointExitColumnNavigatesToExitFrame),
             ("pending event range reuses existing event instance id", PendingEventRangeReusesExistingInstanceId),
             ("pending event range ignores different event ids", PendingEventRangeIgnoresDifferentEventIds),
             ("event clamp trims only matching instance overflow", EventClampTrimsOnlyMatchingInstanceOverflow),
@@ -110,6 +111,18 @@ static class Program
         var personBody = new BoundingBox { Label = "person", PersonId = 3, PersonPartType = "body" };
         var face = new BoundingBox { Label = "person", PersonId = 3, LinkedPersonId = 3, PersonPartType = "face" };
         AssertTrue(!TrackingIdentityHelper.ShouldSkipForSelection(personBody, face), "A person body must remain renderable when its face is selected.");
+    }
+
+    private static void WaypointExitColumnNavigatesToExitFrame()
+    {
+        int targetFrame = WaypointListNavigationHelper.ResolveTargetFrame(1, 12, 48, out bool selectObject);
+
+        AssertEqual(48, targetFrame, "The Exit column must navigate to the waypoint exit frame.");
+        AssertTrue(!selectObject, "The Exit column must not select an object box.");
+
+        targetFrame = WaypointListNavigationHelper.ResolveTargetFrame(2, 12, 48, out selectObject);
+        AssertEqual(12, targetFrame, "The object column retains entry-frame navigation for box selection.");
+        AssertTrue(selectObject, "The object column must select the matching object box.");
     }
     private static void VehicleTrackingComparisonUsesEffectiveIdentity()
     {
