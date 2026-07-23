@@ -470,6 +470,21 @@ namespace WinFormsApp1
             }
             else if (e.KeyCode == Keys.G && selectedBox != null)
             {
+                if (SubAnnotationDeletionHelper.IsSubAnnotation(selectedBox))
+                {
+                    AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
+                    selectedBox.IsDeleted = true;
+
+                    // A child-box G delete is frame-local; do not record a range disappearance.
+                    selectedBox = null;
+                    InvalidateBoxCache();
+                    UpdateBoxCount();
+                    UpdateBboxListDisplay();
+                    pictureBoxVideo.Invalidate();
+                    e.Handled = true;
+                    return;
+                }
+
                 AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(selectedBox) });
                 
                 // ? 삭제 플래그 설정 (실제 제거 안 함, 흔적 유지)
@@ -486,6 +501,39 @@ namespace WinFormsApp1
             }
             else if (e.KeyCode == Keys.Delete)
             {
+                if (selectedBox != null && SubAnnotationDeletionHelper.IsSubAnnotation(selectedBox))
+                {
+                    var boxesToDelete = SubAnnotationDeletionHelper.GetWaypointScopedSubAnnotations(
+                        boundingBoxes,
+                        waypointMarkers,
+                        selectedBox);
+
+                    if (boxesToDelete.Count == 0)
+                    {
+                        MessageBox.Show(
+                            "face 또는 plate 박스의 부모 Waypoint를 하나로 확인할 수 없습니다. 삭제하지 않았습니다.",
+                            "알림",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information);
+                        e.Handled = true;
+                        return;
+                    }
+
+                    foreach (var box in boxesToDelete)
+                    {
+                        AddUndoAction(new UndoAction { Type = UndoActionType.RemoveBox, Box = CloneBoundingBox(box) });
+                        box.IsDeleted = true;
+                    }
+
+                    selectedBox = null;
+                    InvalidateBoxCache();
+                    UpdateBoxCount();
+                    UpdateBboxListDisplay();
+                    pictureBoxVideo.Invalidate();
+                    e.Handled = true;
+                    return;
+                }
+
                 // ? 박스가 선택되어 있으면 박스 삭제 우선
                 if (selectedBox != null)
                 {
