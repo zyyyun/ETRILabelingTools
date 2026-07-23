@@ -425,8 +425,29 @@ namespace WinFormsApp1
         /// <summary>
         /// Event 박스가 중간 프레임에서 수정되었을 때 해당 프레임부터 Exit까지 전파
         /// </summary>
-        private void PropagateEventBoxFromCurrentFrame(BoundingBox box)
+        private void PropagateEventBoxFromCurrentFrame(BoundingBox box, Rectangle sourceBefore)
         {
+            if (box == null || !string.Equals(box.Label, "event", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var plan = EventWaypointBoxPropagationHelper.PlanPropagation(
+                box, boundingBoxes, waypointMarkers, manuallyAdjustedFrames);
+            if (plan.Updates.Count == 0 && plan.Additions.Count == 0)
+                return;
+
+            var batch = EventRectanglePropagationUndoHelper.CreateBatch(box, sourceBefore, plan);
+            EventRectanglePropagationUndoHelper.ApplyForward(boundingBoxes, batch);
+            AddUndoAction(new UndoAction
+            {
+                Type = UndoActionType.EventRectanglePropagation,
+                EventRectanglePropagation = batch
+            });
+
+            InvalidateBoxCache();
+            UpdateBoxCount();
+            UpdateBboxListDisplay();
+            return;
+
             if (box?.Label == "event")
             {
                 System.Diagnostics.Debug.WriteLine(

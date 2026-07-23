@@ -150,6 +150,7 @@ namespace WinFormsApp1
                         // 野껊????獄쏅벡?ゅ첎? ??좎럩?앭뜝???좎럥????좎럥????좎룞??
                         if (HasAnotherHitCandidateAt(e.Location, selectedBox))
                         {
+                            originalDragRect = selectedBox.Rectangle;
                             isWaitingForDoubleClick = true;
                             lastClickPoint = e.Location;
                             dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
@@ -180,6 +181,7 @@ namespace WinFormsApp1
                         else
                         {
                             // 野껊????獄쏅벡?ゅ첎? ??좎럩?앭뜝?筌앸맩????좎럥?믣뜝???좎럩??
+                            originalDragRect = selectedBox.Rectangle;
                             isDragging = true;
                             dragOffset = new System.Drawing.Point(e.X - (int)viewRect.X, e.Y - (int)viewRect.Y);
                             UpdateObjectInfo(selectedBox);
@@ -197,6 +199,7 @@ namespace WinFormsApp1
                 if (selectedBox != null)
                 {
                     isDragging = true;
+                    originalDragRect = selectedBox.Rectangle;
                     // ???ル슦紐닷뜝?癰궰??좎?釉?獄쏅벡????좎럩??疫꿸낀????좎럥以???좎럥?믣뜝???좎?遊???④쑴沅?
                     var viewRect = ImageToView(new RectangleF(selectedBox.Rectangle.X, selectedBox.Rectangle.Y, 
                         selectedBox.Rectangle.Width, selectedBox.Rectangle.Height));
@@ -416,10 +419,6 @@ namespace WinFormsApp1
                 isResizing = false;
                 currentResizeHandle = ResizeHandle.None;
 
-                var undoBox = CloneBoundingBox(selectedBox);
-                undoBox.Rectangle = originalResizeRect;
-                AddUndoAction(new UndoAction { Type = UndoActionType.ModifyBox, Box = undoBox });
-
                 RecordManuallyAdjustedFrame(selectedBox);
 
                 InvalidateBoxCache();
@@ -428,7 +427,13 @@ namespace WinFormsApp1
 
                 if (selectedBox != null && selectedBox.Label == "event")
                 {
-                    PropagateEventBoxFromCurrentFrame(selectedBox);
+                    PropagateEventBoxFromCurrentFrame(selectedBox, originalResizeRect);
+                }
+                else
+                {
+                    var undoBox = CloneBoundingBox(selectedBox);
+                    undoBox.Rectangle = originalResizeRect;
+                    AddUndoAction(new UndoAction { Type = UndoActionType.ModifyBox, Box = undoBox });
                 }
 
                 pictureBoxVideo.Cursor = Cursors.Default;
@@ -453,7 +458,13 @@ namespace WinFormsApp1
 
                     if (selectedBox != null && selectedBox.Label == "event")
                     {
-                        PropagateEventBoxFromCurrentFrame(selectedBox);
+                        PropagateEventBoxFromCurrentFrame(selectedBox, originalDragRect);
+                    }
+                    else if (selectedBox != null)
+                    {
+                        var undoBox = CloneBoundingBox(selectedBox);
+                        undoBox.Rectangle = originalDragRect;
+                        AddUndoAction(new UndoAction { Type = UndoActionType.ModifyBox, Box = undoBox });
                     }
                 }
 

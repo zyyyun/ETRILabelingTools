@@ -69,6 +69,7 @@ static class Program
             ,("event box propagation preserves deleted tombstones", EventBoxPropagationPreservesDeletedTombstones)
             ,("event box propagation isolates different event instances", EventBoxPropagationIsolatesDifferentEventInstances)
             ,("event box propagation rejects ambiguous scopes without removals", EventBoxPropagationRejectsAmbiguousScopesWithoutRemovals)
+            ,("event rectangle propagation undo redo is atomic", EventRectanglePropagationUndoRedoIsAtomic)
         };
 
         try
@@ -1213,6 +1214,35 @@ static class Program
         AssertEqual(0, plan.Updates.Count, "Ambiguous event waypoint scopes must fail closed.");
         AssertEqual(0, plan.Additions.Count, "Ambiguous event waypoint scopes must not create boxes.");
         AssertTrue(typeof(EventWaypointBoxPropagationPlan).GetProperty("Removals") == null, "D-05: propagation plans must not expose a deletion operation.");
+    }
+
+    private static void EventRectanglePropagationUndoRedoIsAtomic()
+    {
+        var source = CreateEventBox(10, "instance-a", new System.Drawing.Rectangle(1, 2, 30, 40));
+        var target = CreateEventBox(11, "instance-a", new System.Drawing.Rectangle(5, 6, 30, 40));
+        var created = CreateEventBox(12, "instance-a", new System.Drawing.Rectangle(50, 60, 30, 40));
+        var boxes = new List<BoundingBox> { source, target };
+        var sourceBefore = source.Rectangle;
+        var targetBefore = target.Rectangle;
+        source.Rectangle = new System.Drawing.Rectangle(10, 20, 30, 40);
+        var plan = new EventWaypointBoxPropagationPlan(
+            new[] { new EventWaypointBoxUpdate(target, source.Rectangle) },
+            new[] { new EventWaypointBoxAddition(created) });
+        var batch = EventRectanglePropagationUndoHelper.CreateBatch(source, sourceBefore, plan);
+
+        EventRectanglePropagationUndoHelper.ApplyForward(boxes, batch);
+        AssertEqual(source.Rectangle, target.Rectangle, "Redo application must update the existing target with the source rectangle.");
+        AssertTrue(boxes.Contains(created), "Redo application must add the derived box.");
+
+        EventRectanglePropagationUndoHelper.ApplyUndo(boxes, batch);
+        AssertEqual(sourceBefore, source.Rectangle, "One undo must restore the source rectangle.");
+        AssertEqual(targetBefore, target.Rectangle, "One undo must restore the existing target rectangle.");
+        AssertTrue(!boxes.Contains(created), "One undo must remove the derived box without a second history action.");
+
+        EventRectanglePropagationUndoHelper.ApplyForward(boxes, batch);
+        AssertEqual(new System.Drawing.Rectangle(10, 20, 30, 40), source.Rectangle, "One redo must reapply the source rectangle.");
+        AssertEqual(source.Rectangle, target.Rectangle, "One redo must reapply the existing target rectangle.");
+        AssertTrue(boxes.Contains(created), "One redo must restore the same derived box reference.");
     }
 
     private static BoundingBox CreateEventBox(int frameIndex, string eventInstanceId, System.Drawing.Rectangle rectangle)

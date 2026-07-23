@@ -21,7 +21,7 @@ using System.Threading.Tasks;
 
 namespace WinFormsApp1
 {
-    public enum UndoActionType { AddBox, RemoveBox, ModifyBox, Tracking, EventIdChange }
+    public enum UndoActionType { AddBox, RemoveBox, ModifyBox, Tracking, EventIdChange, EventRectanglePropagation }
 
     public class UndoAction
     {
@@ -33,6 +33,7 @@ namespace WinFormsApp1
         public List<BoundingBox> TrackedBoxes { get; set; }
         public List<EventIdChange> EventIdChanges { get; set; } = new List<EventIdChange>();
         public EventWaypointMarkerChange? EventWaypointMarkerChange { get; set; }
+        public EventRectanglePropagationBatch EventRectanglePropagation { get; set; }
     }
 
 
@@ -1304,6 +1305,7 @@ namespace WinFormsApp1
         private bool isDrawing = false;
         private bool isDragging = false;
         private System.Drawing.Point dragOffset;
+        private Rectangle originalDragRect;
         private bool isWaitingForDoubleClick = false; // 더블 클릭 대기 플래그
         private System.Threading.Timer doubleClickTimer = null; // 더블 클릭 타이머
         private System.Drawing.Point lastClickPoint; // 마지막 클릭 위치

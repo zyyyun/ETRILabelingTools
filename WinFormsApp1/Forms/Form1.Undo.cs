@@ -82,6 +82,13 @@ namespace WinFormsApp1
                     if (selectedBox != null)
                         UpdateObjectInfo(selectedBox);
                     break;
+
+                case UndoActionType.EventRectanglePropagation:
+                    EventRectanglePropagationUndoHelper.ApplyUndo(boundingBoxes, action.EventRectanglePropagation);
+                    InvalidateBoxCache();
+                    UpdateEventListDisplay();
+                    UpdateWaypointListView();
+                    break;
             }
 
             redoStack.Push(action);
@@ -151,6 +158,13 @@ namespace WinFormsApp1
                     UpdateWaypointListView();
                     if (selectedBox != null)
                         UpdateObjectInfo(selectedBox);
+                    break;
+
+                case UndoActionType.EventRectanglePropagation:
+                    EventRectanglePropagationUndoHelper.ApplyForward(boundingBoxes, action.EventRectanglePropagation);
+                    InvalidateBoxCache();
+                    UpdateEventListDisplay();
+                    UpdateWaypointListView();
                     break;
             }
 
