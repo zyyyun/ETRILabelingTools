@@ -34,6 +34,9 @@ static class Program
             ("face link import marks linked face boxes", FaceLinkImportMarksLinkedFaceBoxes),
             ("face link import ignores malformed links", FaceLinkImportIgnoresMalformedLinks),
             ("two same-type vehicles get different instance ids", TwoSameTypeVehiclesGetDifferentInstanceIds),
+            ("vehicle exit box reuses selected entry instance", VehicleExitBoxReusesSelectedEntryInstance),
+            ("vehicle exit box reuses unambiguous entry instance", VehicleExitBoxReusesUnambiguousEntryInstance),
+            ("vehicle exit box avoids ambiguous entry instance", VehicleExitBoxAvoidsAmbiguousEntryInstance),
             ("legacy vehicle track id remains the type id", LegacyVehicleTrackIdRemainsTypeId),
             ("plate link export connects plate annotation to body annotation", PlateLinkExportConnectsPlateToBody),
             ("plate link import marks linked plate boxes", PlateLinkImportMarksLinkedPlateBoxes),
@@ -887,6 +890,38 @@ static class Program
 
         AssertEqual(carOne.VehicleId, carTwo.VehicleId, "Both vehicles should share the same type id.");
         AssertTrue(carOne.VehicleInstanceId != carTwo.VehicleInstanceId, "Same-type vehicles should have different instance ids.");
+    }
+
+    private static void VehicleExitBoxReusesSelectedEntryInstance()
+    {
+        var entryCar = new BoundingBox { Label = "vehicle", VehicleId = 1, VehicleInstanceId = 1, VehiclePartType = "body", FrameIndex = 10 };
+        var laterCar = new BoundingBox { Label = "vehicle", VehicleId = 1, VehicleInstanceId = 5, VehiclePartType = "body", FrameIndex = 40 };
+
+        int instanceId = VehicleInstanceAssignmentHelper.ResolveNewBodyInstanceId(
+            new[] { entryCar, laterCar }, entryCar, currentFrame: 30, entryFrame: 10, vehicleTypeId: 1, fallbackInstanceId: 6);
+
+        AssertEqual(1, instanceId, "An exit-frame box should reuse the selected entry vehicle instance.");
+    }
+
+    private static void VehicleExitBoxReusesUnambiguousEntryInstance()
+    {
+        var entryCar = new BoundingBox { Label = "vehicle", VehicleId = 1, VehicleInstanceId = 3, VehiclePartType = "body", FrameIndex = 10 };
+
+        int instanceId = VehicleInstanceAssignmentHelper.ResolveNewBodyInstanceId(
+            new[] { entryCar }, selectedBox: null, currentFrame: 30, entryFrame: 10, vehicleTypeId: 1, fallbackInstanceId: 4);
+
+        AssertEqual(3, instanceId, "An exit-frame box should reuse the only matching entry vehicle when selection is unavailable.");
+    }
+
+    private static void VehicleExitBoxAvoidsAmbiguousEntryInstance()
+    {
+        var firstCar = new BoundingBox { Label = "vehicle", VehicleId = 1, VehicleInstanceId = 1, VehiclePartType = "body", FrameIndex = 10 };
+        var secondCar = new BoundingBox { Label = "vehicle", VehicleId = 1, VehicleInstanceId = 2, VehiclePartType = "body", FrameIndex = 10 };
+
+        int instanceId = VehicleInstanceAssignmentHelper.ResolveNewBodyInstanceId(
+            new[] { firstCar, secondCar }, selectedBox: null, currentFrame: 30, entryFrame: 10, vehicleTypeId: 1, fallbackInstanceId: 3);
+
+        AssertEqual(3, instanceId, "Ambiguous same-type entry vehicles must not be merged automatically.");
     }
 
     private static void PlateLinkExportConnectsPlateToBody()

@@ -162,15 +162,13 @@ namespace WinFormsApp1
 
         private int GetVehicleInstanceIdForNewBody()
         {
-            if (selectedBox != null &&
-                string.Equals(selectedBox.Label, "vehicle", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(selectedBox.VehiclePartType, "plate", StringComparison.OrdinalIgnoreCase) &&
-                selectedBox.FrameIndex == currentFrameIndex)
-            {
-                return TrackingIdentityHelper.GetNumericIdentity(selectedBox);
-            }
-
-            return GetNextVehicleInstanceId();
+            return VehicleInstanceAssignmentHelper.ResolveNewBodyInstanceId(
+                boundingBoxes,
+                selectedBox,
+                currentFrameIndex,
+                entryFrameIndex,
+                currentAssignedId,
+                GetNextVehicleInstanceId());
         }
         private int GetNextVehicleInstanceId()
         {
