@@ -114,7 +114,7 @@ namespace WinFormsApp1
                         : 0,
                     LinkedVehicleInstanceId = isPlateCreation && activeBodyForPlate != null ? activeBodyForPlate.VehicleInstanceId : (int?)null,
                     VehiclePartType = currentSelectedLabel == "vehicle" ? (isPlateCreation ? "plate" : "body") : null,
-                    EventId = currentSelectedLabel == "event" ? currentAssignedId : 0,
+                    EventId = currentSelectedLabel == "event" ? GetSelectedEventTypeId() : 0,
                     EventInstanceId = currentSelectedLabel == "event" ? CreateEventInstanceId() : null,
                     Action = "waypoint",
                     PersonPartType = isFaceCreation
@@ -2047,6 +2047,7 @@ namespace WinFormsApp1
             btnLabelPerson.FlatAppearance.BorderSize = 2;
             btnLabelVehicle.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
             btnLabelVehicle.FlatAppearance.BorderSize = 2;
+            currentAssignedId = GetSelectedEventTypeId();
             btnLabelEvent.BackColor = System.Drawing.Color.FromArgb(34, 197, 94);
             btnLabelEvent.FlatAppearance.BorderSize = 3;
             
@@ -2126,7 +2127,7 @@ namespace WinFormsApp1
         // Labels ??좎럥瑗???좎럩???좎럩????좎럥???좎???(??좎룞?? ????좎럩???좎럩????좎럩????좎럩??鈺곌퀣??
         private void UpdateLabelsLayoutAfterToggle()
         {
-            const int startY = 70;
+            const int startY = 100;
             const int toggleHeight = 30;
             const int panelHeight = 100;
             int currentY = startY;

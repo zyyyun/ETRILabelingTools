@@ -1492,6 +1492,7 @@ namespace WinFormsApp1
         public Form1()
         {
             InitializeComponent();
+            ConfigureEventTypeSelector();
             UpdateBoxCount();
             
             // 자막 초기 상태를 닫힌 상태로 설정
@@ -1507,6 +1508,34 @@ namespace WinFormsApp1
 
             // ? 헤더 드래그로 창 이동 기능 활성화
             SetupWindowDragHandlers();
+        }
+
+        private void ConfigureEventTypeSelector()
+        {
+            comboBoxEvent.Items.Clear();
+            comboBoxEvent.Items.AddRange(LabelCatalogHelper.GetEventComboItems().Cast<object>().ToArray());
+            comboBoxEvent.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboBoxEvent.Font = new System.Drawing.Font("Segoe UI", 8F);
+            comboBoxEvent.Location = new System.Drawing.Point(8, 70);
+            comboBoxEvent.Size = new System.Drawing.Size(270, 25);
+            comboBoxEvent.SelectedIndex = 0;
+            comboBoxEvent.SelectedIndexChanged += (sender, args) =>
+            {
+                int eventId = LabelCatalogHelper.GetEventIdFromComboItem(comboBoxEvent.SelectedItem?.ToString());
+                if (eventId > 0)
+                {
+                    currentAssignedId = eventId;
+                }
+            };
+
+            groupBoxLabels.Controls.Add(comboBoxEvent);
+            UpdateLabelsLayoutAfterToggle();
+        }
+
+        private int GetSelectedEventTypeId()
+        {
+            int eventId = LabelCatalogHelper.GetEventIdFromComboItem(comboBoxEvent.SelectedItem?.ToString());
+            return eventId > 0 ? eventId : 1;
         }
 
         /// <summary>

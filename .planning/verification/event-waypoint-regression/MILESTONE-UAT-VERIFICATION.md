@@ -114,13 +114,17 @@ source:
 ### UAT-07. Event 카탈로그와 기존 JSON 호환 (Quick)
 
 - **재현:** Event dropdown을 열고 목록 순서를 확인한다. 새 JSON을 저장해
-  categories와 annotation의 category_id를 확인한다. 기존 JSON을 불러온 뒤
-  event label을 확인하고 새 파일로 저장한 후 다시 불러온다.
+  categories와 annotation의 category_id를 확인한다. `event_get on`과
+  `event_suspect`를 각각 선택한 뒤 새 Event waypoint를 생성한다. 기존 JSON을
+  불러온 뒤 event label을 확인하고 새 파일로 저장한 후 다시 불러온다.
 - **기대 목록:** `event_contact`, `event_throw`, `event_final_exchange`,
   `event_get on`, `event_get off`, `event_suspect`,
   `event_controlled_delivery`, `event_camouflage` 순서다.
 - **기대 새 ID:** contact 25, throw 26, final_exchange 27, get on 28,
   get off 29, suspect 30, controlled_delivery 31, camouflage 32다.
+- **기대 생성 동작:** 생성 전 dropdown에서 고른 Event label이 새 event box와
+  새 Event waypoint에 즉시 적용된다. 새 waypoint가 `event_contact`로 고정되어
+  생성된 뒤 별도 수정이 필요한 경우가 없어야 한다.
 - **기대 기존 JSON 변환:** `event_exchange -> event_throw`,
   `event_board -> event_get on`, `event_disembark -> event_get off`,
   `event_camouflage -> event_camouflage`, `event_throw -> event_throw`다.

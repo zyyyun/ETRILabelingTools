@@ -42,6 +42,11 @@ namespace WinFormsApp1
             return index >= 0 ? 25 + index : 25;
         }
 
+        public static int GetEventIdFromComboItem(string? selectedItem)
+        {
+            return GetEventId(NormalizeImportedEventType(selectedItem));
+        }
+
         public static int GetEventIdFromImportedCategory(int categoryId, string? categoryName)
         {
             int eventId = GetEventId(NormalizeImportedEventType(categoryName));

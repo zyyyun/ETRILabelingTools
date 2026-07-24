@@ -1015,6 +1015,8 @@ static class Program
         AssertEqual(8, LabelCatalogHelper.GetEventIdFromImportedCategory(31, "camouflage"), "Legacy camouflage should remain camouflage.");
         AssertEqual(2, LabelCatalogHelper.GetEventIdFromImportedCategory(32, "throw"), "Legacy throw should retain its event meaning.");
         AssertEqual(2, LabelCatalogHelper.GetEventIdFromImportedCategory(26, "throw"), "New category names must override legacy numeric positions.");
+        AssertEqual(4, LabelCatalogHelper.GetEventIdFromComboItem("event_get on"), "The event creation selector should resolve get on.");
+        AssertEqual(6, LabelCatalogHelper.GetEventIdFromComboItem("event_suspect"), "The event creation selector should resolve suspect.");
     }
 
     private static void EventComboItemsIncludeEveryCatalogEvent()
