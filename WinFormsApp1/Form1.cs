@@ -1527,6 +1527,17 @@ namespace WinFormsApp1
                     currentAssignedId = eventId;
                 }
             };
+            comboBoxEvent.SelectionChangeCommitted += (sender, args) =>
+            {
+                currentSelectedLabel = "event";
+                currentAssignedId = GetSelectedEventTypeId();
+                btnLabelPerson.BackColor = System.Drawing.Color.FromArgb(252, 231, 243);
+                btnLabelPerson.FlatAppearance.BorderSize = 2;
+                btnLabelVehicle.BackColor = System.Drawing.Color.FromArgb(219, 234, 254);
+                btnLabelVehicle.FlatAppearance.BorderSize = 2;
+                btnLabelEvent.BackColor = System.Drawing.Color.FromArgb(34, 197, 94);
+                btnLabelEvent.FlatAppearance.BorderSize = 3;
+            };
 
             groupBoxLabels.Controls.Add(comboBoxEvent);
             UpdateLabelsLayoutAfterToggle();

@@ -37,6 +37,7 @@ static class Program
             ("vehicle exit box reuses selected entry instance", VehicleExitBoxReusesSelectedEntryInstance),
             ("vehicle exit box reuses unambiguous entry instance", VehicleExitBoxReusesUnambiguousEntryInstance),
             ("vehicle exit box avoids ambiguous entry instance", VehicleExitBoxAvoidsAmbiguousEntryInstance),
+            ("vehicle tracking preserves an existing exit box", VehicleTrackingPreservesExistingExitBox),
             ("legacy vehicle track id remains the type id", LegacyVehicleTrackIdRemainsTypeId),
             ("plate link export connects plate annotation to body annotation", PlateLinkExportConnectsPlateToBody),
             ("plate link import marks linked plate boxes", PlateLinkImportMarksLinkedPlateBoxes),
@@ -922,6 +923,43 @@ static class Program
             new[] { firstCar, secondCar }, selectedBox: null, currentFrame: 30, entryFrame: 10, vehicleTypeId: 1, fallbackInstanceId: 3);
 
         AssertEqual(3, instanceId, "Ambiguous same-type entry vehicles must not be merged automatically.");
+    }
+
+    private static void VehicleTrackingPreservesExistingExitBox()
+    {
+        var existingExitBox = new BoundingBox
+        {
+            Label = "vehicle",
+            VehicleId = 1,
+            VehicleInstanceId = 3,
+            VehiclePartType = "body",
+            FrameIndex = 30
+        };
+        var trackedInteriorBox = new BoundingBox
+        {
+            Label = "vehicle",
+            VehicleId = 1,
+            VehicleInstanceId = 3,
+            VehiclePartType = "body",
+            FrameIndex = 20
+        };
+        var trackedExitBox = new BoundingBox
+        {
+            Label = "vehicle",
+            VehicleId = 1,
+            VehicleInstanceId = 3,
+            VehiclePartType = "body",
+            FrameIndex = 30
+        };
+        var waypoint = new WaypointMarker { Label = "vehicle", ObjectId = 3, EntryFrame = 10, ExitFrame = 30 };
+
+        var boxesToAdd = TrackingResultMergeHelper.ExcludeExistingVehicleExitBoxes(
+            new[] { trackedInteriorBox, trackedExitBox },
+            new[] { existingExitBox },
+            waypoint);
+
+        AssertEqual(1, boxesToAdd.Count, "The duplicate vehicle tracking box at exit must be excluded.");
+        AssertTrue(ReferenceEquals(trackedInteriorBox, boxesToAdd[0]), "Tracking should still add boxes before the exit frame.");
     }
 
     private static void PlateLinkExportConnectsPlateToBody()

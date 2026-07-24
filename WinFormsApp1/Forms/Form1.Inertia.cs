@@ -1073,15 +1073,21 @@ InvalidateBoxCache();
 
                 loadingForm.Close();
 
+                // Keep the manually drawn vehicle exit box instead of adding a second tracked box on top of it.
+                var boxesToAdd = TrackingResultMergeHelper.ExcludeExistingVehicleExitBoxes(
+                    allTrackedBoxes,
+                    boundingBoxes,
+                    waypoint);
+
                 // 추적된 박스 추가
-                foreach (var box in allTrackedBoxes)
+                foreach (var box in boxesToAdd)
                 {
                     boundingBoxes.Add(box);
                 }
                 InvalidateBoxCache();
 
                 // 추적이 성공적으로 완료되면 Entry 프레임의 사용자가 지정한 초기 박스 삭제
-                if (allTrackedBoxes.Count > 0)
+                if (boxesToAdd.Count > 0)
                 {
                     foreach (var startBox in startBoxes)
                     {
@@ -1092,7 +1098,7 @@ InvalidateBoxCache();
                     }
 
                     InvalidateBoxCache();
-                    AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = allTrackedBoxes });
+                    AddUndoAction(new UndoAction { Type = UndoActionType.Tracking, TrackedBoxes = boxesToAdd });
                 }
 
                 // ? 추적 완료 후 사라짐 구간 처리
@@ -1105,7 +1111,7 @@ InvalidateBoxCache();
                 UpdateBboxListDisplay();
 
                 // ? 개별 waypoint 추적 완료 로그
-                System.Diagnostics.Debug.WriteLine($"[추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, BBox 추가={allTrackedBoxes.Count}개");
+                System.Diagnostics.Debug.WriteLine($"[추적 완료] {waypoint.Label} ID={waypoint.ObjectId}, BBox 추가={boxesToAdd.Count}개");
             }
             catch (Exception ex)
             {
