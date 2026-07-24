@@ -11,12 +11,12 @@
 [Setup]
 AppId={{E7B3F1A2-4D5C-4E6F-8A9B-1C2D3E4F5A6B}
 AppName=ETRI Labeling Tool
-AppVersion=1.1.1
+AppVersion=1.1.4
 AppPublisher=ETRI
 DefaultDirName={autopf}\ETRILabelingTool
 DefaultGroupName=ETRI Labeling Tool
 OutputDir=output
-OutputBaseFilename=ETRILabelingTool_Setup_1.1.1
+OutputBaseFilename=ETRILabelingTool_Setup_1.1.4
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
