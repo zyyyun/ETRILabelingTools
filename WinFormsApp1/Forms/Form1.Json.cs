@@ -331,7 +331,12 @@ namespace WinFormsApp1
                     {
                         label = "event";
                     }
-                    else if (catId == 33)
+                    else if (catId == 33 && tempCategoryMap.TryGetValue(catId, out var category33) &&
+                             string.Equals(category33.Name, "cardboard box", StringComparison.OrdinalIgnoreCase))
+                    {
+                        label = "event";
+                    }
+                    else if (catId == 33 || catId == LabelCatalogHelper.GetPlateCategoryId())
                     {
                         label = "vehicle"; // plate
                     }
@@ -346,7 +351,8 @@ namespace WinFormsApp1
                         else if (categoryName.Contains("contact") || categoryName.Contains("exchange") || 
                                  categoryName.Contains("board") || categoryName.Contains("final") ||
                                  categoryName.Contains("disembark") || categoryName.Contains("controlled_delivery") ||
-                                 categoryName.Contains("camouflage") || categoryName.Contains("throw"))
+                                  categoryName.Contains("camouflage") || categoryName.Contains("throw") ||
+                                  categoryName.Contains("cardboard box"))
                             label = "event";
                         else if (categoryName.StartsWith("person"))
                             label = "person";
@@ -377,7 +383,7 @@ namespace WinFormsApp1
                         vehicleId = catId >= 21 && catId <= 24 ? (catId - 20) : trackId;
                         // Legacy JSON used track_id for VehicleId; use it as an instance fallback only when the new field is absent.
                         if (vehicleInstanceId == 0) vehicleInstanceId = trackId;
-                        vehiclePartType = catId == 33 ? "plate" : "body";
+                        vehiclePartType = catId == 33 || catId == LabelCatalogHelper.GetPlateCategoryId() ? "plate" : "body";
                     }
                     else if (label == "event")
                     {

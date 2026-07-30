@@ -1482,10 +1482,10 @@ namespace WinFormsApp1
             
             // Event categories (25~32)
             {"contact", 25}, {"throw", 26}, {"final_exchange", 27}, {"get on", 28},
-            {"get off", 29}, {"suspect", 30}, {"controlled_delivery", 31}, {"camouflage", 32},
+            {"get off", 29}, {"suspect", 30}, {"controlled_delivery", 31}, {"camouflage", 32}, {"cardboard box", 33},
 
             // Vehicle plate category (33)
-            {"plate", 33}
+            {"plate", 34}
         };
 
 
